@@ -1,0 +1,6 @@
+{
+  "name": "CartAdmin",
+  "description": "E-commerce dashboard for OpenCart store management with bold typography and real-time sales metrics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

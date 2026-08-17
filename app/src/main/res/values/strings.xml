@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">CartAdmin</string>
+    <string name="title_dashboard">Dashboard</string>
+    <string name="title_orders">Orders</string>
+    <string name="title_catalog">Catalog</string>
+    <string name="title_visitors">Live Traffic</string>
+    <string name="title_config">Config</string>
+</resources>
