@@ -45,7 +45,12 @@ jobs:
         run: |
           touch .env
           echo "DUMMY_KEY=default" > .env
-          gradle :app:compileDebugKotlin --no-daemon
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            ./gradlew :app:compileDebugKotlin --no-daemon
+          else
+            gradle :app:compileDebugKotlin --no-daemon
+          fi
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
