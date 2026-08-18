@@ -1,6 +1,6 @@
 {
   "name": "CartAdmin",
-  "description": "E-commerce dashboard for OpenCart store management with bold typography and real-time sales metrics.",
+  "description": "App ufficiale di OpenCart ITALIA (www.opencartitalia.it) by SOLO SOLUZIONI (www.solosoluzioni.it). Gestione e-commerce OpenCart con metriche vendite in tempo reale, ordini, catalogo e notifiche push.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

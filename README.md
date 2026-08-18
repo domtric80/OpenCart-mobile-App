@@ -17,9 +17,9 @@
 
 ## 📱 About CartAdmin
 
-**CartAdmin** is a modern, high-performance Android companion application engineered for e-commerce store owners and administrators. Built entirely with **Jetpack Compose** and **Material Design 3**, CartAdmin delivers real-time sales metrics, revenue analytics, and comprehensive store management directly to your mobile device.
+**CartAdmin** è l'**App Ufficiale di OpenCart ITALIA** ([www.opencartitalia.it](https://www.opencartitalia.it)) sviluppata da **SOLO SOLUZIONI** ([www.solosoluzioni.it](https://www.solosoluzioni.it)).
 
-Whether running OpenCart or custom commerce endpoints, CartAdmin provides continuous store visibility, offline-first reliability, and push notification support.
+Un'applicazione Android moderna e ad alte prestazioni creata per i gestori e gli amministratori di negozi e-commerce OpenCart. Sviluppata interamente con **Jetpack Compose** e **Material Design 3**, CartAdmin offre metriche di vendita in tempo reale, gestione ordini, catalogo prodotti e notifiche push direttamente sul tuo smartphone.
 
 ---
 

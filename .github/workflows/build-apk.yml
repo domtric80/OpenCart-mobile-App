@@ -65,22 +65,23 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.0
-          name: "CartAdmin v1.0.0 — Official Android Release"
+          name: "CartAdmin v1.0.0 — OpenCart ITALIA by SOLO SOLUZIONI"
           body: |
-            ## 🛒 CartAdmin v1.0.0
+            ## 🛒 CartAdmin v1.0.0 — App Ufficiale OpenCart ITALIA
             
-            Android application for OpenCart e-commerce management.
+            **CartAdmin** è l'applicazione Android ufficiale di **OpenCart ITALIA** ([www.opencartitalia.it](https://www.opencartitalia.it)) sviluppata da **SOLO SOLUZIONI** ([www.solosoluzioni.it](https://www.solosoluzioni.it)).
             
-            ### 📱 Download & Installation
-            1. Download the **`CartAdmin-v1.0.0.apk`** attached below.
-            2. Open the file on your Android device and tap **Install**.
+            ### 📱 Download & Installazione
+            1. Scarica il file **`CartAdmin-v1.0.0.apk`** allegato qui sotto.
+            2. Aprilo sul tuo dispositivo Android e tocca **Installa**.
             
-            ### ✨ Features
-            - Real-time sales metrics & revenue analytics
-            - Order management & status workflows
-            - Product inventory & catalog control
-            - Offline-first cache with Room Database
-            - FCM Push Notifications support
+            ### ✨ Funzionalità Principali
+            - Monitoraggio metriche di vendita e fatturato in tempo reale
+            - Gestione ordini e avanzamento stati di lavorazione
+            - Controllo catalogo, prezzi e allarmi scorte sottoscorta
+            - Cache locale offline con Room Database
+            - Notifiche Push istantanee per nuovi ordini
+            - Collegamenti diretti a OpenCart ITALIA e SOLO SOLUZIONI
           draft: false
           prerelease: false
           files: release-assets/CartAdmin-v1.0.0.apk
