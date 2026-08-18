@@ -54,20 +54,19 @@ Tutti i rilasci compilati sono scaricabili direttamente dalla sezione [GitHub Re
 Se utilizzi CartAdmin per gestire il tuo business e desideri supportare lo sviluppo continuo del progetto o richiedere personalizzazioni dedicate:
 
 <p align="center">
-  <iframe src="https://github.com/sponsors/domtric80/button" title="Sponsor domtric80" height="32" width="114" style="border: 0; border-radius: 6px;"></iframe>
-</p>
-
-<p align="center">
   <a href="https://github.com/sponsors/domtric80"><img src="https://img.shields.io/badge/Sponsor-%E2%9D%A4-ea4aaa?style=for-the-badge&logo=github&logoColor=white" alt="Sponsor domtric80 on GitHub" /></a>
   &nbsp;&nbsp;
-  <a href="https://www.opencartitalia.it"><img src="https://img.shields.io/badge/OpenCart%20ITALIA-Community-0284c7?style=for-the-badge&logo=opencart&logoColor=white" alt="OpenCart Italia" /></a>
+  <a href="https://www.domenicotricarico.it"><img src="https://img.shields.io/badge/Domenico%20Tricarico-Developer-10b981?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Domenico Tricarico" /></a>
   &nbsp;&nbsp;
-  <a href="https://www.solosoluzioni.it"><img src="https://img.shields.io/badge/SOLO%20SOLUZIONI-Sviluppo%20Web-6366f1?style=for-the-badge" alt="Solo Soluzioni" /></a>
+  <a href="https://www.solosoluzioni.it"><img src="https://img.shields.io/badge/SOLO%20SOLUZIONI-Azienda%20del%20Progetto-6366f1?style=for-the-badge" alt="Solo Soluzioni" /></a>
+  &nbsp;&nbsp;
+  <a href="https://www.opencartitalia.it"><img src="https://img.shields.io/badge/OpenCart%20ITALIA-Community-0284c7?style=for-the-badge&logo=opencart&logoColor=white" alt="OpenCart Italia" /></a>
 </p>
 
-- 🌐 Visita il portale della community: **[www.opencartitalia.it](https://www.opencartitalia.it)**
-- 🏢 Contatta lo sviluppatore ufficiale: **[www.solosoluzioni.it](https://www.solosoluzioni.it)**
-- ☕ Sostieni lo sviluppatore su GitHub: **[github.com/sponsors/domtric80](https://github.com/sponsors/domtric80)**
+- 👨‍💻 **Sito dello Sviluppatore**: [www.domenicotricarico.it](https://www.domenicotricarico.it)
+- 🏢 **Azienda del Progetto**: **SOLO SOLUZIONI** — [www.solosoluzioni.it](https://www.solosoluzioni.it)
+- 🌐 **Portale Ufficiale Community**: **OpenCart ITALIA** — [www.opencartitalia.it](https://www.opencartitalia.it)
+- ☕ **Sostieni lo sviluppo su GitHub**: [github.com/sponsors/domtric80](https://github.com/sponsors/domtric80)
 
 ---
 

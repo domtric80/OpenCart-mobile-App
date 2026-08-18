@@ -178,19 +178,19 @@ fun LicenseScreen(
 
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         OutlinedButton(
                             onClick = {
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.opencartitalia.it"))
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.domenicotricarico.it"))
                                 context.startActivity(intent)
                             },
                             modifier = Modifier.weight(1f).height(40.dp),
                             shape = RoundedCornerShape(12.dp)
                         ) {
-                            Icon(Icons.Default.Language, contentDescription = null, modifier = Modifier.size(14.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("OpenCart Italia", style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp))
+                            Icon(Icons.Default.Language, contentDescription = null, modifier = Modifier.size(13.dp))
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text("D. Tricarico", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp))
                         }
 
                         OutlinedButton(
@@ -201,9 +201,22 @@ fun LicenseScreen(
                             modifier = Modifier.weight(1f).height(40.dp),
                             shape = RoundedCornerShape(12.dp)
                         ) {
-                            Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(14.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Solo Soluzioni", style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp))
+                            Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(13.dp))
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text("Solo Soluzioni", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp))
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.opencartitalia.it"))
+                                context.startActivity(intent)
+                            },
+                            modifier = Modifier.weight(1f).height(40.dp),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.Language, contentDescription = null, modifier = Modifier.size(13.dp))
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text("OpenCart Italia", style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp))
                         }
                     }
                 }
