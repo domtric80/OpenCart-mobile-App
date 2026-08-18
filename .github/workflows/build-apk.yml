@@ -26,17 +26,23 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: Grant execute permission for gradlew
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Prepare Secrets and Signing Config
         run: |
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-          else
-            gradle wrapper
-            chmod +x ./gradlew
+          # Create placeholder .env for secrets plugin
+          touch .env
+          echo "DUMMY_KEY=default" > .env
+          
+          # Create a valid debug keystore so signingConfig does not fail
+          mkdir -p ~/.android
+          if [ ! -f "debug.keystore" ]; then
+            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
