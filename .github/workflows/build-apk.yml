@@ -42,7 +42,13 @@ jobs:
           fi
 
       - name: Build Debug APK
-        run: gradle :app:assembleDebug --no-daemon --stacktrace
+        run: |
+          gradle :app:assembleDebug \
+            -Dksp.use.ksp2=true \
+            -Dkotlin.compiler.execution.strategy=out-of-process \
+            -Dorg.gradle.jvmargs="-Xmx4g -Dfile.encoding=UTF-8 -Djava.awt.headless=true" \
+            --no-daemon \
+            --stacktrace
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
