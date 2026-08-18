@@ -9,15 +9,18 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
   build:
-    name: Build APK & Create Release
+    name: Build & Auto Release APK
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -46,21 +49,40 @@ jobs:
         run: |
           gradle :app:assembleDebug --no-daemon --stacktrace
 
+      - name: Prepare Named APK
+        run: |
+          mkdir -p release-assets
+          cp app/build/outputs/apk/debug/app-debug.apk release-assets/CartAdmin-v1.0.0.apk
+
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: CartAdmin-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: CartAdmin-APK
+          path: release-assets/CartAdmin-v1.0.0.apk
           if-no-files-found: error
 
-      - name: Create Release and Upload APK
-        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+      - name: Auto Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name || 'v1.0.0' }}
-          name: CartAdmin ${{ github.ref_name || 'v1.0.0' }}
+          tag_name: v1.0.0
+          name: "CartAdmin v1.0.0 — Official Android Release"
+          body: |
+            ## 🛒 CartAdmin v1.0.0
+            
+            Android application for OpenCart e-commerce management.
+            
+            ### 📱 Download & Installation
+            1. Download the **`CartAdmin-v1.0.0.apk`** attached below.
+            2. Open the file on your Android device and tap **Install**.
+            
+            ### ✨ Features
+            - Real-time sales metrics & revenue analytics
+            - Order management & status workflows
+            - Product inventory & catalog control
+            - Offline-first cache with Room Database
+            - FCM Push Notifications support
           draft: false
           prerelease: false
-          files: app/build/outputs/apk/debug/app-debug.apk
+          files: release-assets/CartAdmin-v1.0.0.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
