@@ -43,6 +43,26 @@ jobs:
             keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
 
+      - name: Extract App Version
+        id: get_version
+        run: |
+          # Extract versionName from app/build.gradle.kts
+          VERSION_NAME=$(grep 'versionName = ' app/build.gradle.kts | head -n 1 | sed -E 's/.*"([^"]+)".*/\1/')
+          if [ -z "$VERSION_NAME" ]; then
+            VERSION_NAME="1.0.1"
+          fi
+          
+          # If triggered by a git tag, use the tag, otherwise use v<VERSION_NAME>
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            RELEASE_TAG="${{ github.ref_name }}"
+          else
+            RELEASE_TAG="v${VERSION_NAME}"
+          fi
+          
+          echo "version=${VERSION_NAME}" >> $GITHUB_OUTPUT
+          echo "tag=${RELEASE_TAG}" >> $GITHUB_OUTPUT
+          echo "Extracted Version: ${VERSION_NAME} with Tag: ${RELEASE_TAG}"
+
       - name: Build Debug APK
         env:
           GRADLE_OPTS: "-Djava.awt.headless=true -Dorg.gradle.jvmargs=\"-Xmx4g -Dfile.encoding=UTF-8 -Djava.awt.headless=true\""
@@ -52,38 +72,37 @@ jobs:
       - name: Prepare Named APK
         run: |
           mkdir -p release-assets
-          cp app/build/outputs/apk/debug/app-debug.apk release-assets/CartAdmin-v1.0.0.apk
+          VERSION="${{ steps.get_version.outputs.version }}"
+          cp app/build/outputs/apk/debug/app-debug.apk "release-assets/CartAdmin-v${VERSION}.apk"
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: CartAdmin-APK
-          path: release-assets/CartAdmin-v1.0.0.apk
+          path: release-assets/*.apk
           if-no-files-found: error
 
       - name: Auto Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.0
-          name: "CartAdmin v1.0.0 — OpenCart ITALIA by SOLO SOLUZIONI"
+          tag_name: ${{ steps.get_version.outputs.tag }}
+          name: "CartAdmin ${{ steps.get_version.outputs.tag }} — OpenCart ITALIA by SOLO SOLUZIONI"
           body: |
-            ## 🛒 CartAdmin v1.0.0 — App Ufficiale OpenCart ITALIA
+            ## 🛒 CartAdmin ${{ steps.get_version.outputs.tag }} — App Ufficiale OpenCart ITALIA
             
             **CartAdmin** è l'applicazione Android ufficiale di **OpenCart ITALIA** ([www.opencartitalia.it](https://www.opencartitalia.it)) sviluppata da **SOLO SOLUZIONI** ([www.solosoluzioni.it](https://www.solosoluzioni.it)).
             
             ### 📱 Download & Installazione
-            1. Scarica il file **`CartAdmin-v1.0.0.apk`** allegato qui sotto.
+            1. Scarica il file **`CartAdmin-${{ steps.get_version.outputs.tag }}.apk`** allegato qui sotto.
             2. Aprilo sul tuo dispositivo Android e tocca **Installa**.
             
-            ### ✨ Funzionalità Principali
-            - Monitoraggio metriche di vendita e fatturato in tempo reale
-            - Gestione ordini e avanzamento stati di lavorazione
-            - Controllo catalogo, prezzi e allarmi scorte sottoscorta
-            - Cache locale offline con Room Database
-            - Notifiche Push istantanee per nuovi ordini
-            - Collegamenti diretti a OpenCart ITALIA e SOLO SOLUZIONI
+            ### ✨ Note di Versione (${{ steps.get_version.outputs.tag }})
+            - Branding ufficiale OpenCart ITALIA by SOLO SOLUZIONI integrato nell'interfaccia
+            - Collegamenti diretti al portale ufficiale e all'assistenza SOLO SOLUZIONI
+            - Gestione ordini, catalogo, statistiche vendite e notifiche push in tempo reale
+            - Cache locale offline per una navigazione ultra-fluida
           draft: false
           prerelease: false
-          files: release-assets/CartAdmin-v1.0.0.apk
+          files: release-assets/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
