@@ -24,31 +24,27 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: gradle
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Prepare Secrets and Signing Config
+      - name: Prepare Secrets and Keystore
         run: |
-          # Create placeholder .env for secrets plugin
+          # Create placeholder .env for secrets gradle plugin
           touch .env
           echo "DUMMY_KEY=default" > .env
           
-          # Create a valid debug keystore so signingConfig does not fail
+          # Generate local debug.keystore if missing
           mkdir -p ~/.android
           if [ ! -f "debug.keystore" ]; then
             keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
 
       - name: Build Debug APK
+        env:
+          GRADLE_OPTS: "-Djava.awt.headless=true -Dorg.gradle.jvmargs=\"-Xmx4g -Dfile.encoding=UTF-8 -Djava.awt.headless=true\""
         run: |
-          gradle :app:assembleDebug \
-            -Dksp.use.ksp2=true \
-            -Dkotlin.compiler.execution.strategy=out-of-process \
-            -Dorg.gradle.jvmargs="-Xmx4g -Dfile.encoding=UTF-8 -Djava.awt.headless=true" \
-            --no-daemon \
-            --stacktrace
+          gradle :app:assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
