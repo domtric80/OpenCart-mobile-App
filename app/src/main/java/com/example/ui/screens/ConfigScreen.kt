@@ -880,6 +880,67 @@ fun ConfigScreen(
                 }
             }
 
+            // SICUREZZA & PASSWORD DI ACCESSO
+            item {
+                val securityManager = remember { com.example.auth.SecurityManager(context) }
+                val authStatus = remember { securityManager.evaluateAuthStatus() }
+                var showChangePwdDialog by remember { mutableStateOf(false) }
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(CardSurfacePure)
+                        .border(1.dp, MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(22.dp))
+                        .padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Default.Security, contentDescription = null, tint = ThemePrimary, modifier = Modifier.size(20.dp))
+                        Text(
+                            text = "SICUREZZA & ACCESSO APP",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                letterSpacing = 1.2.sp
+                            ),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Text(
+                        text = "Stato protezione: " + when (authStatus.lockType) {
+                            com.example.auth.DeviceLockType.STRONG_BIOMETRIC -> "Biometria attiva (Sessione illimitata)"
+                            com.example.auth.DeviceLockType.WEAK_DEVICE_CREDENTIAL -> "PIN/Segno (Scadenza 72h / Password 90gg)"
+                            com.example.auth.DeviceLockType.NONE -> "Nessun blocco schermo (Password ad ogni avvio)"
+                        },
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 12.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    OutlinedButton(
+                        onClick = {
+                            showChangePwdDialog = true
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(46.dp)
+                            .testTag("change_security_password_button"),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Icon(Icons.Default.Key, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Modifica Password di Accesso", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
+                    }
+                }
+            }
+
             // OPENCART ITALIA by SOLO SOLUZIONI Official Info Card
             item {
                 Box(

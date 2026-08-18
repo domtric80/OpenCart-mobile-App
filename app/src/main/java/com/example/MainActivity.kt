@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -30,7 +29,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.auth.AuthStatus
+import com.example.auth.SecurityManager
 import com.example.model.Order
 import com.example.notification.NotificationHelper
 import com.example.ui.MainViewModel
@@ -39,6 +41,7 @@ import com.example.ui.components.HeaderSection
 import com.example.ui.components.NavigationTab
 import com.example.ui.components.OrderDetailSheet
 import com.example.ui.components.StoreSwitcherSheet
+import com.example.ui.screens.AuthLockScreen
 import com.example.ui.screens.CatalogScreen
 import com.example.ui.screens.ConfigScreen
 import com.example.ui.screens.DashboardHomeScreen
@@ -47,7 +50,7 @@ import com.example.ui.screens.OrdersScreen
 import com.example.ui.screens.VisitorsRealtimeScreen
 import com.example.ui.theme.MyApplicationTheme
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
 
@@ -84,7 +87,22 @@ class MainActivity : ComponentActivity() {
                     } catch (_: Exception) {}
                 }
 
-                CartAdminApp(viewModel = viewModel)
+                val securityManager = remember { SecurityManager(context) }
+                var authStatus by remember { mutableStateOf(securityManager.evaluateAuthStatus()) }
+                var isAuthenticated by remember { mutableStateOf(!authStatus.requiresImmediateAuth) }
+
+                if (!isAuthenticated) {
+                    AuthLockScreen(
+                        authStatus = authStatus,
+                        securityManager = securityManager,
+                        onAuthSuccess = {
+                            isAuthenticated = true
+                            authStatus = securityManager.evaluateAuthStatus()
+                        }
+                    )
+                } else {
+                    CartAdminApp(viewModel = viewModel)
+                }
             }
         }
     }

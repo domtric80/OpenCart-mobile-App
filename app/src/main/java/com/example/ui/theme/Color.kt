@@ -37,6 +37,11 @@ val TrendGreenLight = Color(0xFFE6F4EA)
 val AlertRed = Color(0xFFB3261E)
 val AlertRedContainer = Color(0xFFF9DEDC)
 
+// Semantic colors
+val ColorSemanticGreen = Color(0xFF16A34A)
+val ColorSemanticOrange = Color(0xFFEA580C)
+val ColorSemanticRed = Color(0xFFDC2626)
+
 // Order Status Palette
 val StatusPendingGold = Color(0xFFB45309)
 val StatusPendingGoldBg = Color(0xFFFEF3C7)
