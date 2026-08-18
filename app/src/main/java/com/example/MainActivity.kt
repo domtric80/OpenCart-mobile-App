@@ -42,6 +42,7 @@ import com.example.ui.components.StoreSwitcherSheet
 import com.example.ui.screens.CatalogScreen
 import com.example.ui.screens.ConfigScreen
 import com.example.ui.screens.DashboardHomeScreen
+import com.example.ui.screens.LicenseScreen
 import com.example.ui.screens.OrdersScreen
 import com.example.ui.screens.VisitorsRealtimeScreen
 import com.example.ui.theme.MyApplicationTheme
@@ -248,6 +249,10 @@ fun CartAdminApp(
                             viewModel.triggerSync()
                         }
                     )
+                }
+
+                NavigationTab.LICENSE -> {
+                    LicenseScreen()
                 }
             }
 

@@ -1,12 +1,11 @@
 # 🛒 CartAdmin — E-Commerce Store Admin & Analytics for Android
 
 <p align="center">
-  <a href="https://github.com"><img src="https://img.shields.io/badge/Platform-Android%2014+-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android" /></a>
+  <a href="https://github.com"><img src="https://img.shields.io/badge/Platform-Android%207.0+-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android" /></a>
   <a href="https://kotlinlang.org"><img src="https://img.shields.io/badge/Kotlin-2.0+-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white" alt="Kotlin" /></a>
   <a href="https://developer.android.com/jetpack/compose"><img src="https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white" alt="Jetpack Compose" /></a>
-  <a href="https://developer.android.com/training/data-storage/room"><img src="https://img.shields.io/badge/Room-Offline%20Cache-FFA000?style=for-the-badge&logo=sqlite&logoColor=white" alt="Room Database" /></a>
-  <a href="https://github.com"><img src="https://img.shields.io/badge/Build-Passing-brightgreen?style=for-the-badge" alt="Build Status" /></a>
-  <a href="https://github.com"><img src="https://img.shields.io/badge/Version-v1.0.0-blue?style=for-the-badge" alt="Version" /></a>
+  <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GNU%20GPL%20v3-blue.svg?style=for-the-badge" alt="License: GNU GPL v3" /></a>
+  <a href="https://github.com"><img src="https://img.shields.io/badge/Version-v1.0.1-brightgreen?style=for-the-badge" alt="Version" /></a>
 </p>
 
 <p align="center">
@@ -23,19 +22,44 @@ Un'applicazione Android moderna e ad alte prestazioni creata per i gestori e gli
 
 ---
 
-## ✨ Key Features
+## 📥 Download Release & Compatibilità Hardware
 
-- 📊 **Real-Time Sales & Revenue Analytics**: Monitor today's revenue, order counts, customer registrations, and period-over-period growth with charts and KPI cards.
-- 📦 **Order Lifecycle Management**: View, filter, and update customer orders, process statuses (Pending, Processing, Shipped, Completed, Cancelled), and review line items.
-- 👥 **Customer Directory**: Access customer history, contact details, total orders placed, and lifetime value metrics.
-- 🏷️ **Product & Category Catalog**: Real-time product inventory control, stock management, price updates, and category organization.
-- 📶 **Offline-First Resilience**: Powered by Room database caching for continuous access to your store metrics and catalogs even without internet connectivity.
-- 🔔 **Instant Push Notifications**: Firebase Cloud Messaging (FCM) integration with custom channels for immediate alerts on new orders and status changes.
-- 🎨 **Adaptive Material You UI**: Dynamic theming, high-contrast typography, responsive layout scaling across phones and foldables, and smooth navigation.
+Tutti i rilasci compilati sono scaricabili direttamente dalla sezione [GitHub Releases](https://github.com).
+
+| Versione Release | File Scaricabile | Minimo Android Richiesto | Architetture CPU Supportate | Stato |
+| :--- | :--- | :--- | :--- | :--- |
+| **v1.0.1** (Latest) | [`CartAdmin-v1.0.1.apk`](../../releases/tag/v1.0.1) | Android 7.0 (API 24) o sup. | `arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86` | 🟢 Stabile |
+| **v1.0.0** | [`CartAdmin-v1.0.0.apk`](../../releases/tag/v1.0.0) | Android 7.0 (API 24) o sup. | `arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86` | ⚪ Precedente |
+
+### 📋 Requisiti di Sistema & Dispositivi
+- **Sistema Operativo**: Android 7.0 Nougat (API 24) fino ad Android 15 (API 35/36)
+- **Fattori di forma supportati**: Smartphone, Foldables, Tablet e ambienti ChromeOS (layout responsive con supporto Window Size Classes)
+- **OpenCart Supportati**: OpenCart 3.0.x, OpenCart 4.0.x (tramite modulo API `cartadmin_api.php`)
 
 ---
 
-## 📸 Screenshots
+## ✨ Funzionalità Principali
+
+- 📊 **Metriche & Statistiche di Vendita in Tempo Reale**: Monitora fatturato giornaliero, ordini recenti, nuovi clienti e grafici di trend.
+- 📦 **Gestione Ciclo di Vita Ordini**: Filtra per stato (In attesa, In lavorazione, Spedito, Completato, Rimborsato), visualizza il dettaglio dei prodotti acquistati e aggiorna gli stati in tempo reale.
+- 🏷️ **Catalogo Prodotti & Allarmi Stock**: Gestione rapida dell'inventario, prezzi, quantità in magazzino e avvisi automatici sottoscorta.
+- 📶 **Resilienza Offline (Room Database)**: I dati del negozio vengono salvati localmente per una consultazione istantanea anche in assenza di rete.
+- 🔔 **Notifiche Push Istantanee**: Supporto Firebase Cloud Messaging per la ricezione immediata dei nuovi ordini.
+- 🎨 **Interfaccia Material Design 3**: Dynamic theming, tipografia ad alto contrasto e transizioni fluide.
+
+---
+
+## 💖 Supporto & Sponsorizzazione
+
+Se utilizzi CartAdmin per gestire il tuo business e desideri supportare lo sviluppo continuo del progetto o richiedere personalizzazioni dedicate:
+
+- 🌐 Visita il portale della community: **[www.opencartitalia.it](https://www.opencartitalia.it)**
+- 🏢 Contatta lo sviluppatore ufficiale: **[www.solosoluzioni.it](https://www.solosoluzioni.it)**
+- ☕ Puoi sostenere il progetto anche tramite il pulsante **Sponsor** in alto sul repository GitHub!
+
+---
+
+## 📸 Screenshot
 
 <p align="center">
   <img src="app/src/main/res/drawable/img_cartadmin_screen_dash_1786997549527.jpg" width="45%" alt="Dashboard Screen" />
@@ -45,50 +69,28 @@ Un'applicazione Android moderna e ad alte prestazioni creata per i gestori e gli
 
 ---
 
-## 🛠️ Tech Stack & Architecture
+## 🛠️ Architettura & Stack Tecnologico
 
-- **UI Framework**: Jetpack Compose with Material 3 components & theme tokens
-- **Architecture**: Clean MVVM (Model-View-ViewModel) with Kotlin Coroutines & StateFlow
-- **Local Persistence**: Android Room Database (Entities, DAOs, Type Converters)
+- **UI Framework**: Jetpack Compose con componenti Material 3
+- **Architettura**: Clean MVVM con Kotlin Coroutines & StateFlow
+- **Persistenza Locale**: Android Room Database
 - **Networking**: Retrofit 2 + OkHttp3 + Kotlinx Serialization
-- **Cloud Messaging**: Firebase Cloud Messaging (FCM) for real-time notifications
-- **Target SDK**: Android 14+ (minSdk 26, targetSdk 35)
+- **Cloud Messaging**: Firebase Cloud Messaging (FCM)
+- **Target SDK**: minSdk 24, targetSdk 36
 
 ---
 
-## 📥 How to Download & Install the APK
+## 📄 Licenza (License)
 
-### 1. Download via AI Studio / GitHub Releases
-- Download the generated `CartAdmin-release.apk` (or `CartAdmin-debug.apk`) from the **Releases** section of your GitHub repository.
-- Alternatively, in Google AI Studio, use the top menu: **Export / Download APK / AAB**.
+Questo progetto è rilasciato sotto licenza libera e open-source **GNU General Public License v3.0 (GNU GPL v3)**.  
+Consulta il file [`LICENSE`](LICENSE) per il testo completo dei termini e delle condizioni di licenza.
 
-### 2. Sideload on Android
-1. Transfer or download the `.apk` file directly on your Android phone.
-2. Open the file via your device's File Manager or Downloads app.
-3. If prompted, enable **"Install unknown apps"** for your browser / file manager.
-4. Tap **Install** and open **CartAdmin** to connect your store!
+```text
+CartAdmin - App Ufficiale OpenCart ITALIA by SOLO SOLUZIONI
+Copyright (C) 2026 OpenCart ITALIA & SOLO SOLUZIONI
 
----
-
-## 🚀 Building from Source
-
-To compile and build the APK locally using Gradle:
-
-```bash
-# Clone repository
-git clone https://github.com/your-username/cartadmin-android.git
-cd cartadmin-android
-
-# Build Debug APK
-./gradlew assembleDebug
-
-# Build Release APK
-./gradlew assembleRelease
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
 ```
-The compiled APK will be located at:
-`app/build/outputs/apk/debug/app-debug.apk`
-
----
-
-## 📄 License
-CartAdmin is distributed under the MIT License.

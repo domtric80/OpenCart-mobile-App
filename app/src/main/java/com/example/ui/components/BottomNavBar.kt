@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Settings
@@ -44,8 +45,9 @@ enum class NavigationTab(val label: String, val icon: ImageVector, val tag: Stri
     HOME("Home", Icons.Default.Dashboard, "tab_home"),
     ORDERS("Ordini", Icons.Default.ShoppingCart, "tab_orders"),
     CATALOG("Catalogo", Icons.Default.Layers, "tab_catalog"),
-    VISITORS("Live Traffic", Icons.Default.Sensors, "tab_visitors"),
-    CONFIG("Config", Icons.Default.Settings, "tab_config")
+    VISITORS("Traffic", Icons.Default.Sensors, "tab_visitors"),
+    CONFIG("Config", Icons.Default.Settings, "tab_config"),
+    LICENSE("Licenza", Icons.Default.Gavel, "tab_license")
 }
 
 @Composable
