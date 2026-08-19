@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -84,6 +85,7 @@ fun AuthLockScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    var username by remember { mutableStateOf(securityManager.getOperatorUsername()) }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var showPassword by remember { mutableStateOf(false) }
@@ -242,11 +244,59 @@ fun AuthLockScreen(
                 }
             }
 
-            // Password Input Fields
+            // Username & Password Input Fields
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
+                if (isCreatingNewPassword) {
+                    OutlinedTextField(
+                        value = username,
+                        onValueChange = {
+                            username = it
+                            errorMessage = null
+                        },
+                        label = { Text("Nome Utente / Operatore") },
+                        placeholder = { Text("es. admin o tuo nome operatore") },
+                        singleLine = true,
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Text,
+                            imeAction = ImeAction.Next
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("auth_username_input"),
+                        shape = RoundedCornerShape(14.dp)
+                    )
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.padding(horizontal = 4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = null,
+                            tint = ThemePrimary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = "Operatore: ${securityManager.getOperatorUsername()}",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        )
+                    }
+                }
+
                 OutlinedTextField(
                     value = password,
                     onValueChange = {
@@ -336,6 +386,10 @@ fun AuthLockScreen(
                 Button(
                     onClick = {
                         if (isCreatingNewPassword) {
+                            if (username.isBlank()) {
+                                errorMessage = "Inserisci un nome utente o identificativo operatore."
+                                return@Button
+                            }
                             if (password != confirmPassword) {
                                 errorMessage = "Le password inserite non coincidono."
                                 return@Button
@@ -345,8 +399,8 @@ fun AuthLockScreen(
                                 errorMessage = check.message
                                 return@Button
                             }
-                            securityManager.setPassword(password)
-                            Toast.makeText(context, "Password impostata con successo!", Toast.LENGTH_SHORT).show()
+                            securityManager.setCredentials(username, password)
+                            Toast.makeText(context, "Profilo operatore impostato con successo!", Toast.LENGTH_SHORT).show()
                             onAuthSuccess()
                         } else {
                             if (securityManager.verifyPassword(password)) {

@@ -40,4 +40,7 @@ interface ProductDao {
 
     @Query("UPDATE products_cache SET status = :status WHERE id = :productId")
     suspend fun updateStatus(productId: String, status: Boolean)
+
+    @Query("DELETE FROM products_cache")
+    suspend fun clearAllProducts()
 }

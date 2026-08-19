@@ -767,4 +767,22 @@ class EcomRepository {
         _stores.update { it + newStore }
         _currentStoreId.value = newStore.id
     }
+
+    fun clearDummyData() {
+        _orders.value = emptyList()
+        _products.value = emptyList()
+        _categories.value = emptyList()
+        _activities.value = emptyList()
+        _stores.update { currentList ->
+            currentList.map { store ->
+                store.copy(
+                    todayRevenue = 0.0,
+                    revenueGrowthPercent = 0.0,
+                    pendingOrdersCount = 0,
+                    stockAlertsCount = 0,
+                    lastSyncTime = "Nessun dato sincronizzato"
+                )
+            }
+        }
+    }
 }

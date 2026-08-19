@@ -34,4 +34,7 @@ interface CategoryDao {
 
     @Query("UPDATE categories_cache SET status = :status WHERE id = :categoryId")
     suspend fun updateCategoryStatus(categoryId: String, status: Boolean)
+
+    @Query("DELETE FROM categories_cache")
+    suspend fun clearAllCategories()
 }

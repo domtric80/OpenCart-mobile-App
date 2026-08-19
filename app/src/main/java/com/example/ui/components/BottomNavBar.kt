@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Gavel
+import androidx.compose.material.icons.filled.HistoryEdu
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Settings
@@ -46,6 +47,7 @@ enum class NavigationTab(val label: String, val icon: ImageVector, val tag: Stri
     ORDERS("Ordini", Icons.Default.ShoppingCart, "tab_orders"),
     CATALOG("Catalogo", Icons.Default.Layers, "tab_catalog"),
     VISITORS("Traffic", Icons.Default.Sensors, "tab_visitors"),
+    AUDIT("Audit", Icons.Default.HistoryEdu, "tab_audit"),
     CONFIG("Config", Icons.Default.Settings, "tab_config"),
     LICENSE("Licenza", Icons.Default.Gavel, "tab_license")
 }

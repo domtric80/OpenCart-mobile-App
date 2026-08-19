@@ -41,6 +41,7 @@ import com.example.ui.components.HeaderSection
 import com.example.ui.components.NavigationTab
 import com.example.ui.components.OrderDetailSheet
 import com.example.ui.components.StoreSwitcherSheet
+import com.example.ui.screens.AuditScreen
 import com.example.ui.screens.AuthLockScreen
 import com.example.ui.screens.CatalogScreen
 import com.example.ui.screens.ConfigScreen
@@ -252,6 +253,15 @@ fun CartAdminApp(
                     )
                 }
 
+                NavigationTab.AUDIT -> {
+                    AuditScreen(
+                        auditLogs = uiState.auditLogs,
+                        onClearLogs = {
+                            viewModel.clearAuditLogs()
+                        }
+                    )
+                }
+
                 NavigationTab.CONFIG -> {
                     ConfigScreen(
                         currentStore = uiState.currentStore,
@@ -265,6 +275,9 @@ fun CartAdminApp(
                         },
                         onTriggerSync = {
                             viewModel.triggerSync()
+                        },
+                        onClearDummyData = {
+                            viewModel.clearDummyData()
                         }
                     )
                 }

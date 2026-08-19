@@ -28,6 +28,7 @@ class SecurityManager(private val context: Context) {
 
     companion object {
         private const val PREFS_NAME = "cartadmin_security_prefs"
+        private const val KEY_OPERATOR_USERNAME = "sec_operator_username"
         private const val KEY_PWD_HASH = "sec_pwd_hash"
         private const val KEY_PWD_SALT = "sec_pwd_salt"
         private const val KEY_LAST_AUTH_TIME = "sec_last_auth_time"
@@ -98,14 +99,20 @@ class SecurityManager(private val context: Context) {
         return prefs.getString(KEY_PWD_HASH, null) != null
     }
 
-    fun setPassword(password: String): Boolean {
+    fun getOperatorUsername(): String {
+        return prefs.getString(KEY_OPERATOR_USERNAME, "admin") ?: "admin"
+    }
+
+    fun setCredentials(username: String, password: String): Boolean {
         val check = validatePasswordStrength(password)
         if (!check.isValid) return false
 
+        val cleanUsername = if (username.isNotBlank()) username.trim() else "admin"
         val salt = generateSalt()
         val hash = hashPassword(password, salt)
 
         prefs.edit()
+            .putString(KEY_OPERATOR_USERNAME, cleanUsername)
             .putString(KEY_PWD_HASH, hash)
             .putString(KEY_PWD_SALT, salt)
             .putLong(KEY_PWD_CREATED_AT, System.currentTimeMillis())
@@ -113,6 +120,24 @@ class SecurityManager(private val context: Context) {
             .putBoolean(KEY_BIOMETRIC_ENABLED, true)
             .apply()
         return true
+    }
+
+    fun setPassword(password: String): Boolean {
+        return setCredentials(getOperatorUsername(), password)
+    }
+
+    fun getDeviceModelName(): String {
+        val manufacturer = android.os.Build.MANUFACTURER?.replaceFirstChar { it.uppercase() } ?: ""
+        val model = android.os.Build.MODEL ?: "Android Device"
+        return if (model.startsWith(manufacturer, ignoreCase = true)) {
+            model
+        } else {
+            "$manufacturer $model"
+        }.trim()
+    }
+
+    fun getAndroidVersionString(): String {
+        return "Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})"
     }
 
     fun verifyPassword(password: String): Boolean {

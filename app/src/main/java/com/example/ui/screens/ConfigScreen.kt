@@ -48,6 +48,8 @@ import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Store
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -58,6 +60,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -100,6 +103,7 @@ fun ConfigScreen(
     onTestConnection: (url: String, username: String, key: String) -> Unit,
     onSaveStoreCredentials: (storeId: String, name: String, url: String, username: String, key: String, version: String) -> Unit,
     onTriggerSync: () -> Unit,
+    onClearDummyData: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -855,6 +859,62 @@ fun ConfigScreen(
                             text = cacheClearedMessage!!,
                             style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
                             color = TrendGreen
+                        )
+                    }
+
+                    var showClearDummyDialog by remember { mutableStateOf(false) }
+
+                    if (showClearDummyDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showClearDummyDialog = false },
+                            title = {
+                                Text(
+                                    text = "Eliminare i Dati Dimostrativi?",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                )
+                            },
+                            text = {
+                                Text(
+                                    text = "Questa azione rimuoverà tutti gli ordini, prodotti e categorie di esempio dal database locale, lasciando l'app pronta per collegarsi al tuo store OpenCart reale.",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            },
+                            confirmButton = {
+                                Button(
+                                    onClick = {
+                                        onClearDummyData()
+                                        showClearDummyDialog = false
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = AlertRed, contentColor = Color.White)
+                                ) {
+                                    Text("Elimina Dati Finti")
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showClearDummyDialog = false }) {
+                                    Text("Annulla")
+                                }
+                            }
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = { showClearDummyDialog = true },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .testTag("clear_dummy_data_button"),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = AlertRed
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, AlertRed.copy(alpha = 0.6f))
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Rimuovi Dati Dimostrativi (Reset Dati)",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
                         )
                     }
 
