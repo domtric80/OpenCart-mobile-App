@@ -110,7 +110,7 @@ fun ConfigScreen(
     var storeName by remember { mutableStateOf(currentStore?.name ?: "") }
     var storeUrl by remember { mutableStateOf(currentStore?.url ?: "") }
     var apiUsername by remember { mutableStateOf(currentStore?.apiUsername ?: "api_admin_sync") }
-    var apiKey by remember { mutableStateOf(currentStore?.apiKey ?: "oc_key_live_8947239847293847293") }
+    var apiKey by remember { mutableStateOf(currentStore?.apiKey ?: "") }
     var storeVersion by remember { mutableStateOf(currentStore?.version ?: "OpenCart 3.0.3.8") }
     var showGuide by remember { mutableStateOf(false) }
     var showModuleSheet by remember { mutableStateOf(false) }

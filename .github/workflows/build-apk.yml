@@ -110,12 +110,12 @@ jobs:
             2. Aprilo sul tuo dispositivo Android e tocca **Installa**.
             
             ### ✨ Note di Versione (${{ steps.get_version.outputs.tag }})
-            - 🔍 **Nuova Scheda Audit & Registro Operazioni**: tracciamento in tempo reale di tutte le modifiche a ordini, scorte prodotti e credenziali effettuate da smartphone con rilevamento del modello dispositivo e versione Android.
-            - 🎨 **Interfaccia High-Contrast (WCAG AAA)**: leggibilità massimizzata su sfondi chiari con testi neri e scuri nitidi per tutti i badge, metriche e schede.
-            - 🧹 **Manutenzione Dati Dimostrativi**: aggiunta opzione per eliminare tutti i dati di esempio e iniziare con catalogo e ordini puliti per lo store reale.
-            - 🛡️ **Sicurezza Avanzata & Nuova Politica Password**: supporto per password forte (almeno 8 caratteri, maiuscola, numero e simbolo) con opzione di modifica diretta dall'app.
-            - 🌐 **Branding Ufficiale OpenCart ITALIA by SOLO SOLUZIONI**: link ufficiali integrati (OpenCart Italia, SOLO SOLUZIONI e Domenico Tricarico).
-            - ⚡ **Performance & Cache Room Locale**: navigazione fluida e resiliente anche offline.
+            - 🔒 **Security Hardening & CodeQL Patch**: risolti i 21 alert di sicurezza con NetworkSecurityConfig, eliminazione stringhe hardcoded e flag PendingIntent/Exported protetti.
+            - 🔍 **Scheda Audit & Registro Operazioni**: tracciamento in tempo reale di tutte le modifiche a ordini, scorte prodotti e credenziali da smartphone con modello dispositivo e versione Android.
+            - 🎨 **Interfaccia High-Contrast (WCAG AAA)**: massima leggibilità su sfondi chiari con testi scuri nitidi per badge, metriche e schede.
+            - 🧹 **Manutenzione Dati Dimostrativi**: opzione per eliminare tutti i dati di esempio e iniziare con catalogo e ordini puliti.
+            - 🛡️ **Sicurezza Avanzata & Politica Password**: password forte con cifratura salt+SHA256, biometria e opzione cambio credenziali.
+            - 🌐 **Branding Ufficiale OpenCart ITALIA by SOLO SOLUZIONI**: link ufficiali integrati.
           draft: false
           prerelease: false
           files: release-assets/*.apk
