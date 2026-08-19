@@ -5,7 +5,7 @@
   <a href="https://kotlinlang.org"><img src="https://img.shields.io/badge/Kotlin-2.0+-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white" alt="Kotlin" /></a>
   <a href="https://developer.android.com/jetpack/compose"><img src="https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white" alt="Jetpack Compose" /></a>
   <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GNU%20GPL%20v3-blue.svg?style=for-the-badge" alt="License: GNU GPL v3" /></a>
-  <a href="https://github.com"><img src="https://img.shields.io/badge/Version-v1.1.2-brightgreen?style=for-the-badge" alt="Version" /></a>
+  <a href="https://github.com"><img src="https://img.shields.io/badge/Version-v1.1.3-brightgreen?style=for-the-badge" alt="Version" /></a>
 </p>
 
 <p align="center">
@@ -28,7 +28,8 @@ Tutti i rilasci compilati sono scaricabili direttamente dalla sezione [GitHub Re
 
 | Versione Release | File Scaricabile | Minimo Android Richiesto | Architetture CPU Supportate | Stato |
 | :--- | :--- | :--- | :--- | :--- |
-| **v1.1.2** (Latest) | [`CartAdmin-v1.1.2.apk`](../../releases/tag/v1.1.2) | Android 7.0 (API 24) o sup. | `arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86` | 🟢 Stabile (Patch & Release Flow Fix) |
+| **v1.1.3** (Latest) | [`CartAdmin-v1.1.3.apk`](../../releases/tag/v1.1.3) | Android 7.0 (API 24) o sup. | `arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86` | 🟢 Stabile (Accessibilità & Contrasto WCAG AAA, GitHub Release Flow) |
+| **v1.1.2** | [`CartAdmin-v1.1.2.apk`](../../releases/tag/v1.1.2) | Android 7.0 (API 24) o sup. | `arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86` | ⚪ Precedente |
 | **v1.1.1** | [`CartAdmin-v1.1.1.apk`](../../releases/tag/v1.1.1) | Android 7.0 (API 24) o sup. | `arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86` | ⚪ Precedente |
 | **v1.1.0** | [`CartAdmin-v1.1.0.apk`](../../releases/tag/v1.1.0) | Android 7.0 (API 24) o sup. | `arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86` | ⚪ Precedente |
 | **v1.0.1** | [`CartAdmin-v1.0.1.apk`](../../releases/tag/v1.0.1) | Android 7.0 (API 24) o sup. | `arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86` | ⚪ Precedente |

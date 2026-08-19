@@ -661,7 +661,7 @@ private fun getAuditActionStyle(actionType: AuditActionType): Triple<Color, Colo
         AuditActionType.CATEGORY_UPDATE,
         AuditActionType.CATEGORY_DELETE -> Triple(StatusProcessingPurple, StatusProcessingPurpleBg, Icons.Default.Category)
 
-        AuditActionType.STORE_CONFIG_UPDATE -> Triple(OpenCartBluePrimary, CardSurfaceLight, Icons.Default.Settings)
+        AuditActionType.STORE_CONFIG_UPDATE -> Triple(OpenCartBluePrimary, ThemeSecondaryContainer, Icons.Default.Settings)
 
         AuditActionType.DUMMY_DATA_CLEARED -> Triple(StatusAlertRed, StatusAlertRedBg, Icons.Default.CleaningServices)
 

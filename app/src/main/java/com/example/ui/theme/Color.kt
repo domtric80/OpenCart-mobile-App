@@ -1,5 +1,7 @@
 package com.example.ui.theme
 
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 // High-Contrast Light Theme Palette (WCAG AAA compliant)
@@ -30,8 +32,18 @@ val ThemeOutlineVariant = Color(0xFF94A3B8)
 val BrandAvatarBg = Color(0xFFE0E7FF)
 val BrandAvatarText = Color(0xFF312E81)
 val LabelPurple = Color(0xFF4338CA)
-val CardSurfaceLight = Color(0xFFF3F4F6)
-val CardSurfacePure = Color(0xFFFFFFFF)
+// Base static fallbacks
+val CardSurfaceLightStatic = Color(0xFFF3F4F6)
+val CardSurfacePureStatic = Color(0xFFFFFFFF)
+
+// Dynamic theme-aware card surfaces
+val CardSurfacePure: Color
+    @Composable
+    get() = MaterialTheme.colorScheme.surface
+
+val CardSurfaceLight: Color
+    @Composable
+    get() = MaterialTheme.colorScheme.surfaceVariant
 val TrendGreen = Color(0xFF15803D)
 val TrendGreenLight = Color(0xFFDCFCE7)
 val AlertRed = Color(0xFFB91C1C)
