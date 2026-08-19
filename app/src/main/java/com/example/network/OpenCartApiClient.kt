@@ -364,7 +364,7 @@ class OpenCartApiClient {
                                     details = item.optString("details", null),
                                     deviceModel = item.optString("deviceModel", "Android"),
                                     androidVersion = "OpenCart Server Log",
-                                    appVersion = "1.1.1",
+                                    appVersion = "1.1.2",
                                     storeName = store.name,
                                     apiProfileUsed = "OpenCart Database (cartadmin_audit)"
                                 )
