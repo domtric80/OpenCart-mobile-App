@@ -701,5 +701,33 @@ class MainViewModel @JvmOverloads constructor(
     fun addStore(name: String, url: String, version: String, username: String = "api_user", key: String = "api_key_secret") {
         repository.addStore(name, url, version, username, key)
         _isStoreSwitcherOpen.value = false
+        viewModelScope.launch(Dispatchers.IO) {
+            offlineAuditRepository.logAction(
+                actionType = AuditActionType.STORE_CONFIG_UPDATE,
+                description = "Aggiunto nuovo store OpenCart '$name'",
+                details = "URL: $url • Versione: $version",
+                operatorUsername = securityManager.getOperatorUsername(),
+                deviceModel = securityManager.getDeviceModelName(),
+                androidVersion = securityManager.getAndroidVersionString(),
+                storeName = name
+            )
+        }
+    }
+
+    fun deleteStore(storeId: String) {
+        val storeToDelete = uiState.value.stores.find { it.id == storeId }
+        val storeName = storeToDelete?.name ?: "Store #$storeId"
+        repository.deleteStore(storeId)
+        viewModelScope.launch(Dispatchers.IO) {
+            offlineAuditRepository.logAction(
+                actionType = AuditActionType.STORE_CONFIG_UPDATE,
+                description = "Rimosso store OpenCart '$storeName'",
+                details = "Configurazione e credenziali eliminate dal dispositivo.",
+                operatorUsername = securityManager.getOperatorUsername(),
+                deviceModel = securityManager.getDeviceModelName(),
+                androidVersion = securityManager.getAndroidVersionString(),
+                storeName = storeName
+            )
+        }
     }
 }

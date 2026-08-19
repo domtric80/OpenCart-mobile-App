@@ -3,19 +3,19 @@ package com.example.ui.theme
 import androidx.compose.ui.graphics.Color
 
 // High-Contrast Light Theme Palette (WCAG AAA compliant)
-val ThemeBackground = Color(0xFFF8F9FA)
-val ThemeOnBackground = Color(0xFF111827)
+val ThemeBackground = Color(0xFFF1F5F9) // Slightly deeper light background for better separation
+val ThemeOnBackground = Color(0xFF0F172A) // Near jet-black
 val ThemeSurface = Color(0xFFFFFFFF)
-val ThemeOnSurface = Color(0xFF111827)
-val ThemeSurfaceVariant = Color(0xFFEEF2F6)
-val ThemeOnSurfaceVariant = Color(0xFF374151)
+val ThemeOnSurface = Color(0xFF0F172A) // Near jet-black
+val ThemeSurfaceVariant = Color(0xFFE2E8F0)
+val ThemeOnSurfaceVariant = Color(0xFF1E293B) // Dark Charcoal (High contrast)
 
-val ThemePrimary = Color(0xFF4F46E5) // Vivid Deep Indigo
+val ThemePrimary = Color(0xFF3730A3) // Deep rich Indigo
 val ThemeOnPrimary = Color(0xFFFFFFFF)
 val ThemePrimaryContainer = Color(0xFFE0E7FF)
 val ThemeOnPrimaryContainer = Color(0xFF1E1B4B)
 
-val ThemeSecondary = Color(0xFF475569) // Deep Slate
+val ThemeSecondary = Color(0xFF334155) // Deep Slate
 val ThemeOnSecondary = Color(0xFFFFFFFF)
 val ThemeSecondaryContainer = Color(0xFFE2E8F0)
 val ThemeOnSecondaryContainer = Color(0xFF0F172A)
@@ -24,8 +24,8 @@ val ThemeTertiary = Color(0xFF0F766E) // Deep Teal
 val ThemeTertiaryContainer = Color(0xFFCCFBF1)
 val ThemeOnTertiaryContainer = Color(0xFF134E4A)
 
-val ThemeOutline = Color(0xFF6B7280)
-val ThemeOutlineVariant = Color(0xFFD1D5DB)
+val ThemeOutline = Color(0xFF475569) // Darker outline for clarity
+val ThemeOutlineVariant = Color(0xFF94A3B8)
 
 val BrandAvatarBg = Color(0xFFE0E7FF)
 val BrandAvatarText = Color(0xFF312E81)

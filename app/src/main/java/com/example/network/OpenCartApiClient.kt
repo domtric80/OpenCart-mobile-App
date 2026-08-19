@@ -283,4 +283,98 @@ class OpenCartApiClient {
 
         true
     }
+
+    /**
+     * Synchronize audit log action directly to the remote OpenCart store database (cartadmin_audit table)
+     */
+    suspend fun sendAuditLogToOpenCart(
+        store: Store,
+        actionType: String,
+        description: String,
+        details: String?,
+        operator: String,
+        device: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        val cleanUrl = store.url.trim().removeSuffix("/")
+        if (cleanUrl.isBlank() || store.apiKey.isBlank()) return@withContext false
+
+        val bridgeUrl = "$cleanUrl/cartadmin_api.php?action=log_audit"
+        val payload = JSONObject().apply {
+            put("action_type", actionType)
+            put("description", description)
+            put("details", details ?: "")
+            put("operator", operator)
+            put("device", device)
+        }
+
+        val request = Request.Builder()
+            .url(bridgeUrl)
+            .post(payload.toString().toRequestBody(jsonMediaType))
+            .header("X-CartAdmin-Key", store.apiKey)
+            .header("User-Agent", "CartAdmin-Android/1.1.1")
+            .build()
+
+        try {
+            client.newCall(request).execute().use { res ->
+                res.isSuccessful && res.body?.string()?.contains("\"success\":true") == true
+            }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Fetch remote audit logs registered on the OpenCart server
+     */
+    suspend fun fetchOpenCartAuditLogs(store: Store): List<com.example.model.AuditLog> = withContext(Dispatchers.IO) {
+        val cleanUrl = store.url.trim().removeSuffix("/")
+        if (cleanUrl.isBlank() || store.apiKey.isBlank()) return@withContext emptyList()
+
+        val bridgeUrl = "$cleanUrl/cartadmin_api.php?action=audit_logs&limit=100"
+        val request = Request.Builder()
+            .url(bridgeUrl)
+            .get()
+            .header("X-CartAdmin-Key", store.apiKey)
+            .header("User-Agent", "CartAdmin-Android/1.1.1")
+            .build()
+
+        try {
+            client.newCall(request).execute().use { res ->
+                if (res.isSuccessful) {
+                    val body = res.body?.string() ?: ""
+                    val json = JSONObject(body)
+                    if (json.optBoolean("success", false)) {
+                        val logsArr = json.optJSONArray("logs") ?: return@withContext emptyList()
+                        val result = mutableListOf<com.example.model.AuditLog>()
+                        for (i in 0 until logsArr.length()) {
+                            val item = logsArr.getJSONObject(i)
+                            val actType = try {
+                                com.example.model.AuditActionType.valueOf(item.optString("actionType", "SYSTEM_LOGIN"))
+                            } catch (_: Exception) {
+                                com.example.model.AuditActionType.SYSTEM_LOGIN
+                            }
+                            result.add(
+                                com.example.model.AuditLog(
+                                    id = item.optString("id", "oc_$i"),
+                                    timestamp = item.optString("timestamp", "Recente"),
+                                    timestampMillis = System.currentTimeMillis(),
+                                    operatorUsername = item.optString("operatorUsername", "admin"),
+                                    actionType = actType,
+                                    description = item.optString("description", ""),
+                                    details = item.optString("details", null),
+                                    deviceModel = item.optString("deviceModel", "Android"),
+                                    androidVersion = "OpenCart Server Log",
+                                    appVersion = "1.1.1",
+                                    storeName = store.name,
+                                    apiProfileUsed = "OpenCart Database (cartadmin_audit)"
+                                )
+                            )
+                        }
+                        return@withContext result
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        emptyList()
+    }
 }

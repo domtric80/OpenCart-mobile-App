@@ -59,6 +59,11 @@ import com.example.ui.theme.ThemePrimary
 import com.example.ui.theme.ThemePrimaryContainer
 import com.example.ui.theme.ThemeSecondaryContainer
 
+import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import com.example.ui.theme.AlertRed
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StoreSwitcherSheet(
@@ -66,14 +71,51 @@ fun StoreSwitcherSheet(
     currentStoreId: String?,
     onSelectStore: (String) -> Unit,
     onAddStore: (name: String, url: String, version: String) -> Unit,
+    onDeleteStore: (String) -> Unit = {},
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showAddForm by remember { mutableStateOf(false) }
+    var storeToDelete by remember { mutableStateOf<Store?>(null) }
 
     var newStoreName by remember { mutableStateOf("") }
     var newStoreUrl by remember { mutableStateOf("https://") }
     var newStoreVersion by remember { mutableStateOf("OpenCart 3.0.3.8") }
+
+    if (storeToDelete != null) {
+        val target = storeToDelete!!
+        AlertDialog(
+            onDismissRequest = { storeToDelete = null },
+            title = {
+                Text(
+                    text = "Rimuovere lo Store?",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                )
+            },
+            text = {
+                Text(
+                    text = "Sei sicuro di voler eliminare '${target.name}' (${target.url}) dall'app? Le credenziali e la configurazione salvata verranno rimosse.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onDeleteStore(target.id)
+                        storeToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AlertRed, contentColor = androidx.compose.ui.graphics.Color.White)
+                ) {
+                    Text("Elimina Store")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { storeToDelete = null }) {
+                    Text("Annulla")
+                }
+            }
+        )
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -192,6 +234,21 @@ fun StoreSwitcherSheet(
                                         modifier = Modifier.size(16.dp)
                                     )
                                 }
+                            }
+
+                            // Delete Store Button (Only if more than 0 stores or not deleting last one without confirm)
+                            IconButton(
+                                onClick = { storeToDelete = store },
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .testTag("delete_store_btn_${store.id}")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.DeleteOutline,
+                                    contentDescription = "Elimina store ${store.name}",
+                                    tint = AlertRed,
+                                    modifier = Modifier.size(20.dp)
+                                )
                             }
                         }
                     }

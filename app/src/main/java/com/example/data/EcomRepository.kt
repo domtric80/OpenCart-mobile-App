@@ -768,6 +768,13 @@ class EcomRepository {
         _currentStoreId.value = newStore.id
     }
 
+    fun deleteStore(storeId: String) {
+        _stores.update { list -> list.filter { it.id != storeId } }
+        if (_currentStoreId.value == storeId) {
+            _currentStoreId.value = _stores.value.firstOrNull()?.id ?: ""
+        }
+    }
+
     fun clearDummyData() {
         _orders.value = emptyList()
         _products.value = emptyList()

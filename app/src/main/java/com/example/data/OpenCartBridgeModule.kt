@@ -383,6 +383,76 @@ try {
             }
             break;
 
+        case 'log_audit':
+            ${s}rawInput = file_get_contents('php://input');
+            ${s}data = json_decode(${s}rawInput, true);
+            if (!${s}data) ${s}data = ${s}_POST;
+
+            ${s}actionType = isset(${s}data['action_type']) ? ${s}mysqli->real_escape_string(trim(${s}data['action_type'])) : 'GENERAL';
+            ${s}description = isset(${s}data['description']) ? ${s}mysqli->real_escape_string(trim(${s}data['description'])) : '';
+            ${s}details = isset(${s}data['details']) ? ${s}mysqli->real_escape_string(trim(${s}data['details'])) : '';
+            ${s}operator = isset(${s}data['operator']) ? ${s}mysqli->real_escape_string(trim(${s}data['operator'])) : 'admin';
+            ${s}device = isset(${s}data['device']) ? ${s}mysqli->real_escape_string(trim(${s}data['device'])) : 'Android App';
+            ${s}ipAddr = ${s}mysqli->real_escape_string(${s}_SERVER['REMOTE_ADDR'] ?? '127.0.0.1');
+
+            // Auto create audit table if not exists in OpenCart database
+            ${s}mysqli->query("CREATE TABLE IF NOT EXISTS `${s}db_prefix" . "cartadmin_audit` (
+                `audit_id` INT(11) NOT NULL AUTO_INCREMENT,
+                `action_type` VARCHAR(64) NOT NULL,
+                `description` VARCHAR(255) NOT NULL,
+                `details` TEXT NULL,
+                `operator` VARCHAR(128) NOT NULL,
+                `device` VARCHAR(128) NOT NULL,
+                `ip_address` VARCHAR(45) NOT NULL,
+                `date_added` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (`audit_id`),
+                INDEX (`action_type`),
+                INDEX (`date_added`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+            ${s}stmt = ${s}mysqli->prepare("INSERT INTO `${s}db_prefix" . "cartadmin_audit` (`action_type`, `description`, `details`, `operator`, `device`, `ip_address`, `date_added`) VALUES (?, ?, ?, ?, ?, ?, NOW())");
+            if (${s}stmt) {
+                ${s}stmt->bind_param('ssssss', ${s}actionType, ${s}description, ${s}details, ${s}operator, ${s}device, ${s}ipAddr);
+                ${s}stmt->execute();
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'Evento di audit registrato con successo nel database OpenCart!',
+                    'audit_id' => ${s}stmt->insert_id
+                ]);
+            } else {
+                http_response_code(500);
+                echo json_encode(['success' => false, 'error' => 'Errore nella registrazione audit su OpenCart.']);
+            }
+            break;
+
+        case 'audit_logs':
+            ${s}limit = isset(${s}_GET['limit']) ? min(200, max(1, (int)${s}_GET['limit'])) : 50;
+            ${s}checkTable = ${s}mysqli->query("SHOW TABLES LIKE '${s}db_prefix" . "cartadmin_audit'");
+            ${s}logs = [];
+            if (${s}checkTable && ${s}checkTable->num_rows > 0) {
+                ${s}res = ${s}mysqli->query("SELECT * FROM `${s}db_prefix" . "cartadmin_audit` ORDER BY `audit_id` DESC LIMIT " . (int)${s}limit);
+                if (${s}res) {
+                    while (${s}row = ${s}res->fetch_assoc()) {
+                        ${s}logs[] = [
+                            'id' => 'oc_audit_' . ${s}row['audit_id'],
+                            'actionType' => ${s}row['action_type'],
+                            'description' => ${s}row['description'],
+                            'details' => ${s}row['details'],
+                            'operatorUsername' => ${s}row['operator'],
+                            'deviceModel' => ${s}row['device'],
+                            'ipAddress' => ${s}row['ip_address'],
+                            'timestamp' => ${s}row['date_added']
+                        ];
+                    }
+                }
+            }
+            echo json_encode([
+                'success' => true,
+                'total' => count(${s}logs),
+                'logs' => ${s}logs
+            ]);
+            break;
+
         case 'clear_cache':
             ${s}cacheDir = defined('DIR_CACHE') ? DIR_CACHE : 'system/storage/cache/';
             ${s}filesCleared = 0;

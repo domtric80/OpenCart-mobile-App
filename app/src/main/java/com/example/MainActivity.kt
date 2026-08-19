@@ -298,6 +298,9 @@ fun CartAdminApp(
                     onAddStore = { name, url, version ->
                         viewModel.addStore(name, url, version)
                     },
+                    onDeleteStore = { storeId ->
+                        viewModel.deleteStore(storeId)
+                    },
                     onDismiss = {
                         viewModel.setStoreSwitcherOpen(false)
                     }
