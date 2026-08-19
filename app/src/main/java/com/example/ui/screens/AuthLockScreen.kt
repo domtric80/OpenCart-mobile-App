@@ -92,7 +92,7 @@ fun AuthLockScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isCreatingNewPassword by remember { mutableStateOf(!authStatus.isPasswordConfigured || authStatus.isPasswordExpired) }
 
-    val isBiometricAvailable = authStatus.lockType == DeviceLockType.STRONG_BIOMETRIC
+    val isBiometricAvailable = authStatus.canUseBiometric
 
     fun launchBiometricPrompt() {
         val activity = context as? FragmentActivity ?: return
@@ -106,20 +106,20 @@ fun AuthLockScreen(
 
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                 super.onAuthenticationError(errorCode, errString)
-                // Se annullato o fallito, può sempre digitare la password
+                // Se annullato o fallito, l'operatore può sempre digitare la password
             }
         })
 
         val promptInfo = BiometricPrompt.PromptInfo.Builder()
-            .setTitle("Autenticazione CartAdmin")
-            .setSubtitle("Sblocca per accedere al tuo negozio OpenCart")
+            .setTitle("Autenticazione Sicura CartAdmin")
+            .setSubtitle("Sblocca per accedere al pannello OpenCart ITALIA")
             .setNegativeButtonText("Usa Password")
             .build()
 
         prompt.authenticate(promptInfo)
     }
 
-    // Se la biometria è attiva e la password è già impostata, apri automaticamente il prompt biometrico
+    // Se la biometria è attiva, abilitata dall'utente e la password è configurata, apri automaticamente il prompt biometrico
     LaunchedEffect(Unit) {
         if (isBiometricAvailable && authStatus.isPasswordConfigured && !authStatus.isPasswordExpired) {
             launchBiometricPrompt()

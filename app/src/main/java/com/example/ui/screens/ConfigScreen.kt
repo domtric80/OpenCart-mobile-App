@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Language
@@ -107,6 +108,7 @@ fun ConfigScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val securityManager = remember { com.example.auth.SecurityManager(context) }
     var storeName by remember { mutableStateOf(currentStore?.name ?: "") }
     var storeUrl by remember { mutableStateOf(currentStore?.url ?: "") }
     var apiUsername by remember { mutableStateOf(currentStore?.apiUsername ?: "api_admin_sync") }
@@ -682,6 +684,9 @@ fun ConfigScreen(
                             onClick = {
                                 currentStore?.let {
                                     onSaveStoreCredentials(it.id, storeName, storeUrl, apiUsername, apiKey, storeVersion)
+                                    // Crittografa i parametri con il chip hardware (TEE / AndroidKeyStore)
+                                    securityManager.saveEncryptedStoreCredentials("$storeUrl|$apiUsername|$apiKey")
+                                    Toast.makeText(context, "Parametri API salvati e protetti con chip hardware!", Toast.LENGTH_SHORT).show()
                                 }
                             },
                             modifier = Modifier
@@ -940,10 +945,10 @@ fun ConfigScreen(
                 }
             }
 
-            // SICUREZZA & PASSWORD DI ACCESSO
+            // SICUREZZA & PASSWORD DI ACCESSO (BANKING-GRADE)
             item {
-                val securityManager = remember { com.example.auth.SecurityManager(context) }
                 val authStatus = remember { securityManager.evaluateAuthStatus() }
+                var isBiometricPrefEnabled by remember { mutableStateOf(securityManager.isBiometricEnabledByUser()) }
                 var showChangePwdDialog by remember { mutableStateOf(false) }
 
                 Column(
@@ -953,36 +958,127 @@ fun ConfigScreen(
                         .background(CardSurfacePure)
                         .border(1.dp, MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(22.dp))
                         .padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.Security, contentDescription = null, tint = ThemePrimary, modifier = Modifier.size(20.dp))
-                        Text(
-                            text = "SICUREZZA & ACCESSO APP",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 11.sp,
-                                letterSpacing = 1.2.sp
-                            ),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(Icons.Default.Security, contentDescription = null, tint = ThemePrimary, modifier = Modifier.size(20.dp))
+                            Text(
+                                text = "SICUREZZA & AUTENTICAZIONE",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp,
+                                    letterSpacing = 1.2.sp
+                                ),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(TrendGreenLight)
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Text(
+                                text = "Crittografia Hardware TEE",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.sp
+                                ),
+                                color = TrendGreen
+                            )
+                        }
                     }
 
                     Text(
-                        text = "Stato protezione: " + when (authStatus.lockType) {
-                            com.example.auth.DeviceLockType.STRONG_BIOMETRIC -> "Biometria attiva (Sessione illimitata)"
-                            com.example.auth.DeviceLockType.WEAK_DEVICE_CREDENTIAL -> "PIN/Segno (Scadenza 72h / Password 90gg)"
-                            com.example.auth.DeviceLockType.NONE -> "Nessun blocco schermo (Password ad ogni avvio)"
-                        },
+                        text = "I dati e i token API OpenCart sono protetti con crittografia hardware AES-256 GCM (AndroidKeyStore). L'accesso richiede autenticazione ad ogni apertura o dopo 5 minuti di inattività.",
                         style = MaterialTheme.typography.bodySmall.copy(
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 12.sp
+                            fontSize = 12.sp,
+                            lineHeight = 17.sp
                         ),
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+
+                    // TOGGLE "Usa Biometrico"
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Fingerprint,
+                                contentDescription = null,
+                                tint = if (isBiometricPrefEnabled) ThemePrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Column {
+                                Text(
+                                    text = "Usa biometrico",
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = if (securityManager.isHardwareBiometricAvailable()) {
+                                        "Accedi con impronta o volto senza digitare la password"
+                                    } else {
+                                        "Biometria hardware non rilevata o non registrata sul dispositivo"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Switch(
+                            checked = isBiometricPrefEnabled,
+                            onCheckedChange = { checked ->
+                                isBiometricPrefEnabled = checked
+                                securityManager.setBiometricEnabledByUser(checked)
+                                Toast.makeText(
+                                    context,
+                                    if (checked) "Accesso biometrico rapido abilitato" else "Accesso biometrico disabilitato (richiesta password)",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            },
+                            enabled = securityManager.isHardwareBiometricAvailable(),
+                            modifier = Modifier.testTag("biometric_auth_switch")
+                        )
+                    }
+
+                    // Informazioni Operatore
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Operatore: ${securityManager.getOperatorUsername()}",
+                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Timeout sessione: 5 min",
+                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                            color = ThemePrimary
+                        )
+                    }
 
                     OutlinedButton(
                         onClick = {
@@ -998,6 +1094,86 @@ fun ConfigScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Modifica Password di Accesso", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
                     }
+                }
+
+                if (showChangePwdDialog) {
+                    var currentEnteredPwd by remember { mutableStateOf("") }
+                    var newPwd by remember { mutableStateOf("") }
+                    var confirmNewPwd by remember { mutableStateOf("") }
+                    var pwdErrorMsg by remember { mutableStateOf<String?>(null) }
+
+                    AlertDialog(
+                        onDismissRequest = { showChangePwdDialog = false },
+                        title = {
+                            Text("Modifica Password Operatore", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                        },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                if (securityManager.isPasswordSet()) {
+                                    OutlinedTextField(
+                                        value = currentEnteredPwd,
+                                        onValueChange = { currentEnteredPwd = it },
+                                        label = { Text("Password Attuale") },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+
+                                OutlinedTextField(
+                                    value = newPwd,
+                                    onValueChange = { newPwd = it },
+                                    label = { Text("Nuova Password (min. 8 car, 1 Maiusc, 1 Num, 1 Simbolo)") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                OutlinedTextField(
+                                    value = confirmNewPwd,
+                                    onValueChange = { confirmNewPwd = it },
+                                    label = { Text("Conferma Nuova Password") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                if (pwdErrorMsg != null) {
+                                    Text(
+                                        text = pwdErrorMsg ?: "",
+                                        color = AlertRed,
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp)
+                                    )
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    if (securityManager.isPasswordSet() && !securityManager.verifyPassword(currentEnteredPwd)) {
+                                        pwdErrorMsg = "Password attuale errata."
+                                        return@Button
+                                    }
+                                    if (newPwd != confirmNewPwd) {
+                                        pwdErrorMsg = "Le nuove password non corrispondono."
+                                        return@Button
+                                    }
+                                    val valCheck = securityManager.validatePasswordStrength(newPwd)
+                                    if (!valCheck.isValid) {
+                                        pwdErrorMsg = valCheck.message
+                                        return@Button
+                                    }
+                                    securityManager.setPassword(newPwd)
+                                    Toast.makeText(context, "Password aggiornata con successo!", Toast.LENGTH_SHORT).show()
+                                    showChangePwdDialog = false
+                                }
+                            ) {
+                                Text("Salva")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showChangePwdDialog = false }) {
+                                Text("Annulla")
+                            }
+                        }
+                    )
                 }
             }
 

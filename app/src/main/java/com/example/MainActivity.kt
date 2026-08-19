@@ -54,15 +54,25 @@ import com.example.ui.theme.MyApplicationTheme
 class MainActivity : FragmentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
+    private lateinit var securityManager: SecurityManager
+    private var isAuthenticatedState = mutableStateOf(false)
+    private var authStatusState = mutableStateOf<AuthStatus?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        securityManager = SecurityManager(this)
+
         // Initialize Android notification channels
         try {
             NotificationHelper.createNotificationChannels(this)
         } catch (_: Exception) {}
+
+        // Valutazione iniziale della sicurezza all'avvio dell'app (fresh launch: richiede autenticazione)
+        val initialStatus = securityManager.evaluateAuthStatus(isFreshAppLaunch = true)
+        authStatusState.value = initialStatus
+        isAuthenticatedState.value = !initialStatus.requiresImmediateAuth
 
         setContent {
             MyApplicationTheme {
@@ -88,23 +98,40 @@ class MainActivity : FragmentActivity() {
                     } catch (_: Exception) {}
                 }
 
-                val securityManager = remember { SecurityManager(context) }
-                var authStatus by remember { mutableStateOf(securityManager.evaluateAuthStatus()) }
-                var isAuthenticated by remember { mutableStateOf(!authStatus.requiresImmediateAuth) }
+                val isAuthenticated by isAuthenticatedState
+                val currentAuthStatus = authStatusState.value ?: securityManager.evaluateAuthStatus()
 
                 if (!isAuthenticated) {
                     AuthLockScreen(
-                        authStatus = authStatus,
+                        authStatus = currentAuthStatus,
                         securityManager = securityManager,
                         onAuthSuccess = {
-                            isAuthenticated = true
-                            authStatus = securityManager.evaluateAuthStatus()
+                            isAuthenticatedState.value = true
+                            authStatusState.value = securityManager.evaluateAuthStatus()
                         }
                     )
                 } else {
                     CartAdminApp(viewModel = viewModel)
                 }
             }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Controlla se la sessione è scaduta (inattività > 5 minuti)
+        val status = securityManager.evaluateAuthStatus()
+        authStatusState.value = status
+        if (status.requiresImmediateAuth) {
+            isAuthenticatedState.value = false
+        }
+    }
+
+    override fun onUserInteraction() {
+        super.onUserInteraction()
+        // Registra attività attiva dell'utente per mantenere viva la sessione durante l'uso continuo
+        if (isAuthenticatedState.value) {
+            securityManager.recordSuccessfulAuth()
         }
     }
 }
