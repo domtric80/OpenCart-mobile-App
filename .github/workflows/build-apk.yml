@@ -102,31 +102,48 @@ jobs:
           if-no-files-found: error
 
       - name: Auto Publish GitHub Release
-        uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-        with:
-          tag_name: ${{ steps.get_version.outputs.tag }}
-          name: "CartAdmin ${{ steps.get_version.outputs.tag }} — OpenCart ITALIA by SOLO SOLUZIONI"
-          body: |
-            ## 🛒 CartAdmin ${{ steps.get_version.outputs.tag }} — App Ufficiale OpenCart ITALIA
-            
-            **CartAdmin** è l'applicazione Android ufficiale di **OpenCart ITALIA** ([www.opencartitalia.it](https://www.opencartitalia.it)) sviluppata da **SOLO SOLUZIONI** ([www.solosoluzioni.it](https://www.solosoluzioni.it)).
-            
-            ### 📱 Download & Installazione
-            1. Scarica il file **`CartAdmin-v${{ steps.get_version.outputs.version }}.apk`** allegato qui sotto.
-            2. Aprilo sul tuo dispositivo Android e tocca **Installa**.
-            
-            ### ✨ Note di Versione (${{ steps.get_version.outputs.tag }})
-            - 🔒 **Security Hardening & CodeQL**: risolti tutti gli alert di sicurezza con NetworkSecurityConfig, cifratura credenziali e conformità CodeQL.
-            - 🔍 **Audit Log Server-Side & Locale**: sincronizzazione remota delle operazioni sul database OpenCart (`cartadmin_audit`) e tracciamento dispositivo.
-            - 🏪 **Gestione Multi-Store con Conferma**: aggiunta e rimozione negozi sicura con dialogo di conferma prima dell'eliminazione.
-            - 🎨 **Interfaccia High-Contrast (WCAG AAA)**: leggibilità ottimizzata con testi scuri definiti su sfondi chiari.
-            - 🛡️ **Sicurezza Operatore**: autenticazione biometrica, policy password forte (8+ caratteri con maiuscola, simbolo e numero) e hash salt+SHA256.
-            - 🌐 **Branding Ufficiale OpenCart ITALIA by SOLO SOLUZIONI**: collegamenti ufficiali a [www.opencartitalia.it](https://www.opencartitalia.it) e [www.solosoluzioni.it](https://www.solosoluzioni.it).
-          draft: false
-          prerelease: false
-          files: release-assets/*.apk
-          make_latest: true
-          fail_on_unmatched_files: false
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ steps.get_version.outputs.tag }}
+          VERSION: ${{ steps.get_version.outputs.version }}
+        run: |
+          APK_PATH="release-assets/CartAdmin-v${VERSION}.apk"
+          RELEASE_TITLE="CartAdmin ${TAG_NAME} — OpenCart ITALIA by SOLO SOLUZIONI"
+          
+          cat << 'EOF' > release_notes.md
+          ## 🛒 CartAdmin ${TAG_NAME} — App Ufficiale OpenCart ITALIA
+
+          **CartAdmin** è l'applicazione Android ufficiale di **OpenCart ITALIA** ([www.opencartitalia.it](https://www.opencartitalia.it)) sviluppata da **SOLO SOLUZIONI** ([www.solosoluzioni.it](https://www.solosoluzioni.it)).
+
+          ### 📱 Download & Installazione
+          1. Scarica il file **`CartAdmin-v${VERSION}.apk`** allegato qui sotto.
+          2. Aprilo sul tuo dispositivo Android e tocca **Installa**.
+
+          ### ✨ Note di Versione (${TAG_NAME})
+          - 🔒 **Security Hardening & CodeQL**: risolti tutti gli alert di sicurezza con NetworkSecurityConfig, cifratura credenziali e conformità CodeQL.
+          - 🔍 **Audit Log Server-Side & Locale**: sincronizzazione remota delle operazioni sul database OpenCart (`cartadmin_audit`) e tracciamento dispositivo.
+          - 🏪 **Gestione Multi-Store con Conferma**: aggiunta e rimozione negozi sicura con dialogo di conferma prima dell'eliminazione.
+          - 🎨 **Interfaccia High-Contrast (WCAG AAA)**: leggibilità ottimizzata con testi scuri definiti su sfondi chiari.
+          - 🛡️ **Sicurezza Operatore**: autenticazione biometrica, policy password forte (8+ caratteri con maiuscola, simbolo e numero) e hash salt+SHA256.
+          - 🌐 **Branding Ufficiale OpenCart ITALIA by SOLO SOLUZIONI**: collegamenti ufficiali a [www.opencartitalia.it](https://www.opencartitalia.it) e [www.solosoluzioni.it](https://www.solosoluzioni.it).
+          EOF
+
+          # Replace placeholders in notes
+          sed -i "s/\${TAG_NAME}/${TAG_NAME}/g" release_notes.md
+          sed -i "s/\${VERSION}/${VERSION}/g" release_notes.md
+
+          echo "Publishing release ${TAG_NAME} with APK ${APK_PATH} via GitHub CLI..."
+
+          # Check if release already exists
+          if gh release view "${TAG_NAME}" >/dev/null 2>&1; then
+            echo "Release ${TAG_NAME} already exists. Uploading asset with clobber..."
+            gh release upload "${TAG_NAME}" "${APK_PATH}" --clobber || echo "Asset upload completed or release is immutable."
+          else
+            echo "Creating new release ${TAG_NAME}..."
+            gh release create "${TAG_NAME}" "${APK_PATH}" \
+              --title "${RELEASE_TITLE}" \
+              --notes-file release_notes.md \
+              --latest
+          fi
+          echo "GitHub Release completed successfully."
