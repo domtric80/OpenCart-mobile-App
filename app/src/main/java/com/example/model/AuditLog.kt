@@ -26,7 +26,7 @@ data class AuditLog(
     val details: String? = null,
     val deviceModel: String,
     val androidVersion: String,
-    val appVersion: String = "1.2.0",
+    val appVersion: String = "1.2.1",
     val storeName: String = "TechGadgets Italy",
     val apiProfileUsed: String = "OpenCart Admin API (Direct Session)"
 )

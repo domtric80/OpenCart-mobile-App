@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CleaningServices
@@ -526,29 +527,36 @@ fun ConfigScreen(
                                     ),
                                     color = ThemePrimary
                                 )
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Copia Token",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = ThemePrimary
+                                        ),
+                                        modifier = Modifier
+                                            .clickable {
+                                                clipboardManager.setText(AnnotatedString(fcmToken ?: ""))
+                                                Toast.makeText(context, "Token FCM copiato negli appunti!", Toast.LENGTH_SHORT).show()
+                                            }
+                                            .padding(vertical = 2.dp, horizontal = 4.dp)
+                                    )
+                                }
+                            }
+                            SelectionContainer {
                                 Text(
-                                    text = "Copia",
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        color = ThemePrimary
+                                    text = fcmToken ?: "",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        fontSize = 11.sp,
+                                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                        lineHeight = 15.sp
                                     ),
-                                    modifier = Modifier
-                                        .clickable {
-                                            clipboardManager.setText(AnnotatedString(fcmToken ?: ""))
-                                            Toast.makeText(context, "Token FCM copiato negli appunti!", Toast.LENGTH_SHORT).show()
-                                        }
-                                        .padding(4.dp)
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                             }
-                            Text(
-                                text = fcmToken ?: "",
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    fontSize = 11.sp,
-                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
-                                ),
-                                maxLines = 2,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
                         }
                     }
                 }
