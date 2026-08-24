@@ -279,6 +279,56 @@ fun OpenCartModuleSheet(
                 }
             }
 
+            // Plugin OCMOD Zip Download Banner
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(TrendGreen.copy(alpha = 0.08f))
+                    .border(1.dp, TrendGreen.copy(alpha = 0.35f), RoundedCornerShape(18.dp))
+                    .padding(16.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Default.Download, contentDescription = null, tint = TrendGreen, modifier = Modifier.size(20.dp))
+                        Text(
+                            text = "PACCHETTO PLUGIN OPENCART (.OCMOD.ZIP)",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                letterSpacing = 1.1.sp
+                            ),
+                            color = TrendGreen
+                        )
+                    }
+
+                    Text(
+                        text = "Preferisci installare il plugin direttamente dal pannello di OpenCart? Puoi scaricare l'estensione ufficiale pronta .ocmod.zip dalla sezione Release di GitHub.",
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, lineHeight = 17.sp),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    OutlinedButton(
+                        onClick = {
+                            val browserIntent = Intent(
+                                Intent.ACTION_VIEW,
+                                android.net.Uri.parse("https://github.com")
+                            )
+                            context.startActivity(browserIntent)
+                        },
+                        modifier = Modifier.fillMaxWidth().height(42.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Vai ai Download Release su GitHub", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
+                    }
+                }
+            }
+
             // Quick 3-Step Setup Instructions
             Column(
                 modifier = Modifier

@@ -81,10 +81,12 @@ jobs:
             gradle :app:assembleDebug --no-daemon --stacktrace
           fi
 
-      - name: Prepare Named APK
+      - name: Prepare Release Assets (APK & OpenCart Plugin)
         run: |
           mkdir -p release-assets
           VERSION="${{ steps.get_version.outputs.version }}"
+          
+          # 1. Package APK
           APK_FILE=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
           if [ -f "$APK_FILE" ]; then
             cp "$APK_FILE" "release-assets/CartAdmin-v${VERSION}.apk"
@@ -94,11 +96,21 @@ jobs:
             exit 1
           fi
 
-      - name: Upload APK Artifact
+          # 2. Package OpenCart Bridge OCMOD Extension Zip
+          if [ -d "opencart-plugin" ]; then
+            cd opencart-plugin
+            zip -r "../release-assets/cartadmin-opencart-bridge-v${VERSION}.ocmod.zip" install.xml upload/ README.md
+            cd ..
+            echo "Created release-assets/cartadmin-opencart-bridge-v${VERSION}.ocmod.zip"
+          else
+            echo "Warning: opencart-plugin folder not found, skipping plugin zip"
+          fi
+
+      - name: Upload Release Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: CartAdmin-APK
-          path: release-assets/*.apk
+          name: CartAdmin-Release-Assets
+          path: release-assets/*
           if-no-files-found: error
 
       - name: Auto Publish GitHub Release
@@ -109,23 +121,32 @@ jobs:
           VERSION: ${{ steps.get_version.outputs.version }}
         run: |
           APK_PATH="release-assets/CartAdmin-v${VERSION}.apk"
+          PLUGIN_PATH="release-assets/cartadmin-opencart-bridge-v${VERSION}.ocmod.zip"
           RELEASE_TITLE="CartAdmin ${TAG_NAME} — OpenCart ITALIA by SOLO SOLUZIONI"
           
           cat << 'EOF' > release_notes.md
-          ## 🛒 CartAdmin ${TAG_NAME} — App Ufficiale OpenCart ITALIA
+          ## 🛒 CartAdmin ${TAG_NAME} — App Ufficiale & Plugin OpenCart ITALIA
 
-          **CartAdmin** è l'applicazione Android ufficiale di **OpenCart ITALIA** ([www.opencartitalia.it](https://www.opencartitalia.it)) sviluppata da **SOLO SOLUZIONI** ([www.solosoluzioni.it](https://www.solosoluzioni.it)).
+          **CartAdmin** è la piattaforma mobile e bridge ufficiale di **OpenCart ITALIA** ([www.opencartitalia.it](https://www.opencartitalia.it)) sviluppata da **SOLO SOLUZIONI** ([www.solosoluzioni.it](https://www.solosoluzioni.it)).
 
-          ### 📱 Download & Installazione
-          1. Scarica il file **`CartAdmin-v${VERSION}.apk`** allegato qui sotto.
-          2. Aprilo sul tuo dispositivo Android e tocca **Installa**.
+          ---
+
+          ### 📦 Download Disponibili in questa Release
+
+          | Download | Descrizione | Come Installare |
+          | :--- | :--- | :--- |
+          | 📱 **[`CartAdmin-v${VERSION}.apk`](../../releases/download/${TAG_NAME}/CartAdmin-v${VERSION}.apk)** | Applicazione Android per smartphone e tablet | Scarica e apri sul dispositivo Android |
+          | 🔌 **[`cartadmin-opencart-bridge-v${VERSION}.ocmod.zip`](../../releases/download/${TAG_NAME}/cartadmin-opencart-bridge-v${VERSION}.ocmod.zip)** | Estensione / Plugin per OpenCart 2.x, 3.x e 4.x | Carica in *Estensioni > Programma di Installazione* |
+
+          ---
 
           ### ✨ Note di Versione (${TAG_NAME})
+          - 🔌 **Doppio Rilascio Automatico**: Download separato per App Android (`.apk`) e Plugin OpenCart (`.ocmod.zip`).
           - 🔒 **Security Hardening & CodeQL**: risolti tutti gli alert di sicurezza con NetworkSecurityConfig, cifratura credenziali e conformità CodeQL.
+          - 🛡️ **Sicurezza Bancaria & TEE Hardware**: timeout inattività a 5 minuti, supporto sblocco biometrico immediato e cifratura hardware `AndroidKeyStore` AES-256 GCM.
           - 🔍 **Audit Log Server-Side & Locale**: sincronizzazione remota delle operazioni sul database OpenCart (`cartadmin_audit`) e tracciamento dispositivo.
           - 🏪 **Gestione Multi-Store con Conferma**: aggiunta e rimozione negozi sicura con dialogo di conferma prima dell'eliminazione.
           - 🎨 **Interfaccia High-Contrast (WCAG AAA)**: leggibilità ottimizzata con testi scuri definiti su sfondi chiari.
-          - 🛡️ **Sicurezza Operatore**: autenticazione biometrica, policy password forte (8+ caratteri con maiuscola, simbolo e numero) e hash salt+SHA256.
           - 🌐 **Branding Ufficiale OpenCart ITALIA by SOLO SOLUZIONI**: collegamenti ufficiali a [www.opencartitalia.it](https://www.opencartitalia.it) e [www.solosoluzioni.it](https://www.solosoluzioni.it).
           EOF
 
@@ -133,17 +154,28 @@ jobs:
           sed -i "s/\${TAG_NAME}/${TAG_NAME}/g" release_notes.md
           sed -i "s/\${VERSION}/${VERSION}/g" release_notes.md
 
-          echo "Publishing release ${TAG_NAME} with APK ${APK_PATH} via GitHub CLI..."
+          echo "Publishing release ${TAG_NAME} with APK and Plugin via GitHub CLI..."
+
+          # Build list of asset arguments
+          ASSET_ARGS=()
+          if [ -f "$APK_PATH" ]; then
+            ASSET_ARGS+=("$APK_PATH")
+          fi
+          if [ -f "$PLUGIN_PATH" ]; then
+            ASSET_ARGS+=("$PLUGIN_PATH")
+          fi
 
           # Check if release already exists
           if gh release view "${TAG_NAME}" >/dev/null 2>&1; then
-            echo "Release ${TAG_NAME} already exists. Uploading asset with clobber..."
-            gh release upload "${TAG_NAME}" "${APK_PATH}" --clobber || echo "Asset upload completed or release is immutable."
+            echo "Release ${TAG_NAME} already exists. Uploading assets with clobber..."
+            for asset in "${ASSET_ARGS[@]}"; do
+              gh release upload "${TAG_NAME}" "$asset" --clobber || echo "Asset $asset uploaded or immutable."
+            done
           else
-            echo "Creating new release ${TAG_NAME}..."
-            gh release create "${TAG_NAME}" "${APK_PATH}" \
+            echo "Creating new release ${TAG_NAME} with assets..."
+            gh release create "${TAG_NAME}" "${ASSET_ARGS[@]}" \
               --title "${RELEASE_TITLE}" \
               --notes-file release_notes.md \
               --latest
           fi
-          echo "GitHub Release completed successfully."
+          echo "GitHub Release completed successfully with dual downloads (App APK + OpenCart Plugin)."

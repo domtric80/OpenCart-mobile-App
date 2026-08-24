@@ -24,18 +24,27 @@ Un'applicazione Android moderna e ad alte prestazioni creata per i gestori e gli
 
 ## 📥 Download Release & Compatibilità Hardware
 
-Tutti i rilasci compilati sono scaricabili direttamente dalla sezione [GitHub Releases](https://github.com).
+Tutti i rilasci compilati dell'**App Android** e del **Plugin per OpenCart** sono scaricabili direttamente dalla sezione [GitHub Releases](../../releases).
 
-| Versione Release | File Scaricabile | Minimo Android Richiesto | Architetture CPU Supportate | Stato |
-| :--- | :--- | :--- | :--- | :--- |
-| **v1.2.1** (Latest) | [`CartAdmin-v1.2.1.apk`](../../releases/tag/v1.2.1) | Android 7.0 (API 24) o sup. | `arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86` | 🟢 Stabile (Risoluzione Token FCM Push, Sicurezza Bancaria, Timeout 5m, Sblocco Biometrico, TEE AES-GCM) |
-| **v1.2.0** | [`CartAdmin-v1.2.0.apk`](../../releases/tag/v1.2.0) | Android 7.0 (API 24) o sup. | `arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86` | ⚪ Precedente |
-| **v1.1.3** | [`CartAdmin-v1.1.3.apk`](../../releases/tag/v1.1.3) | Android 7.0 (API 24) o sup. | `arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86` | ⚪ Precedente |
-| **v1.1.2** | [`CartAdmin-v1.1.2.apk`](../../releases/tag/v1.1.2) | Android 7.0 (API 24) o sup. | `arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86` | ⚪ Precedente |
-| **v1.1.1** | [`CartAdmin-v1.1.1.apk`](../../releases/tag/v1.1.1) | Android 7.0 (API 24) o sup. | `arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86` | ⚪ Precedente |
-| **v1.1.0** | [`CartAdmin-v1.1.0.apk`](../../releases/tag/v1.1.0) | Android 7.0 (API 24) o sup. | `arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86` | ⚪ Precedente |
-| **v1.0.1** | [`CartAdmin-v1.0.1.apk`](../../releases/tag/v1.0.1) | Android 7.0 (API 24) o sup. | `arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86` | ⚪ Precedente |
-| **v1.0.0** | [`CartAdmin-v1.0.0.apk`](../../releases/tag/v1.0.0) | Android 7.0 (API 24) o sup. | `arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86` | ⚪ Precedente |
+### 📦 File Disponibili per il Download:
+
+| Componente | File Scaricabile | Compatibilità | Note di Installazione |
+| :--- | :--- | :--- | :--- |
+| 📱 **App Android** (Latest) | [`CartAdmin-v1.2.1.apk`](../../releases/tag/v1.2.1) | Android 7.0 (API 24) o superiore | Scarica sul telefono/tablet e tocca Installa |
+| 🔌 **Plugin OpenCart** (Latest) | [`cartadmin-opencart-bridge-v1.2.1.ocmod.zip`](../../releases/tag/v1.2.1) | OpenCart 2.x, 3.x, 4.x | Carica in *Estensioni > Programma di Installazione* (OCMOD) |
+
+---
+
+### 🕒 Cronologia Release
+
+| Versione Release | App Android (`.apk`) | Plugin OpenCart (`.ocmod.zip`) | Stato |
+| :--- | :--- | :--- | :--- |
+| **v1.2.1** (Latest) | [`CartAdmin-v1.2.1.apk`](../../releases/tag/v1.2.1) | [`cartadmin-opencart-bridge-v1.2.1.ocmod.zip`](../../releases/tag/v1.2.1) | 🟢 Stabile (Risoluzione Token FCM Push, Sicurezza Bancaria, Timeout 5m, Sblocco Biometrico, TEE AES-GCM) |
+| **v1.2.0** | [`CartAdmin-v1.2.0.apk`](../../releases/tag/v1.2.0) | — | ⚪ Precedente |
+| **v1.1.3** | [`CartAdmin-v1.1.3.apk`](../../releases/tag/v1.1.3) | — | ⚪ Precedente |
+| **v1.1.2** | [`CartAdmin-v1.1.2.apk`](../../releases/tag/v1.1.2) | — | ⚪ Precedente |
+| **v1.1.1** | [`CartAdmin-v1.1.1.apk`](../../releases/tag/v1.1.1) | — | ⚪ Precedente |
+| **v1.1.0** | [`CartAdmin-v1.1.0.apk`](../../releases/tag/v1.1.0) | — | ⚪ Precedente |
 
 ### 📋 Requisiti di Sistema & Dispositivi
 - **Sistema Operativo**: Android 7.0 Nougat (API 24) fino ad Android 15 (API 35/36)
