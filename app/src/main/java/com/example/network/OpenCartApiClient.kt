@@ -69,12 +69,16 @@ class OpenCartApiClient {
         }
 
         // 1. Check CartAdmin Bridge Module
-        val bridgeUrl = "$cleanUrl/cartadmin_api.php?action=status&api_key=$apiKey"
+        val encodedKey = java.net.URLEncoder.encode(apiKey, "UTF-8")
+        val encodedUser = java.net.URLEncoder.encode(apiUsername, "UTF-8")
+        val bridgeUrl = "$cleanUrl/cartadmin_api.php?action=status&api_key=$encodedKey&username=$encodedUser"
         val bridgeRequest = Request.Builder()
             .url(bridgeUrl)
             .get()
             .header("X-CartAdmin-Key", apiKey)
-            .header("User-Agent", "CartAdmin-Android/1.2.1")
+            .header("X-CartAdmin-User", apiUsername)
+            .header("Authorization", "Bearer $apiKey")
+            .header("User-Agent", "CartAdmin-Android/1.2.2")
             .build()
 
         try {
@@ -84,9 +88,10 @@ class OpenCartApiClient {
 
                 if (response.isSuccessful && body.contains("\"success\":true")) {
                     val json = try { JSONObject(body) } catch (e: Exception) { null }
-                    val ocVer = json?.optString("bridge_version", json.optString("opencart_version", "1.2.1")) ?: "1.2.1"
+                    val ocVer = json?.optString("bridge_version", json.optString("opencart_version", "1.2.2")) ?: "1.2.2"
                     val storeName = json?.optString("store_name", "OpenCart Store") ?: "OpenCart Store"
                     val ordersCount = json?.optInt("total_orders", 0) ?: 0
+                    val prodsCount = json?.optInt("total_products", 0) ?: 0
 
                     return@withContext OpenCartConnectionResult(
                         isSuccess = true,
@@ -94,16 +99,18 @@ class OpenCartApiClient {
                         responseTimeMs = duration,
                         message = "Modulo CartAdmin Bridge attivo e connesso a $storeName!",
                         apiToken = apiKey,
-                        details = "Bridge v$ocVer • Ordini nel DB: $ordersCount • Risposta in ${duration}ms.",
+                        details = "Bridge v$ocVer • Ordini: $ordersCount • Prodotti: $prodsCount • Risposta in ${duration}ms.",
                         isBridgeDetected = true
                     )
                 } else if (response.code == 401) {
+                    val json = try { JSONObject(body) } catch (e: Exception) { null }
+                    val hint = json?.optString("hint", "Verifica che la chiave inserita corrisponda a quella configurata in OpenCart.")
                     return@withContext OpenCartConnectionResult(
                         isSuccess = false,
                         statusCode = 401,
                         responseTimeMs = duration,
-                        message = "Modulo trovato su $cleanUrl ma la chiave API non è corretta.",
-                        details = "Verifica che la chiave API inserita nell'app corrisponda a quella del file cartadmin_api.php."
+                        message = "Modulo CartAdmin rilevato ma autenticazione non riuscita (401).",
+                        details = hint
                     )
                 }
             }
@@ -121,7 +128,7 @@ class OpenCartApiClient {
         val nativeRequest = Request.Builder()
             .url(nativeUrl)
             .post(formBody)
-            .header("User-Agent", "CartAdmin-Android/1.2.1")
+            .header("User-Agent", "CartAdmin-Android/1.2.2")
             .header("Accept", "application/json")
             .build()
 
@@ -153,8 +160,8 @@ class OpenCartApiClient {
                             isSuccess = false,
                             statusCode = code,
                             responseTimeMs = duration,
-                            message = "OpenCart errore: $errorMsg",
-                            details = "Consiglio: Installa il plugin cartadmin_api.php per bypassare i blocchi IP dinamici."
+                            message = "OpenCart API errore: $errorMsg",
+                            details = "Consiglio: Installa l'estensione cartadmin_api.php per bypassare il blocco IP dinamico di OpenCart."
                         )
                     }
 
@@ -171,7 +178,7 @@ class OpenCartApiClient {
                         statusCode = code,
                         responseTimeMs = duration,
                         message = "Errore HTTP $code dal server OpenCart.",
-                        details = "Verifica che il modulo CartAdmin Bridge o le API di OpenCart siano abilitate su $cleanUrl."
+                        details = "Carica il file cartadmin_api.php nella cartella principale del tuo OpenCart oppure verifica i permessi API."
                     )
                 }
             }
@@ -182,7 +189,7 @@ class OpenCartApiClient {
                 statusCode = 0,
                 responseTimeMs = duration,
                 message = "Impossibile raggiungere il server: ${e.localizedMessage ?: "Errore di rete"}",
-                details = "Verifica la connessione internet e l'URL dello store OpenCart."
+                details = "Verifica la connessione internet e l'URL inserito ($cleanUrl)."
             )
         }
     }
@@ -190,20 +197,23 @@ class OpenCartApiClient {
     /**
      * Scarica gli ordini reali dal server OpenCart.
      */
-    suspend fun fetchOrders(baseUrl: String, apiKey: String, limit: Int = 50): Result<List<Order>> = withContext(Dispatchers.IO) {
+    suspend fun fetchOrders(baseUrl: String, apiKey: String, username: String = "", limit: Int = 50): Result<List<Order>> = withContext(Dispatchers.IO) {
         try {
             var cleanUrl = baseUrl.trim().removeSuffix("/")
             if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
                 cleanUrl = "https://$cleanUrl"
             }
-            val endpoint = "$cleanUrl/cartadmin_api.php?action=orders&limit=$limit"
+            val encodedKey = java.net.URLEncoder.encode(apiKey, "UTF-8")
+            val encodedUser = java.net.URLEncoder.encode(username, "UTF-8")
+            val endpoint = "$cleanUrl/cartadmin_api.php?action=orders&limit=$limit&api_key=$encodedKey&username=$encodedUser"
 
             val request = Request.Builder()
                 .url(endpoint)
                 .get()
                 .header("X-CartAdmin-Key", apiKey)
+                .header("X-CartAdmin-User", username)
                 .header("Authorization", "Bearer $apiKey")
-                .header("User-Agent", "CartAdmin-Android/1.2.1")
+                .header("User-Agent", "CartAdmin-Android/1.2.2")
                 .header("Accept", "application/json")
                 .build()
 
@@ -219,10 +229,17 @@ class OpenCartApiClient {
 
                 for (i in 0 until ordersArray.length()) {
                     val obj = ordersArray.getJSONObject(i)
-                    val orderId = obj.optInt("order_id", 0).toString()
-                    val customer = obj.optString("customer", "Cliente #$orderId")
+                    val rawOrderId = if (obj.has("order_id")) {
+                        obj.optString("order_id")
+                    } else if (obj.has("id")) {
+                        obj.optString("id")
+                    } else {
+                        (i + 1).toString()
+                    }
+                    val orderId = rawOrderId.removePrefix("order_").removePrefix("ord_")
+                    val customer = obj.optString("customer", obj.optString("customer_name", "Cliente #$orderId"))
                     val total = obj.optDouble("total", 0.0)
-                    val statusId = obj.optInt("status_id", 1)
+                    val statusId = obj.optInt("status_id", obj.optInt("order_status_id", 1))
                     val dateAdded = obj.optString("date_added", "N/D")
                     val paymentMethod = obj.optString("payment_method", "Non specificato")
                     val shippingMethod = obj.optString("shipping_method", "Corriere Standard")
@@ -248,7 +265,7 @@ class OpenCartApiClient {
                             itemsCount = 1,
                             shippingMethod = shippingMethod,
                             paymentMethod = paymentMethod,
-                            notes = "Ordine da OpenCart Bridge"
+                            notes = "Ordine sincronizzato da OpenCart"
                         )
                     )
                 }
@@ -262,20 +279,23 @@ class OpenCartApiClient {
     /**
      * Scarica i prodotti reali dal server OpenCart.
      */
-    suspend fun fetchProducts(baseUrl: String, apiKey: String, limit: Int = 100): Result<List<Product>> = withContext(Dispatchers.IO) {
+    suspend fun fetchProducts(baseUrl: String, apiKey: String, username: String = "", limit: Int = 100): Result<List<Product>> = withContext(Dispatchers.IO) {
         try {
             var cleanUrl = baseUrl.trim().removeSuffix("/")
             if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
                 cleanUrl = "https://$cleanUrl"
             }
-            val endpoint = "$cleanUrl/cartadmin_api.php?action=products&limit=$limit"
+            val encodedKey = java.net.URLEncoder.encode(apiKey, "UTF-8")
+            val encodedUser = java.net.URLEncoder.encode(username, "UTF-8")
+            val endpoint = "$cleanUrl/cartadmin_api.php?action=products&limit=$limit&api_key=$encodedKey&username=$encodedUser"
 
             val request = Request.Builder()
                 .url(endpoint)
                 .get()
                 .header("X-CartAdmin-Key", apiKey)
+                .header("X-CartAdmin-User", username)
                 .header("Authorization", "Bearer $apiKey")
-                .header("User-Agent", "CartAdmin-Android/1.2.1")
+                .header("User-Agent", "CartAdmin-Android/1.2.2")
                 .header("Accept", "application/json")
                 .build()
 
@@ -291,25 +311,34 @@ class OpenCartApiClient {
 
                 for (i in 0 until prodsArray.length()) {
                     val obj = prodsArray.getJSONObject(i)
-                    val prodId = obj.optInt("product_id", 0).toString()
-                    val name = obj.optString("name", "Prodotto #$prodId")
+                    val rawProdId = if (obj.has("product_id")) {
+                        obj.optString("product_id")
+                    } else if (obj.has("id")) {
+                        obj.optString("id")
+                    } else {
+                        (i + 1).toString()
+                    }
+                    val prodId = rawProdId.removePrefix("prod_").removePrefix("product_")
+                    val rawName = obj.optString("name", "Prodotto #$prodId")
+                    val cleanName = rawName.replace("&amp;", "&").replace("&quot;", "\"").replace("&#039;", "'").replace("&lt;", "<").replace("&gt;", ">")
                     val model = obj.optString("model", "SKU-$prodId")
                     val sku = obj.optString("sku", model)
                     val qty = obj.optInt("quantity", 0)
                     val price = obj.optDouble("price", 0.0)
                     val status = obj.optBoolean("status", true)
+                    val category = obj.optString("category", "Catalogo OpenCart")
 
                     list.add(
                         Product(
                             id = prodId,
-                            name = name,
+                            name = cleanName,
                             model = model,
                             sku = if (sku.isNotBlank()) sku else model,
                             price = price,
                             specialPrice = null,
                             quantity = qty,
                             minQuantityAlert = 5,
-                            category = "Catalogo OpenCart",
+                            category = category,
                             description = obj.optString("description", ""),
                             status = status
                         )
@@ -325,7 +354,7 @@ class OpenCartApiClient {
     /**
      * Aggiorna la giacenza di un prodotto direttamente su OpenCart.
      */
-    suspend fun updateProductStock(baseUrl: String, apiKey: String, productId: String, newStock: Int): Result<Boolean> = withContext(Dispatchers.IO) {
+    suspend fun updateProductStock(baseUrl: String, apiKey: String, productId: String, newStock: Int, username: String = ""): Result<Boolean> = withContext(Dispatchers.IO) {
         try {
             var cleanUrl = baseUrl.trim().removeSuffix("/")
             if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
@@ -337,13 +366,17 @@ class OpenCartApiClient {
                 .add("action", "update_stock")
                 .add("product_id", productId)
                 .add("quantity", newStock.toString())
+                .add("api_key", apiKey)
+                .add("username", username)
                 .build()
 
             val request = Request.Builder()
                 .url(endpoint)
                 .post(formBody)
                 .header("X-CartAdmin-Key", apiKey)
-                .header("User-Agent", "CartAdmin-Android/1.2.1")
+                .header("X-CartAdmin-User", username)
+                .header("Authorization", "Bearer $apiKey")
+                .header("User-Agent", "CartAdmin-Android/1.2.2")
                 .build()
 
             client.newCall(request).execute().use { response ->
@@ -357,7 +390,7 @@ class OpenCartApiClient {
     /**
      * Aggiorna lo stato di un ordine direttamente su OpenCart.
      */
-    suspend fun updateOrderStatus(baseUrl: String, apiKey: String, orderId: String, statusId: Int, comment: String): Result<Boolean> = withContext(Dispatchers.IO) {
+    suspend fun updateOrderStatus(baseUrl: String, apiKey: String, orderId: String, statusId: Int, comment: String, username: String = ""): Result<Boolean> = withContext(Dispatchers.IO) {
         try {
             var cleanUrl = baseUrl.trim().removeSuffix("/")
             if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
@@ -370,13 +403,17 @@ class OpenCartApiClient {
                 .add("order_id", orderId)
                 .add("status_id", statusId.toString())
                 .add("comment", comment)
+                .add("api_key", apiKey)
+                .add("username", username)
                 .build()
 
             val request = Request.Builder()
                 .url(endpoint)
                 .post(formBody)
                 .header("X-CartAdmin-Key", apiKey)
-                .header("User-Agent", "CartAdmin-Android/1.2.1")
+                .header("X-CartAdmin-User", username)
+                .header("Authorization", "Bearer $apiKey")
+                .header("User-Agent", "CartAdmin-Android/1.2.2")
                 .build()
 
             client.newCall(request).execute().use { response ->

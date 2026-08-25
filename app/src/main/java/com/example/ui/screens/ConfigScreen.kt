@@ -104,7 +104,7 @@ fun ConfigScreen(
     connectionResult: OpenCartConnectionResult?,
     onTestConnection: (url: String, username: String, key: String) -> Unit,
     onSaveStoreCredentials: (storeId: String, name: String, url: String, username: String, key: String, version: String) -> Unit,
-    onTriggerSync: () -> Unit,
+    onTriggerSync: (url: String, key: String, username: String) -> Unit,
     onClearDummyData: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -694,7 +694,7 @@ fun ConfigScreen(
                                 onSaveStoreCredentials(targetId, storeName.ifBlank { "Mio Negozio OpenCart" }, storeUrl, apiUsername, apiKey, storeVersion)
                                 // Crittografa i parametri con il chip hardware (TEE / AndroidKeyStore)
                                 securityManager.saveEncryptedStoreCredentials("$storeUrl|$apiUsername|$apiKey")
-                                Toast.makeText(context, "Parametri API salvati e protetti con chip hardware!", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Parametri salvati e sincronizzazione avviata!", Toast.LENGTH_SHORT).show()
                             },
                             modifier = Modifier
                                 .weight(1f)
@@ -710,6 +710,34 @@ fun ConfigScreen(
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Salva")
                         }
+                    }
+
+                    // Direct Sync Button
+                    Button(
+                        onClick = {
+                            val targetId = currentStore?.id ?: "store_${System.currentTimeMillis()}"
+                            onSaveStoreCredentials(targetId, storeName.ifBlank { "Mio Negozio OpenCart" }, storeUrl, apiUsername, apiKey, storeVersion)
+                            onTriggerSync(storeUrl, apiKey, apiUsername)
+                            Toast.makeText(context, "Sincronizzazione avviata per $storeUrl...", Toast.LENGTH_SHORT).show()
+                        },
+                        enabled = storeUrl.isNotBlank(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .testTag("manual_sync_now_btn"),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = ThemeSecondaryContainer,
+                            contentColor = ThemePrimary
+                        )
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp), tint = ThemePrimary)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Sincronizza Dati Adesso (Ordini & Catalogo)",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                            color = ThemePrimary
+                        )
                     }
 
                     // Diagnostic Result Box
@@ -931,7 +959,7 @@ fun ConfigScreen(
                     }
 
                     Button(
-                        onClick = onTriggerSync,
+                        onClick = { onTriggerSync(storeUrl, apiKey, apiUsername) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp)

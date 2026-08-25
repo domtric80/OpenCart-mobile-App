@@ -111,7 +111,7 @@ class MainViewModel(
             // Se è presente uno store configurato, avvia la sincronizzazione automatica reale
             val primaryStore = db.storeProfileDao().getPrimaryStore()
             if (primaryStore != null && primaryStore.url.isNotBlank()) {
-                syncDataFromOpenCart(primaryStore.url, primaryStore.apiKey)
+                syncDataFromOpenCart(primaryStore.url, primaryStore.apiKey, primaryStore.adminUsername)
             }
         }
     }
@@ -214,7 +214,7 @@ class MainViewModel(
             if (store != null) {
                 db.storeProfileDao().setPrimaryStore(storeId)
                 if (store.url.isNotBlank()) {
-                    syncDataFromOpenCart(store.url, store.apiKey)
+                    syncDataFromOpenCart(store.url, store.apiKey, store.adminUsername)
                 }
             }
         }
@@ -236,30 +236,36 @@ class MainViewModel(
         _selectedOrderDetail.value = null
     }
 
-    fun triggerSync() {
+    fun triggerSync(explicitUrl: String? = null, explicitKey: String? = null, explicitUsername: String? = null) {
         viewModelScope.launch(Dispatchers.IO) {
             val currentStore = uiState.value.currentStore
-            if (currentStore != null && currentStore.url.isNotBlank()) {
-                _syncSuccessMessage.value = "Sincronizzazione in corso..."
-                val success = syncDataFromOpenCart(currentStore.url, currentStore.apiKey)
-                if (success) {
-                    _syncSuccessMessage.value = "Sincronizzazione con OpenCart completata con successo!"
-                } else {
-                    _syncSuccessMessage.value = "Errore di sincronizzazione con ${currentStore.url}. Verifica credenziali."
-                }
+            val url = explicitUrl?.takeIf { it.isNotBlank() } ?: currentStore?.url ?: ""
+            val key = explicitKey?.takeIf { it.isNotBlank() } ?: currentStore?.apiKey ?: ""
+            val user = explicitUsername?.takeIf { it.isNotBlank() } ?: currentStore?.apiUsername ?: ""
+
+            if (url.isNotBlank()) {
+                _syncSuccessMessage.value = "Sincronizzazione con $url in corso..."
+                val syncResult = syncDataFromOpenCartDetailed(url, key, user)
+                _syncSuccessMessage.value = syncResult
             } else {
-                _syncSuccessMessage.value = "Nessuno store OpenCart configurato. Vai in Impostazioni per aggiungerlo."
+                _syncSuccessMessage.value = "Nessun URL specificato. Inserisci URL e Chiave API."
             }
-            kotlinx.coroutines.delay(3000)
+            kotlinx.coroutines.delay(4000)
             _syncSuccessMessage.value = null
         }
     }
 
-    private suspend fun syncDataFromOpenCart(url: String, apiKey: String): Boolean {
+    private suspend fun syncDataFromOpenCartDetailed(url: String, apiKey: String, username: String = ""): String {
         return try {
-            val ordersRes = apiClient.fetchOrders(url, apiKey, limit = 50)
+            val ordersRes = apiClient.fetchOrders(url, apiKey, username, limit = 50)
+            val prodRes = apiClient.fetchProducts(url, apiKey, username, limit = 100)
+
+            var orderCount = 0
+            var prodCount = 0
+
             if (ordersRes.isSuccess) {
                 val liveOrders = ordersRes.getOrNull() ?: emptyList()
+                orderCount = liveOrders.size
                 repository.setLiveOrders(liveOrders)
 
                 // Salva nella persistenza locale Room
@@ -284,7 +290,71 @@ class MainViewModel(
                 }
             }
 
-            val prodRes = apiClient.fetchProducts(url, apiKey, limit = 100)
+            if (prodRes.isSuccess) {
+                val liveProds = prodRes.getOrNull() ?: emptyList()
+                prodCount = liveProds.size
+                repository.setLiveProducts(liveProds)
+
+                db.productDao().clearAllProducts()
+                liveProds.forEach { prod ->
+                    db.productDao().insertProduct(
+                        com.example.data.local.entity.ProductEntity(
+                            id = prod.id,
+                            storeId = uiState.value.currentStore?.id ?: "store_1",
+                            name = prod.name,
+                            model = prod.model,
+                            sku = prod.sku,
+                            price = prod.price,
+                            specialPrice = prod.specialPrice,
+                            quantity = prod.quantity,
+                            category = prod.category,
+                            description = prod.description,
+                            status = prod.status
+                        )
+                    )
+                }
+            }
+
+            if (ordersRes.isSuccess || prodRes.isSuccess) {
+                "Sincronizzazione completata: $orderCount ordini e $prodCount prodotti scaricati da OpenCart!"
+            } else {
+                val err = ordersRes.exceptionOrNull()?.message ?: prodRes.exceptionOrNull()?.message ?: "Errore sconosciuto"
+                "Errore sinc: $err. Verifica URL e Chiave API in Impostazioni."
+            }
+        } catch (e: Exception) {
+            "Errore durante la sincronizzazione: ${e.localizedMessage}"
+        }
+    }
+
+    private suspend fun syncDataFromOpenCart(url: String, apiKey: String, username: String = ""): Boolean {
+        return try {
+            val ordersRes = apiClient.fetchOrders(url, apiKey, username, limit = 50)
+            if (ordersRes.isSuccess) {
+                val liveOrders = ordersRes.getOrNull() ?: emptyList()
+                repository.setLiveOrders(liveOrders)
+
+                db.orderDao().clearAllOrders()
+                liveOrders.forEach { order ->
+                    db.orderDao().insertOrder(
+                        com.example.data.local.entity.OrderEntity(
+                            id = order.id,
+                            storeId = uiState.value.currentStore?.id ?: "store_1",
+                            orderNumber = order.orderNumber,
+                            customerName = order.customerName,
+                            customerEmail = order.customerEmail,
+                            total = order.total,
+                            status = order.status.name,
+                            dateAdded = order.dateAdded,
+                            itemsCount = order.itemsCount,
+                            shippingMethod = order.shippingMethod,
+                            paymentMethod = order.paymentMethod,
+                            customerNotes = order.notes
+                        )
+                    )
+                }
+            }
+
+            val prodRes = apiClient.fetchProducts(url, apiKey, username, limit = 100)
             if (prodRes.isSuccess) {
                 val liveProds = prodRes.getOrNull() ?: emptyList()
                 repository.setLiveProducts(liveProds)
@@ -492,7 +562,7 @@ class MainViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             repository.updateStoreCredentials(storeId, name, url, username, key, version)
             _syncSuccessMessage.value = "Parametri store salvati su memoria permanente!"
-            syncDataFromOpenCart(url, key)
+            syncDataFromOpenCart(url, key, username)
             kotlinx.coroutines.delay(2500)
             _syncSuccessMessage.value = null
         }
@@ -502,7 +572,7 @@ class MainViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             repository.addStore(name, url, version, username, key)
             _isStoreSwitcherOpen.value = false
-            syncDataFromOpenCart(url, key)
+            syncDataFromOpenCart(url, key, username)
         }
     }
 

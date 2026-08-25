@@ -138,12 +138,23 @@ jobs:
 
           **CartAdmin** è la piattaforma mobile e bridge ufficiale di **OpenCart ITALIA** ([www.opencartitalia.it](https://www.opencartitalia.it)) sviluppata da **SOLO SOLUZIONI** ([www.solosoluzioni.it](https://www.solosoluzioni.it)).
 
-          ### 📦 Download disponibili
+          ---
 
-          | Download | Descrizione | Come installare |
+          ### 📦 Download Disponibili in questa Release
+
+          | Download | Descrizione | Come Installare |
           | :--- | :--- | :--- |
-          | 📱 **CartAdmin-v${VERSION}.apk** | Applicazione Android per smartphone e tablet | Scarica e apri sul dispositivo Android |
-          | 🔌 **cartadmin-opencart-bridge-v${VERSION}.ocmod.zip** | Estensione OpenCart | Carica in *Estensioni > Programma di installazione* |
+          | 📱 **[`CartAdmin-v${VERSION}.apk`](https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/CartAdmin-v${VERSION}.apk)** | Applicazione Android per smartphone e tablet | Scarica e apri sul dispositivo Android |
+          | 🔌 **[`cartadmin-opencart-bridge-v${VERSION}.ocmod.zip`](https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/cartadmin-opencart-bridge-v${VERSION}.ocmod.zip)** | Estensione OpenCart 2.x, 3.x e 4.x | Carica in *Estensioni > Programma di Installazione* (OCMOD) |
+
+          ---
+
+          ### ✨ Novità & Note di Rilascio (${TAG_NAME})
+          - 🗄️ **Persistenza Reale Room Database**: Salvataggio permanente e sicuro di profili e chiavi API dei negozi su database SQLite crittografato (`store_profiles`).
+          - 🚫 **Eliminazione Dati Demo & Mock**: Rimozione definitiva dei dati di esempio e fittizi; l'app lavora esclusivamente con dati reali sincronizzati dal tuo store OpenCart.
+          - 🚀 **Doppio Rilascio Automatico**: Download separato e istantaneo dell'APK Android e del pacchetto OCMOD zip per OpenCart.
+          - 🔒 **Sicurezza Hardware TEE & Biometria**: Protezione accessi biometrica con impronta digitale/Face Unlock, crittografia AES-256 GCM e timeout di sicurezza a 5 minuti.
+          - 🔍 **Audit Log Completo**: Tracciamento di tutte le modifiche a ordini, scorte e impostazioni sincronizzate con OpenCart.
           EOF
 
           sed -i "s/\${TAG_NAME}/${TAG_NAME}/g" release_notes.md

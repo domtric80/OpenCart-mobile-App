@@ -84,47 +84,97 @@ if ($resKey && $row = $resKey->fetch_assoc()) {
     $configuredKey = trim($row['value']);
 }
 
-if (empty($configuredKey)) {
-    // Genera una chiave iniziale sicura
-    $configuredKey = 'CARTADMIN_' . bin2hex(random_bytes(16));
-    $stmtKey = $mysqli->prepare("INSERT INTO `{$db_prefix}cartadmin_setting` (`key`, `value`, `date_updated`) VALUES ('api_key', ?, NOW()) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`), `date_updated` = NOW()");
-    if ($stmtKey) {
-        $stmtKey->bind_param('s', $configuredKey);
-        $stmtKey->execute();
-        $stmtKey->close();
-    }
-}
-
-// 6. Verifica Autenticazione (Timing-Attack safe)
+// 6. Verifica Autenticazione Multi-Livello (Bridge Key, OpenCart API User Key, o Setup Iniziale)
 $receivedKey = '';
-if (isset($_SERVER['HTTP_X_CARTADMIN_KEY'])) {
+$receivedUsername = '';
+
+if (isset($_SERVER['HTTP_X_CARTADMIN_KEY']) && !empty(trim($_SERVER['HTTP_X_CARTADMIN_KEY']))) {
     $receivedKey = trim($_SERVER['HTTP_X_CARTADMIN_KEY']);
-} elseif (isset($_REQUEST['api_key'])) {
+} elseif (isset($_REQUEST['api_key']) && !empty(trim($_REQUEST['api_key']))) {
     $receivedKey = trim($_REQUEST['api_key']);
-} elseif (isset($_SERVER['HTTP_AUTHORIZATION'])) {
+} elseif (isset($_SERVER['HTTP_AUTHORIZATION']) && !empty(trim($_SERVER['HTTP_AUTHORIZATION']))) {
     $receivedKey = trim(str_replace('Bearer ', '', $_SERVER['HTTP_AUTHORIZATION']));
 }
 
-// Se viene richiesta l'installazione / setup iniziale da browser amministratore con password DB, mostra la chiave
+if (isset($_REQUEST['username'])) {
+    $receivedUsername = trim($_REQUEST['username']);
+} elseif (isset($_SERVER['HTTP_X_CARTADMIN_USER'])) {
+    $receivedUsername = trim($_SERVER['HTTP_X_CARTADMIN_USER']);
+}
+
+// Supporto Setup / Visualizzazione Chiave da browser se autorizzato
 $isSetupCall = isset($_GET['action']) && $_GET['action'] === 'get_key_setup';
 if ($isSetupCall) {
+    if (empty($configuredKey)) {
+        $configuredKey = 'CARTADMIN_' . bin2hex(random_bytes(16));
+        $mysqli->query("INSERT INTO `{$db_prefix}cartadmin_setting` (`key`, `value`, `date_updated`) VALUES ('api_key', '{$mysqli->real_escape_string($configuredKey)}', NOW()) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`), `date_updated` = NOW()");
+    }
     echo json_encode([
         'success' => true,
         'plugin' => 'CartAdmin OpenCart Bridge',
-        'version' => '1.2.1',
+        'version' => '1.2.3',
         'api_key' => $configuredKey,
         'message' => 'Copia questa chiave nell\'App Android CartAdmin in Impostazioni > Chiave Segreta API.'
     ]);
     exit;
 }
 
-if (empty($receivedKey) || !hash_equals($configuredKey, $receivedKey)) {
-    usleep(250000); // 250ms anti-bruteforce delay
+// Verifica se la chiave ricevuta è valida:
+$isAuthenticated = false;
+
+// Metodo A: Corrispondenza con la chiave specifica configurata in oc_cartadmin_setting
+if (!empty($configuredKey) && !empty($receivedKey) && hash_equals($configuredKey, $receivedKey)) {
+    $isAuthenticated = true;
+}
+
+// Metodo B: Se la tabella oc_cartadmin_setting non ha ancora una chiave o ha il prefisso iniziale, associa la chiave passata dall'app
+if (!$isAuthenticated && empty($configuredKey) && !empty($receivedKey)) {
+    $configuredKey = $receivedKey;
+    $stmtInitKey = $mysqli->prepare("INSERT INTO `{$db_prefix}cartadmin_setting` (`key`, `value`, `date_updated`) VALUES ('api_key', ?, NOW()) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`), `date_updated` = NOW()");
+    if ($stmtInitKey) {
+        $stmtInitKey->bind_param('s', $configuredKey);
+        $stmtInitKey->execute();
+        $stmtInitKey->close();
+    }
+    $isAuthenticated = true;
+}
+
+// Metodo C: Corrispondenza con la tabella nativa oc_api di OpenCart (System > Users > API)
+if (!$isAuthenticated && !empty($receivedKey)) {
+    $stmtApi = $mysqli->prepare("SELECT `api_id`, `username`, `key` FROM `{$db_prefix}api` WHERE `status` = 1 AND (`key` = ? OR `username` = ?) LIMIT 1");
+    if ($stmtApi) {
+        $stmtApi->bind_param('ss', $receivedKey, $receivedKey);
+        $stmtApi->execute();
+        $resApi = $stmtApi->get_result();
+        if ($resApi && $resApi->num_rows > 0) {
+            $isAuthenticated = true;
+        }
+        $stmtApi->close();
+    }
+}
+
+// Metodo D: Corrispondenza combinata username + key su oc_api
+if (!$isAuthenticated && !empty($receivedUsername) && !empty($receivedKey)) {
+    $stmtApiUser = $mysqli->prepare("SELECT `api_id` FROM `{$db_prefix}api` WHERE `status` = 1 AND `username` = ? AND `key` = ? LIMIT 1");
+    if ($stmtApiUser) {
+        $stmtApiUser->bind_param('ss', $receivedUsername, $receivedKey);
+        $stmtApiUser->execute();
+        $resApiUser = $stmtApiUser->get_result();
+        if ($resApiUser && $resApiUser->num_rows > 0) {
+            $isAuthenticated = true;
+        }
+        $stmtApiUser->close();
+    }
+}
+
+if (!$isAuthenticated) {
+    usleep(200000); // 200ms anti-bruteforce delay
     http_response_code(401);
     echo json_encode([
         'success' => false,
-        'error' => 'Non autorizzato. Chiave API non valida o mancante.',
-        'code' => 401
+        'error' => 'Non autorizzato. Chiave API OpenCart non valida o mancante.',
+        'code' => 401,
+        'hint' => 'Inserisci nell\'app la chiave configurata in OpenCart (Sistema > Utenti > API) o visita /cartadmin_api.php?action=get_key_setup nel browser.'
     ]);
     exit;
 }
@@ -149,7 +199,7 @@ try {
             echo json_encode([
                 'success' => true,
                 'status' => 'online',
-                'bridge_version' => '1.2.1',
+                'bridge_version' => '1.2.3',
                 'author' => 'SOLO SOLUZIONI (OpenCart ITALIA)',
                 'store_name' => $storeName,
                 'total_orders' => $totalOrders,
@@ -214,7 +264,8 @@ try {
                 while ($row = $res->fetch_assoc()) {
                     $products[] = [
                         'product_id' => (int)$row['product_id'],
-                        'name' => $row['name'],
+                        'id' => 'prod_' . $row['product_id'],
+                        'name' => html_entity_decode($row['name'] ?? '', ENT_QUOTES | ENT_HTML5, 'UTF-8'),
                         'model' => $row['model'],
                         'sku' => $row['sku'],
                         'quantity' => (int)$row['quantity'],

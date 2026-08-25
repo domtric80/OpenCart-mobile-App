@@ -243,8 +243,8 @@ fun MainAppContent(
                         onSaveStoreCredentials = { storeId, name, url, user, key, ver ->
                             viewModel.saveStoreCredentials(storeId, name, url, user, key, ver)
                         },
-                        onTriggerSync = {
-                            viewModel.triggerSync()
+                        onTriggerSync = { url, key, user ->
+                            viewModel.triggerSync(url, key, user)
                         },
                         onClearDummyData = {
                             viewModel.clearDummyData()

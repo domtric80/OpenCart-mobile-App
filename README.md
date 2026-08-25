@@ -5,7 +5,7 @@
   <a href="https://kotlinlang.org"><img src="https://img.shields.io/badge/Kotlin-2.0+-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white" alt="Kotlin" /></a>
   <a href="https://developer.android.com/jetpack/compose"><img src="https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white" alt="Jetpack Compose" /></a>
   <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GNU%20GPL%20v3-blue.svg?style=for-the-badge" alt="License: GNU GPL v3" /></a>
-  <a href="https://github.com"><img src="https://img.shields.io/badge/Version-v1.2.1-brightgreen?style=for-the-badge" alt="Version" /></a>
+  <a href="https://github.com"><img src="https://img.shields.io/badge/Version-v1.2.3-brightgreen?style=for-the-badge" alt="Version" /></a>
 </p>
 
 <p align="center">
@@ -30,8 +30,8 @@ Tutti i rilasci compilati dell'**App Android** e del **Plugin per OpenCart** son
 
 | Componente | File Scaricabile | Compatibilità | Note di Installazione |
 | :--- | :--- | :--- | :--- |
-| 📱 **App Android** (Latest) | [`CartAdmin-v1.2.1.apk`](../../releases/tag/v1.2.1) | Android 7.0 (API 24) o superiore | Scarica sul telefono/tablet e tocca Installa |
-| 🔌 **Plugin OpenCart** (Latest) | [`cartadmin-opencart-bridge-v1.2.1.ocmod.zip`](../../releases/tag/v1.2.1) | OpenCart 2.x, 3.x, 4.x | Carica in *Estensioni > Programma di Installazione* (OCMOD) |
+| 📱 **App Android** (Latest) | [`CartAdmin-v1.2.3.apk`](../../releases/tag/v1.2.3) | Android 7.0 (API 24) o superiore | Scarica sul telefono/tablet e tocca Installa |
+| 🔌 **Plugin OpenCart** (Latest) | [`cartadmin-opencart-bridge-v1.2.3.ocmod.zip`](../../releases/tag/v1.2.3) | OpenCart 2.x, 3.x, 4.x | Carica in *Estensioni > Programma di Installazione* (OCMOD) |
 
 ---
 
@@ -39,7 +39,9 @@ Tutti i rilasci compilati dell'**App Android** e del **Plugin per OpenCart** son
 
 | Versione Release | App Android (`.apk`) | Plugin OpenCart (`.ocmod.zip`) | Stato |
 | :--- | :--- | :--- | :--- |
-| **v1.2.1** (Latest) | [`CartAdmin-v1.2.1.apk`](../../releases/tag/v1.2.1) | [`cartadmin-opencart-bridge-v1.2.1.ocmod.zip`](../../releases/tag/v1.2.1) | 🟢 Stabile (Risoluzione Token FCM Push, Sicurezza Bancaria, Timeout 5m, Sblocco Biometrico, TEE AES-GCM) |
+| **v1.2.3** (Latest) | [`CartAdmin-v1.2.3.apk`](../../releases/tag/v1.2.3) | [`cartadmin-opencart-bridge-v1.2.3.ocmod.zip`](../../releases/tag/v1.2.3) | 🟢 Stabile (Risoluzione sincronizzazione reale catalogo OpenCart, supporto chiavi universali, parsing polimorfo ID/HTML) |
+| **v1.2.2** | [`CartAdmin-v1.2.2.apk`](../../releases/tag/v1.2.2) | [`cartadmin-opencart-bridge-v1.2.2.ocmod.zip`](../../releases/tag/v1.2.2) | ⚪ Precedente (Persistenza Room StoreProfile, eliminazione dati demo) |
+| **v1.2.1** | [`CartAdmin-v1.2.1.apk`](../../releases/tag/v1.2.1) | [`cartadmin-opencart-bridge-v1.2.1.ocmod.zip`](../../releases/tag/v1.2.1) | ⚪ Precedente (Risoluzione Token FCM Push, Sicurezza Bancaria, Timeout 5m) |
 | **v1.2.0** | [`CartAdmin-v1.2.0.apk`](../../releases/tag/v1.2.0) | — | ⚪ Precedente |
 | **v1.1.3** | [`CartAdmin-v1.1.3.apk`](../../releases/tag/v1.1.3) | — | ⚪ Precedente |
 | **v1.1.2** | [`CartAdmin-v1.1.2.apk`](../../releases/tag/v1.1.2) | — | ⚪ Precedente |
