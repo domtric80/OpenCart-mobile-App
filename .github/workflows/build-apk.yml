@@ -63,6 +63,8 @@ jobs:
             RELEASE_TAG="${GITHUB_REF_NAME}"
           elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && -n "$CUSTOM_TAG" ]]; then
             RELEASE_TAG="$CUSTOM_TAG"
+          else
+            RELEASE_TAG="v${VERSION_NAME}"
           fi
 
           if [ -n "$RELEASE_TAG" ] && [ "$RELEASE_TAG" != "v${VERSION_NAME}" ]; then
@@ -72,7 +74,7 @@ jobs:
 
           echo "version=${VERSION_NAME}" >> "$GITHUB_OUTPUT"
           echo "tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
-          echo "Version: ${VERSION_NAME}; release tag: ${RELEASE_TAG:-none}"
+          echo "Version: ${VERSION_NAME}; release tag: ${RELEASE_TAG}"
 
       - name: Build Debug APK
         env:
@@ -119,7 +121,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish a new GitHub Release
-        if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.custom_tag != '')
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: ${{ steps.get_version.outputs.tag }}
@@ -130,11 +132,6 @@ jobs:
           APK_PATH="release-assets/CartAdmin-v${VERSION}.apk"
           PLUGIN_PATH="release-assets/cartadmin-opencart-bridge-v${VERSION}.ocmod.zip"
           RELEASE_TITLE="CartAdmin ${TAG_NAME} — OpenCart ITALIA by SOLO SOLUZIONI"
-
-          if gh release view "${TAG_NAME}" >/dev/null 2>&1; then
-            echo "::error::Release ${TAG_NAME} already exists and will not be modified. Increase versionName and publish a new tag."
-            exit 1
-          fi
 
           cat << 'EOF' > release_notes.md
           ## 🛒 CartAdmin ${TAG_NAME} — App Ufficiale & Plugin OpenCart ITALIA
@@ -152,6 +149,18 @@ jobs:
           sed -i "s/\${TAG_NAME}/${TAG_NAME}/g" release_notes.md
           sed -i "s/\${VERSION}/${VERSION}/g" release_notes.md
 
-          gh release create "${TAG_NAME}"             "$APK_PATH"             "$PLUGIN_PATH"             --target "$GITHUB_SHA"             --title "$RELEASE_TITLE"             --notes-file release_notes.md             --latest
+          if gh release view "${TAG_NAME}" >/dev/null 2>&1; then
+            echo "Release ${TAG_NAME} already exists. Updating release assets..."
+            gh release upload "${TAG_NAME}" "$APK_PATH" "$PLUGIN_PATH" --clobber
+          else
+            echo "Creating new release ${TAG_NAME}..."
+            gh release create "${TAG_NAME}" \
+              "$APK_PATH" \
+              "$PLUGIN_PATH" \
+              --target "$GITHUB_SHA" \
+              --title "$RELEASE_TITLE" \
+              --notes-file release_notes.md \
+              --latest
+          fi
 
           echo "Release ${TAG_NAME} created successfully with APK and OCMOD plugin."
