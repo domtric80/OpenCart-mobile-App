@@ -1,13 +1,9 @@
 package com.example
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.os.Build
+import android.content.Context
 import android.os.Bundle
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -21,20 +17,16 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.auth.AuthStatus
+import com.example.auth.AuthLockScreen
 import com.example.auth.SecurityManager
 import com.example.model.Order
-import com.example.notification.NotificationHelper
 import com.example.ui.MainViewModel
 import com.example.ui.components.BottomNavBar
 import com.example.ui.components.HeaderSection
@@ -42,7 +34,6 @@ import com.example.ui.components.NavigationTab
 import com.example.ui.components.OrderDetailSheet
 import com.example.ui.components.StoreSwitcherSheet
 import com.example.ui.screens.AuditScreen
-import com.example.ui.screens.AuthLockScreen
 import com.example.ui.screens.CatalogScreen
 import com.example.ui.screens.ConfigScreen
 import com.example.ui.screens.DashboardHomeScreen
@@ -54,98 +45,50 @@ import com.example.ui.theme.MyApplicationTheme
 class MainActivity : FragmentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
-    private lateinit var securityManager: SecurityManager
-    private var isAuthenticatedState = mutableStateOf(false)
-    private var authStatusState = mutableStateOf<AuthStatus?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        securityManager = SecurityManager(this)
-
-        // Initialize Android notification channels
-        try {
-            NotificationHelper.createNotificationChannels(this)
-        } catch (_: Exception) {}
-
-        // Valutazione iniziale della sicurezza all'avvio dell'app (fresh launch: richiede autenticazione)
-        val initialStatus = securityManager.evaluateAuthStatus(isFreshAppLaunch = true)
-        authStatusState.value = initialStatus
-        isAuthenticatedState.value = !initialStatus.requiresImmediateAuth
-
         setContent {
             MyApplicationTheme {
-                // Request Notification permission for Android 13+ (API 33+)
-                val context = LocalContext.current
-                val permissionLauncher = rememberLauncherForActivityResult(
-                    contract = ActivityResultContracts.RequestPermission()
-                ) { isGranted ->
-                    // Permission result handled
-                }
-
-                LaunchedEffect(Unit) {
-                    try {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            if (ContextCompat.checkSelfPermission(
-                                    context,
-                                    Manifest.permission.POST_NOTIFICATIONS
-                                ) != PackageManager.PERMISSION_GRANTED
-                            ) {
-                                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                            }
-                        }
-                    } catch (_: Exception) {}
-                }
-
-                val isAuthenticated by isAuthenticatedState
-                val currentAuthStatus = authStatusState.value ?: securityManager.evaluateAuthStatus()
-
-                if (!isAuthenticated) {
-                    AuthLockScreen(
-                        authStatus = currentAuthStatus,
-                        securityManager = securityManager,
-                        onAuthSuccess = {
-                            isAuthenticatedState.value = true
-                            authStatusState.value = securityManager.evaluateAuthStatus()
-                        }
-                    )
-                } else {
-                    CartAdminApp(viewModel = viewModel)
-                }
+                MainAppContainer(viewModel = viewModel, context = this)
             }
-        }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        // Controlla se la sessione è scaduta (inattività > 5 minuti)
-        val status = securityManager.evaluateAuthStatus()
-        authStatusState.value = status
-        if (status.requiresImmediateAuth) {
-            isAuthenticatedState.value = false
-        }
-    }
-
-    override fun onUserInteraction() {
-        super.onUserInteraction()
-        // Registra attività attiva dell'utente per mantenere viva la sessione durante l'uso continuo
-        if (isAuthenticatedState.value) {
-            securityManager.recordSuccessfulAuth()
         }
     }
 }
 
 @Composable
-fun CartAdminApp(
+fun MainAppContainer(
     viewModel: MainViewModel,
-    modifier: Modifier = Modifier
+    context: Context
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val securityManager = remember { SecurityManager(context) }
+    var isUnlocked by remember {
+        mutableStateOf(!securityManager.evaluateAuthStatus(true).isLocked)
+    }
+
+    if (!isUnlocked) {
+        AuthLockScreen(
+            securityManager = securityManager,
+            onUnlockSuccess = {
+                isUnlocked = true
+            }
+        )
+    } else {
+        MainAppContent(viewModel = viewModel)
+    }
+}
+
+@Composable
+fun MainAppContent(
+    viewModel: MainViewModel
+) {
+    val uiState by viewModel.uiState.collectAsState()
     var currentTab by remember { mutableStateOf(NavigationTab.HOME) }
 
     Scaffold(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
         containerColor = MaterialTheme.colorScheme.background,
@@ -157,7 +100,7 @@ fun CartAdminApp(
             ) {
                 HeaderSection(
                     onMenuClick = {
-                        viewModel.setStoreSwitcherOpen(true)
+                        viewModel.openStoreSwitcher()
                     },
                     onAvatarClick = {
                         currentTab = NavigationTab.CONFIG
@@ -192,10 +135,10 @@ fun CartAdminApp(
                         selectedTimeframe = uiState.selectedTimeframe,
                         syncMessage = uiState.syncSuccessMessage,
                         onStoreClick = {
-                            viewModel.setStoreSwitcherOpen(true)
+                            viewModel.openStoreSwitcher()
                         },
                         onSelectTimeframe = { timeframe ->
-                            viewModel.setTimeframe(timeframe)
+                            viewModel.selectTimeframe(timeframe)
                         },
                         onPendingOrdersClick = {
                             currentTab = NavigationTab.ORDERS
@@ -247,7 +190,7 @@ fun CartAdminApp(
                             viewModel.setDirectProductStock(productId, newQty)
                         },
                         onAddNewProduct = { name, model, sku, price, special, qty, minAlert, category, desc, status ->
-                            viewModel.addNewProduct(name, model, sku, price, special, qty, minAlert, category, desc, status)
+                            viewModel.addNewProduct(name, model, sku, price, special, qty, category, desc)
                         },
                         onUpdateProduct = { product ->
                             viewModel.updateProduct(product)
@@ -329,7 +272,7 @@ fun CartAdminApp(
                         viewModel.deleteStore(storeId)
                     },
                     onDismiss = {
-                        viewModel.setStoreSwitcherOpen(false)
+                        viewModel.closeStoreSwitcher()
                     }
                 )
             }
@@ -359,7 +302,7 @@ fun CartAdminApp(
                         viewModel.updateOrder(orderDetail.order.id, newStatus, newNotes)
                     },
                     onDismiss = {
-                        viewModel.selectOrderForDetail(null)
+                        viewModel.clearSelectedOrder()
                     }
                 )
             }

@@ -690,12 +690,11 @@ fun ConfigScreen(
 
                         Button(
                             onClick = {
-                                currentStore?.let {
-                                    onSaveStoreCredentials(it.id, storeName, storeUrl, apiUsername, apiKey, storeVersion)
-                                    // Crittografa i parametri con il chip hardware (TEE / AndroidKeyStore)
-                                    securityManager.saveEncryptedStoreCredentials("$storeUrl|$apiUsername|$apiKey")
-                                    Toast.makeText(context, "Parametri API salvati e protetti con chip hardware!", Toast.LENGTH_SHORT).show()
-                                }
+                                val targetId = currentStore?.id ?: "store_${System.currentTimeMillis()}"
+                                onSaveStoreCredentials(targetId, storeName.ifBlank { "Mio Negozio OpenCart" }, storeUrl, apiUsername, apiKey, storeVersion)
+                                // Crittografa i parametri con il chip hardware (TEE / AndroidKeyStore)
+                                securityManager.saveEncryptedStoreCredentials("$storeUrl|$apiUsername|$apiKey")
+                                Toast.makeText(context, "Parametri API salvati e protetti con chip hardware!", Toast.LENGTH_SHORT).show()
                             },
                             modifier = Modifier
                                 .weight(1f)

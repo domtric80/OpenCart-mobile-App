@@ -11,6 +11,9 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface ProductDao {
 
+    @Query("SELECT * FROM products_cache ORDER BY name ASC")
+    suspend fun getAllProducts(): List<ProductEntity>
+
     @Query("SELECT * FROM products_cache WHERE storeId = :storeId ORDER BY name ASC")
     fun getProductsByStoreFlow(storeId: String): Flow<List<ProductEntity>>
 

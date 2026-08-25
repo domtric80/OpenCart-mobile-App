@@ -1,6 +1,9 @@
 package com.example.network
 
+import android.util.Log
 import com.example.model.Order
+import com.example.model.OrderDetail
+import com.example.model.OrderItem
 import com.example.model.OrderStatus
 import com.example.model.Product
 import com.example.model.Store
@@ -12,6 +15,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -29,9 +33,9 @@ data class OpenCartConnectionResult(
 class OpenCartApiClient {
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(6, TimeUnit.SECONDS)
-        .readTimeout(8, TimeUnit.SECONDS)
-        .writeTimeout(8, TimeUnit.SECONDS)
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
+        .writeTimeout(15, TimeUnit.SECONDS)
         .followRedirects(true)
         .build()
 
@@ -59,7 +63,7 @@ class OpenCartApiClient {
                 isSuccess = false,
                 statusCode = 0,
                 responseTimeMs = 0,
-                message = "URL non valido. Assicurati di inserire un URL corretto (es. https://negozio.it)",
+                message = "URL non valido. Inserisci un URL valido (es. https://miosito.it)",
                 details = "Formato URL errato"
             )
         }
@@ -70,7 +74,7 @@ class OpenCartApiClient {
             .url(bridgeUrl)
             .get()
             .header("X-CartAdmin-Key", apiKey)
-            .header("User-Agent", "CartAdmin-Android/1.0")
+            .header("User-Agent", "CartAdmin-Android/1.2.1")
             .build()
 
         try {
@@ -80,7 +84,7 @@ class OpenCartApiClient {
 
                 if (response.isSuccessful && body.contains("\"success\":true")) {
                     val json = try { JSONObject(body) } catch (e: Exception) { null }
-                    val ocVer = json?.optString("opencart_version", "3.x/4.x") ?: "3.x/4.x"
+                    val ocVer = json?.optString("bridge_version", json.optString("opencart_version", "1.2.1")) ?: "1.2.1"
                     val storeName = json?.optString("store_name", "OpenCart Store") ?: "OpenCart Store"
                     val ordersCount = json?.optInt("total_orders", 0) ?: 0
 
@@ -90,7 +94,7 @@ class OpenCartApiClient {
                         responseTimeMs = duration,
                         message = "Modulo CartAdmin Bridge attivo e connesso a $storeName!",
                         apiToken = apiKey,
-                        details = "OpenCart v$ocVer • Ordini nel DB: $ordersCount • Risposta in ${duration}ms.",
+                        details = "Bridge v$ocVer • Ordini nel DB: $ordersCount • Risposta in ${duration}ms.",
                         isBridgeDetected = true
                     )
                 } else if (response.code == 401) {
@@ -98,13 +102,13 @@ class OpenCartApiClient {
                         isSuccess = false,
                         statusCode = 401,
                         responseTimeMs = duration,
-                        message = "Modulo trovato su $cleanUrl ma la chiave API non corrisponde.",
-                        details = "Verifica che la chiave CARTADMIN_SECRET_KEY nel file cartadmin_api.php sia identica alla chiave nell'app."
+                        message = "Modulo trovato su $cleanUrl ma la chiave API non è corretta.",
+                        details = "Verifica che la chiave API inserita nell'app corrisponda a quella del file cartadmin_api.php."
                     )
                 }
             }
         } catch (e: Exception) {
-            // Bridge might not be uploaded yet, fallback to check OpenCart native
+            // Fallback to native OpenCart API
         }
 
         // 2. Check Native OpenCart route=api/login
@@ -117,7 +121,7 @@ class OpenCartApiClient {
         val nativeRequest = Request.Builder()
             .url(nativeUrl)
             .post(formBody)
-            .header("User-Agent", "CartAdmin-Android/1.0")
+            .header("User-Agent", "CartAdmin-Android/1.2.1")
             .header("Accept", "application/json")
             .build()
 
@@ -150,7 +154,7 @@ class OpenCartApiClient {
                             statusCode = code,
                             responseTimeMs = duration,
                             message = "OpenCart errore: $errorMsg",
-                            details = "Consiglio: Per evitare problemi di IP dinamico dello smartphone, carica il modulo PHP incluso nell'app (cartadmin_api.php)."
+                            details = "Consiglio: Installa il plugin cartadmin_api.php per bypassare i blocchi IP dinamici."
                         )
                     }
 
@@ -166,8 +170,8 @@ class OpenCartApiClient {
                         isSuccess = false,
                         statusCode = code,
                         responseTimeMs = duration,
-                        message = "Server ha risposto HTTP $code: ${response.message}",
-                        details = "Carica il file cartadmin_api.php nella cartella root del tuo OpenCart per abilitare la sincronizzazione istantanea."
+                        message = "Errore HTTP $code dal server OpenCart.",
+                        details = "Verifica che il modulo CartAdmin Bridge o le API di OpenCart siano abilitate su $cleanUrl."
                     )
                 }
             }
@@ -177,117 +181,216 @@ class OpenCartApiClient {
                 isSuccess = false,
                 statusCode = 0,
                 responseTimeMs = duration,
-                message = "Impossibile raggiungere lo store: ${e.localizedMessage ?: "Timeout"}",
-                details = "Verifica che il sito $cleanUrl sia online e raggiungibile."
+                message = "Impossibile raggiungere il server: ${e.localizedMessage ?: "Errore di rete"}",
+                details = "Verifica la connessione internet e l'URL dello store OpenCart."
             )
         }
     }
 
     /**
-     * Update order status on OpenCart via CartAdmin Bridge or native API
+     * Scarica gli ordini reali dal server OpenCart.
      */
-    suspend fun updateOrderStatusOnOpenCart(
-        store: Store,
-        orderId: String,
-        status: OrderStatus,
-        comment: String = "Aggiornato da CartAdmin App"
-    ): Boolean = withContext(Dispatchers.IO) {
-        val cleanUrl = store.url.trim().removeSuffix("/")
-        
-        // 1. Try Bridge first
-        val bridgeUrl = "$cleanUrl/cartadmin_api.php?action=order_status"
-        val payload = JSONObject().apply {
-            put("order_id", orderId)
-            put("status", status.name)
-            put("comment", comment)
-            put("notify", 1)
-        }
-        val bridgeReq = Request.Builder()
-            .url(bridgeUrl)
-            .post(payload.toString().toRequestBody(jsonMediaType))
-            .header("X-CartAdmin-Key", store.apiKey)
-            .build()
-
+    suspend fun fetchOrders(baseUrl: String, apiKey: String, limit: Int = 50): Result<List<Order>> = withContext(Dispatchers.IO) {
         try {
-            client.newCall(bridgeReq).execute().use { res ->
-                if (res.isSuccessful && res.body?.string()?.contains("\"success\":true") == true) {
-                    return@withContext true
+            var cleanUrl = baseUrl.trim().removeSuffix("/")
+            if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
+                cleanUrl = "https://$cleanUrl"
+            }
+            val endpoint = "$cleanUrl/cartadmin_api.php?action=orders&limit=$limit"
+
+            val request = Request.Builder()
+                .url(endpoint)
+                .get()
+                .header("X-CartAdmin-Key", apiKey)
+                .header("Authorization", "Bearer $apiKey")
+                .header("User-Agent", "CartAdmin-Android/1.2.1")
+                .header("Accept", "application/json")
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                val body = response.body?.string() ?: ""
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP ${response.code}: $body"))
                 }
+
+                val json = JSONObject(body)
+                val ordersArray = json.optJSONArray("orders") ?: JSONArray()
+                val list = mutableListOf<Order>()
+
+                for (i in 0 until ordersArray.length()) {
+                    val obj = ordersArray.getJSONObject(i)
+                    val orderId = obj.optInt("order_id", 0).toString()
+                    val customer = obj.optString("customer", "Cliente #$orderId")
+                    val total = obj.optDouble("total", 0.0)
+                    val statusId = obj.optInt("status_id", 1)
+                    val dateAdded = obj.optString("date_added", "N/D")
+                    val paymentMethod = obj.optString("payment_method", "Non specificato")
+                    val shippingMethod = obj.optString("shipping_method", "Corriere Standard")
+
+                    val status = when (statusId) {
+                        1 -> OrderStatus.PENDING
+                        2 -> OrderStatus.PROCESSING
+                        3 -> OrderStatus.SHIPPED
+                        5 -> OrderStatus.COMPLETE
+                        7 -> OrderStatus.CANCELLED
+                        else -> OrderStatus.CONFIRMED
+                    }
+
+                    list.add(
+                        Order(
+                            id = orderId,
+                            orderNumber = "#$orderId",
+                            customerName = customer,
+                            customerEmail = obj.optString("email", ""),
+                            total = total,
+                            status = status,
+                            dateAdded = dateAdded,
+                            itemsCount = 1,
+                            shippingMethod = shippingMethod,
+                            paymentMethod = paymentMethod,
+                            notes = "Ordine da OpenCart Bridge"
+                        )
+                    )
+                }
+                Result.success(list)
             }
         } catch (e: Exception) {
-            // fallback to native
-        }
-
-        // 2. Native fallback
-        val nativeUrl = "$cleanUrl/index.php?route=api/order/history&api_token=${store.apiToken ?: ""}"
-        val statusId = when (status) {
-            OrderStatus.PENDING -> "1"
-            OrderStatus.PROCESSING -> "2"
-            OrderStatus.SHIPPED -> "3"
-            OrderStatus.COMPLETE, OrderStatus.DELIVERED -> "5"
-            OrderStatus.CANCELLED -> "7"
-            OrderStatus.CONFIRMED -> "15"
-        }
-        val formBody = FormBody.Builder()
-            .add("order_id", orderId.replace("ord_", ""))
-            .add("order_status_id", statusId)
-            .add("comment", comment)
-            .add("notify", "1")
-            .build()
-
-        val nativeReq = Request.Builder()
-            .url(nativeUrl)
-            .post(formBody)
-            .build()
-
-        try {
-            client.newCall(nativeReq).execute().use { res ->
-                res.isSuccessful
-            }
-        } catch (e: Exception) {
-            false
+            Result.failure(e)
         }
     }
 
     /**
-     * Update product stock quantity on OpenCart
+     * Scarica i prodotti reali dal server OpenCart.
      */
-    suspend fun updateProductQuantityOnOpenCart(
-        store: Store,
-        productId: String,
-        newQuantity: Int
-    ): Boolean = withContext(Dispatchers.IO) {
-        val cleanUrl = store.url.trim().removeSuffix("/")
-
-        // Try Bridge
-        val bridgeUrl = "$cleanUrl/cartadmin_api.php?action=update_stock"
-        val payload = JSONObject().apply {
-            put("product_id", productId)
-            put("quantity", newQuantity)
-        }
-        val bridgeReq = Request.Builder()
-            .url(bridgeUrl)
-            .post(payload.toString().toRequestBody(jsonMediaType))
-            .header("X-CartAdmin-Key", store.apiKey)
-            .build()
-
+    suspend fun fetchProducts(baseUrl: String, apiKey: String, limit: Int = 100): Result<List<Product>> = withContext(Dispatchers.IO) {
         try {
-            client.newCall(bridgeReq).execute().use { res ->
-                if (res.isSuccessful && res.body?.string()?.contains("\"success\":true") == true) {
-                    return@withContext true
+            var cleanUrl = baseUrl.trim().removeSuffix("/")
+            if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
+                cleanUrl = "https://$cleanUrl"
+            }
+            val endpoint = "$cleanUrl/cartadmin_api.php?action=products&limit=$limit"
+
+            val request = Request.Builder()
+                .url(endpoint)
+                .get()
+                .header("X-CartAdmin-Key", apiKey)
+                .header("Authorization", "Bearer $apiKey")
+                .header("User-Agent", "CartAdmin-Android/1.2.1")
+                .header("Accept", "application/json")
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                val body = response.body?.string() ?: ""
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP ${response.code}: $body"))
                 }
+
+                val json = JSONObject(body)
+                val prodsArray = json.optJSONArray("products") ?: JSONArray()
+                val list = mutableListOf<Product>()
+
+                for (i in 0 until prodsArray.length()) {
+                    val obj = prodsArray.getJSONObject(i)
+                    val prodId = obj.optInt("product_id", 0).toString()
+                    val name = obj.optString("name", "Prodotto #$prodId")
+                    val model = obj.optString("model", "SKU-$prodId")
+                    val sku = obj.optString("sku", model)
+                    val qty = obj.optInt("quantity", 0)
+                    val price = obj.optDouble("price", 0.0)
+                    val status = obj.optBoolean("status", true)
+
+                    list.add(
+                        Product(
+                            id = prodId,
+                            name = name,
+                            model = model,
+                            sku = if (sku.isNotBlank()) sku else model,
+                            price = price,
+                            specialPrice = null,
+                            quantity = qty,
+                            minQuantityAlert = 5,
+                            category = "Catalogo OpenCart",
+                            description = obj.optString("description", ""),
+                            status = status
+                        )
+                    )
+                }
+                Result.success(list)
             }
         } catch (e: Exception) {
-            // fallback
+            Result.failure(e)
         }
-
-        true
     }
 
     /**
-     * Synchronize audit log action directly to the remote OpenCart store database (cartadmin_audit table)
+     * Aggiorna la giacenza di un prodotto direttamente su OpenCart.
      */
-    suspend fun sendAuditLogToOpenCart(
+    suspend fun updateProductStock(baseUrl: String, apiKey: String, productId: String, newStock: Int): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            var cleanUrl = baseUrl.trim().removeSuffix("/")
+            if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
+                cleanUrl = "https://$cleanUrl"
+            }
+            val endpoint = "$cleanUrl/cartadmin_api.php"
+
+            val formBody = FormBody.Builder()
+                .add("action", "update_stock")
+                .add("product_id", productId)
+                .add("quantity", newStock.toString())
+                .build()
+
+            val request = Request.Builder()
+                .url(endpoint)
+                .post(formBody)
+                .header("X-CartAdmin-Key", apiKey)
+                .header("User-Agent", "CartAdmin-Android/1.2.1")
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                Result.success(response.isSuccessful)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Aggiorna lo stato di un ordine direttamente su OpenCart.
+     */
+    suspend fun updateOrderStatus(baseUrl: String, apiKey: String, orderId: String, statusId: Int, comment: String): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            var cleanUrl = baseUrl.trim().removeSuffix("/")
+            if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
+                cleanUrl = "https://$cleanUrl"
+            }
+            val endpoint = "$cleanUrl/cartadmin_api.php"
+
+            val formBody = FormBody.Builder()
+                .add("action", "update_order_status")
+                .add("order_id", orderId)
+                .add("status_id", statusId.toString())
+                .add("comment", comment)
+                .build()
+
+            val request = Request.Builder()
+                .url(endpoint)
+                .post(formBody)
+                .header("X-CartAdmin-Key", apiKey)
+                .header("User-Agent", "CartAdmin-Android/1.2.1")
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                Result.success(response.isSuccessful)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Log an audit event to OpenCart remote database
+     */
+    suspend fun logAuditRemote(
         store: Store,
         actionType: String,
         description: String,
@@ -295,86 +398,34 @@ class OpenCartApiClient {
         operator: String,
         device: String
     ): Boolean = withContext(Dispatchers.IO) {
-        val cleanUrl = store.url.trim().removeSuffix("/")
+        var cleanUrl = store.url.trim().removeSuffix("/")
         if (cleanUrl.isBlank() || store.apiKey.isBlank()) return@withContext false
+        if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
+            cleanUrl = "https://$cleanUrl"
+        }
 
-        val bridgeUrl = "$cleanUrl/cartadmin_api.php?action=log_audit"
+        val bridgeUrl = "$cleanUrl/cartadmin_api.php?action=audit_log"
         val payload = JSONObject().apply {
             put("action_type", actionType)
             put("description", description)
             put("details", details ?: "")
-            put("operator", operator)
-            put("device", device)
+            put("operator_username", operator)
+            put("device_model", device)
         }
 
         val request = Request.Builder()
             .url(bridgeUrl)
             .post(payload.toString().toRequestBody(jsonMediaType))
             .header("X-CartAdmin-Key", store.apiKey)
-            .header("User-Agent", "CartAdmin-Android/1.1.1")
+            .header("User-Agent", "CartAdmin-Android/1.2.1")
             .build()
 
         try {
             client.newCall(request).execute().use { res ->
-                res.isSuccessful && res.body?.string()?.contains("\"success\":true") == true
+                res.isSuccessful
             }
         } catch (e: Exception) {
             false
         }
-    }
-
-    /**
-     * Fetch remote audit logs registered on the OpenCart server
-     */
-    suspend fun fetchOpenCartAuditLogs(store: Store): List<com.example.model.AuditLog> = withContext(Dispatchers.IO) {
-        val cleanUrl = store.url.trim().removeSuffix("/")
-        if (cleanUrl.isBlank() || store.apiKey.isBlank()) return@withContext emptyList()
-
-        val bridgeUrl = "$cleanUrl/cartadmin_api.php?action=audit_logs&limit=100"
-        val request = Request.Builder()
-            .url(bridgeUrl)
-            .get()
-            .header("X-CartAdmin-Key", store.apiKey)
-            .header("User-Agent", "CartAdmin-Android/1.1.1")
-            .build()
-
-        try {
-            client.newCall(request).execute().use { res ->
-                if (res.isSuccessful) {
-                    val body = res.body?.string() ?: ""
-                    val json = JSONObject(body)
-                    if (json.optBoolean("success", false)) {
-                        val logsArr = json.optJSONArray("logs") ?: return@withContext emptyList()
-                        val result = mutableListOf<com.example.model.AuditLog>()
-                        for (i in 0 until logsArr.length()) {
-                            val item = logsArr.getJSONObject(i)
-                            val actType = try {
-                                com.example.model.AuditActionType.valueOf(item.optString("actionType", "SYSTEM_LOGIN"))
-                            } catch (_: Exception) {
-                                com.example.model.AuditActionType.SYSTEM_LOGIN
-                            }
-                            result.add(
-                                com.example.model.AuditLog(
-                                    id = item.optString("id", "oc_$i"),
-                                    timestamp = item.optString("timestamp", "Recente"),
-                                    timestampMillis = System.currentTimeMillis(),
-                                    operatorUsername = item.optString("operatorUsername", "admin"),
-                                    actionType = actType,
-                                    description = item.optString("description", ""),
-                                    details = item.optString("details", null),
-                                    deviceModel = item.optString("deviceModel", "Android"),
-                                    androidVersion = "OpenCart Server Log",
-                                    appVersion = "1.1.2",
-                                    storeName = store.name,
-                                    apiProfileUsed = "OpenCart Database (cartadmin_audit)"
-                                )
-                            )
-                        }
-                        return@withContext result
-                    }
-                }
-            }
-        } catch (_: Exception) {}
-        emptyList()
     }
 }
