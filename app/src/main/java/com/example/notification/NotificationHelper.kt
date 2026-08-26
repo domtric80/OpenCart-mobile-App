@@ -60,8 +60,8 @@ object NotificationHelper {
         action: String? = null,
         configureExtras: (Intent.() -> Unit)? = null
     ): PendingIntent {
-        val intent = Intent(context, MainActivity::class.java).apply {
-            setPackage(context.packageName)
+        val intent = Intent().apply {
+            setClassName(context.packageName, MainActivity::class.java.name)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             if (action != null) {
                 this.action = action

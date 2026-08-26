@@ -34,8 +34,7 @@ object ExplicitExternalIntentFactory {
 
     internal fun buildDialIntent(component: ComponentName, cleanPhone: String): Intent =
         Intent(Intent.ACTION_DIAL).apply {
-            this.component = component
-            setPackage(component.packageName)
+            setClassName(component.packageName, component.className)
             data = Uri.fromParts("tel", cleanPhone, null)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
@@ -45,8 +44,7 @@ object ExplicitExternalIntentFactory {
         cleanEmail: String,
         subject: String
     ): Intent = Intent(Intent.ACTION_SENDTO).apply {
-        this.component = component
-        setPackage(component.packageName)
+        setClassName(component.packageName, component.className)
         data = Uri.fromParts("mailto", cleanEmail, null)
         putExtra(Intent.EXTRA_SUBJECT, subject)
         flags = Intent.FLAG_ACTIVITY_NEW_TASK
