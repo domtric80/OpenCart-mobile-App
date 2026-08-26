@@ -15,12 +15,11 @@ object ExplicitExternalIntentFactory {
 
     fun dial(context: Context, cleanPhone: String): Boolean {
         val component = resolveHandler(context, Intent.ACTION_DIAL, "tel") ?: return false
-        val intent = Intent().apply {
-            setClassName(component.packageName, component.className)
-            action = Intent.ACTION_DIAL
-            data = Uri.fromParts("tel", cleanPhone, null)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        }
+        val intent = Intent()
+        intent.setClassName(component.packageName, component.className)
+        intent.action = Intent.ACTION_DIAL
+        intent.data = Uri.fromParts("tel", cleanPhone, null)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
         return try {
             context.startActivity(intent)
             true
@@ -33,13 +32,12 @@ object ExplicitExternalIntentFactory {
 
     fun email(context: Context, cleanEmail: String, subject: String): Boolean {
         val component = resolveHandler(context, Intent.ACTION_SENDTO, "mailto") ?: return false
-        val intent = Intent().apply {
-            setClassName(component.packageName, component.className)
-            action = Intent.ACTION_SENDTO
-            data = Uri.fromParts("mailto", cleanEmail, null)
-            putExtra(Intent.EXTRA_SUBJECT, subject)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        }
+        val intent = Intent()
+        intent.setClassName(component.packageName, component.className)
+        intent.action = Intent.ACTION_SENDTO
+        intent.data = Uri.fromParts("mailto", cleanEmail, null)
+        intent.putExtra(Intent.EXTRA_SUBJECT, subject)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
         return try {
             context.startActivity(intent)
             true
@@ -60,23 +58,26 @@ object ExplicitExternalIntentFactory {
         return ComponentName(activityInfo.packageName, activityInfo.name)
     }
 
-    internal fun buildDialIntent(component: ComponentName, cleanPhone: String): Intent =
-        Intent().apply {
-            setClassName(component.packageName, component.className)
-            action = Intent.ACTION_DIAL
-            data = Uri.fromParts("tel", cleanPhone, null)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        }
+    internal fun buildDialIntent(component: ComponentName, cleanPhone: String): Intent {
+        val intent = Intent()
+        intent.setClassName(component.packageName, component.className)
+        intent.action = Intent.ACTION_DIAL
+        intent.data = Uri.fromParts("tel", cleanPhone, null)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        return intent
+    }
 
     internal fun buildEmailIntent(
         component: ComponentName,
         cleanEmail: String,
         subject: String
-    ): Intent = Intent().apply {
-        setClassName(component.packageName, component.className)
-        action = Intent.ACTION_SENDTO
-        data = Uri.fromParts("mailto", cleanEmail, null)
-        putExtra(Intent.EXTRA_SUBJECT, subject)
-        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+    ): Intent {
+        val intent = Intent()
+        intent.setClassName(component.packageName, component.className)
+        intent.action = Intent.ACTION_SENDTO
+        intent.data = Uri.fromParts("mailto", cleanEmail, null)
+        intent.putExtra(Intent.EXTRA_SUBJECT, subject)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        return intent
     }
 }
