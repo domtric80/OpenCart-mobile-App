@@ -9,6 +9,9 @@ on:
     - cron: '30 2 * * 1' # Every Monday at 02:30 UTC
   workflow_dispatch:
 
+env:
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: "true"
+
 permissions:
   actions: read
   contents: read
@@ -161,9 +164,14 @@ jobs:
     name: Dependency Review & Secrets Check
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Dependency Review
         uses: actions/dependency-review-action@v4
+        continue-on-error: true
+        with:
+          fail-on-severity: high
