@@ -7,6 +7,7 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
 import java.security.KeyStore
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -56,6 +57,8 @@ class SecurityManager(private val context: Context) {
         private const val KEY_BIOMETRIC_PREF = "sec_vault_biometric_enabled"
         private const val KEY_ENCRYPTED_STORE_CREDS = "sec_vault_enc_store_creds"
         private const val KEY_STORE_CREDS_IV = "sec_vault_store_creds_iv"
+        private const val KEY_BIOMETRIC_PROOF = "sec_vault_biometric_proof"
+        private const val KEY_BIOMETRIC_PROOF_IV = "sec_vault_biometric_proof_iv"
 
         // Timeout inattività: 5 MINUTI (stile app bancaria)
         const val TIMEOUT_INACTIVITY_MS = 5L * 60 * 1000 // 5 minuti in millisecondi
@@ -64,8 +67,10 @@ class SecurityManager(private val context: Context) {
 
         private const val ANDROID_KEYSTORE = "AndroidKeyStore"
         private const val KEYSTORE_ALIAS = "CartAdmin_HardwareMasterKey_v2"
+        private const val BIOMETRIC_KEYSTORE_ALIAS = "CartAdmin_BiometricProofKey_v1"
         private const val AES_GCM_NOPADDING = "AES/GCM/NoPadding"
         private const val GCM_TAG_LENGTH = 128
+        private val BIOMETRIC_PROOF_PLAINTEXT = "CartAdmin biometric proof v1".toByteArray(Charsets.UTF_8)
     }
 
     init {
@@ -167,6 +172,104 @@ class SecurityManager(private val context: Context) {
     }
 
     /**
+     * Prepares an auth-bound cipher. The returned CryptoObject must be supplied to
+     * BiometricPrompt.authenticate; a successful callback alone is not sufficient to unlock.
+     */
+    fun prepareBiometricCryptoObject(): BiometricPrompt.CryptoObject? {
+        return prepareBiometricCryptoObjectInternal(retryAfterReset = true)
+    }
+
+    private fun prepareBiometricCryptoObjectInternal(
+        retryAfterReset: Boolean
+    ): BiometricPrompt.CryptoObject? {
+        return try {
+            val secretKey = getOrCreateBiometricKey()
+            val cipher = Cipher.getInstance(AES_GCM_NOPADDING)
+            val encryptedProof = prefs.getString(KEY_BIOMETRIC_PROOF, null)
+            val proofIv = prefs.getString(KEY_BIOMETRIC_PROOF_IV, null)
+
+            if (encryptedProof != null && proofIv != null) {
+                val iv = Base64.decode(proofIv, Base64.NO_WRAP)
+                cipher.init(Cipher.DECRYPT_MODE, secretKey, GCMParameterSpec(GCM_TAG_LENGTH, iv))
+            } else {
+                cipher.init(Cipher.ENCRYPT_MODE, secretKey)
+            }
+            BiometricPrompt.CryptoObject(cipher)
+        } catch (_: Exception) {
+            if (!retryAfterReset) return null
+            resetBiometricProof()
+            prepareBiometricCryptoObjectInternal(retryAfterReset = false)
+        }
+    }
+
+    /** Completes and verifies the Keystore operation authorized by the biometric prompt. */
+    fun completeBiometricAuthentication(cryptoObject: BiometricPrompt.CryptoObject?): Boolean {
+        val cipher = cryptoObject?.cipher ?: return false
+        return try {
+            val encryptedProof = prefs.getString(KEY_BIOMETRIC_PROOF, null)
+            if (encryptedProof == null) {
+                val proof = cipher.doFinal(BIOMETRIC_PROOF_PLAINTEXT)
+                prefs.edit()
+                    .putString(KEY_BIOMETRIC_PROOF, Base64.encodeToString(proof, Base64.NO_WRAP))
+                    .putString(KEY_BIOMETRIC_PROOF_IV, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
+                    .apply()
+                true
+            } else {
+                val decrypted = cipher.doFinal(Base64.decode(encryptedProof, Base64.NO_WRAP))
+                MessageDigest.isEqual(decrypted, BIOMETRIC_PROOF_PLAINTEXT)
+            }
+        } catch (_: Exception) {
+            resetBiometricProof()
+            false
+        }
+    }
+
+    private fun getOrCreateBiometricKey(): SecretKey {
+        val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
+        (keyStore.getKey(BIOMETRIC_KEYSTORE_ALIAS, null) as? SecretKey)?.let { return it }
+
+        val keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
+        val builder = KeyGenParameterSpec.Builder(
+            BIOMETRIC_KEYSTORE_ALIAS,
+            KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+        )
+            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+            .setKeySize(256)
+            .setRandomizedEncryptionRequired(true)
+            .setUserAuthenticationRequired(true)
+            .setInvalidatedByBiometricEnrollment(true)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            builder.setUserAuthenticationParameters(
+                0,
+                KeyProperties.AUTH_BIOMETRIC_STRONG
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            builder.setUserAuthenticationValidityDurationSeconds(-1)
+        }
+
+        keyGenerator.init(builder.build())
+        return keyGenerator.generateKey()
+    }
+
+    private fun resetBiometricProof() {
+        prefs.edit()
+            .remove(KEY_BIOMETRIC_PROOF)
+            .remove(KEY_BIOMETRIC_PROOF_IV)
+            .apply()
+        try {
+            KeyStore.getInstance(ANDROID_KEYSTORE).apply {
+                load(null)
+                deleteEntry(BIOMETRIC_KEYSTORE_ALIAS)
+            }
+        } catch (_: Exception) {
+            // A new key will be generated on the next biometric attempt.
+        }
+    }
+
+    /**
      * Rileva il tipo di blocco dello schermo presente sul dispositivo Android
      */
     fun detectDeviceLockType(): DeviceLockType {
@@ -181,7 +284,7 @@ class SecurityManager(private val context: Context) {
 
         // Verifica biometria forte (impronta / face id hardware sicuro)
         val canAuthBiometric = biometricManager?.canAuthenticate(
-            BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.BIOMETRIC_WEAK
+            BiometricManager.Authenticators.BIOMETRIC_STRONG
         )
         if (canAuthBiometric == BiometricManager.BIOMETRIC_SUCCESS) {
             return DeviceLockType.STRONG_BIOMETRIC
@@ -205,7 +308,7 @@ class SecurityManager(private val context: Context) {
             null
         }
         val status = biometricManager?.canAuthenticate(
-            BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.BIOMETRIC_WEAK
+            BiometricManager.Authenticators.BIOMETRIC_STRONG
         )
         return status == BiometricManager.BIOMETRIC_SUCCESS
     }
