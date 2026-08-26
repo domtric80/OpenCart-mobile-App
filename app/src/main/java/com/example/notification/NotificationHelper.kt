@@ -60,14 +60,13 @@ object NotificationHelper {
         action: String? = null,
         configureExtras: (Intent.() -> Unit)? = null
     ): PendingIntent {
-        val intent = Intent().apply {
-            setClassName(context.packageName, MainActivity::class.java.name)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            if (action != null) {
-                this.action = action
-            }
-            configureExtras?.invoke(this)
+        val intent = Intent()
+        intent.setClassName(context.packageName, MainActivity::class.java.name)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        if (action != null) {
+            intent.action = action
         }
+        configureExtras?.invoke(intent)
 
         val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         return PendingIntent.getActivity(context, requestCode, intent, flags)
