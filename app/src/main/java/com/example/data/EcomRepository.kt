@@ -20,7 +20,7 @@ import kotlinx.coroutines.flow.update
 
 class EcomRepository(
     private val storeProfileDao: StoreProfileDao? = null,
-    private val apiClient: OpenCartApiClient = OpenCartApiClient()
+    private val apiClient: OpenCartApiClient
 ) {
 
     private val _stores = MutableStateFlow<List<Store>>(emptyList())

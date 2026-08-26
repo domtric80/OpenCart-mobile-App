@@ -85,7 +85,7 @@ class MainViewModel(
 ) : AndroidViewModel(application) {
 
     private val db = AppDatabase.getDatabase(application)
-    private val apiClient = OpenCartApiClient()
+    private val apiClient = OpenCartApiClient(application)
     private val repository = EcomRepository(db.storeProfileDao(), apiClient)
     private val offlineOrderRepository = OfflineOrderRepository(db.orderDao())
     private val offlineCatalogRepository = OfflineCatalogRepository(db.productDao(), db.categoryDao())

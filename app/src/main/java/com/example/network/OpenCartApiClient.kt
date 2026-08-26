@@ -1,5 +1,6 @@
 package com.example.network
 
+import android.content.Context
 import android.util.Log
 import com.example.model.Category
 import com.example.model.Order
@@ -17,13 +18,11 @@ import kotlinx.coroutines.withContext
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
-import java.util.concurrent.TimeUnit
 
 data class OpenCartConnectionResult(
     val isSuccess: Boolean,
@@ -35,14 +34,9 @@ data class OpenCartConnectionResult(
     val isBridgeDetected: Boolean = false
 )
 
-class OpenCartApiClient {
+class OpenCartApiClient(context: Context) {
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .writeTimeout(15, TimeUnit.SECONDS)
-        .followRedirects(true)
-        .build()
+    private val tlsClient = TlsPinnedClient(context)
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
@@ -87,7 +81,7 @@ class OpenCartApiClient {
             .build()
 
         try {
-            client.newCall(bridgeRequest).execute().use { response ->
+            tlsClient.execute(bridgeRequest).use { response ->
                 val duration = System.currentTimeMillis() - startTime
                 val body = response.body?.string() ?: ""
 
@@ -138,7 +132,7 @@ class OpenCartApiClient {
             .build()
 
         try {
-            client.newCall(nativeRequest).execute().use { response ->
+            tlsClient.execute(nativeRequest).use { response ->
                 val duration = System.currentTimeMillis() - startTime
                 val responseBody = response.body?.string() ?: ""
                 val code = response.code
@@ -222,7 +216,7 @@ class OpenCartApiClient {
                 .header("Accept", "application/json")
                 .build()
 
-            client.newCall(request).execute().use { response ->
+            tlsClient.execute(request).use { response ->
                 val body = response.body?.string() ?: ""
                 if (!response.isSuccessful) {
                     return@withContext Result.failure(Exception("HTTP ${response.code}: $body"))
@@ -304,7 +298,7 @@ class OpenCartApiClient {
                 .header("Accept", "application/json")
                 .build()
 
-            client.newCall(request).execute().use { response ->
+            tlsClient.execute(request).use { response ->
                 val body = response.body?.string() ?: ""
                 if (!response.isSuccessful) {
                     return@withContext Result.failure(Exception("HTTP ${response.code}: $body"))
@@ -379,7 +373,7 @@ class OpenCartApiClient {
                 .header("Accept", "application/json")
                 .build()
 
-            client.newCall(request).execute().use { response ->
+            tlsClient.execute(request).use { response ->
                 val body = response.body?.string() ?: ""
                 if (!response.isSuccessful) {
                     return@withContext Result.failure(Exception("HTTP ${response.code}: $body"))
@@ -452,7 +446,7 @@ class OpenCartApiClient {
                 .header("User-Agent", "CartAdmin-Android/1.2.2")
                 .build()
 
-            client.newCall(request).execute().use { response ->
+            tlsClient.execute(request).use { response ->
                 Result.success(response.isSuccessful)
             }
         } catch (e: Exception) {
@@ -489,7 +483,7 @@ class OpenCartApiClient {
                 .header("User-Agent", "CartAdmin-Android/1.2.3")
                 .build()
 
-            client.newCall(request).execute().use { response ->
+            tlsClient.execute(request).use { response ->
                 Result.success(response.isSuccessful)
             }
         } catch (e: Exception) {
@@ -517,7 +511,7 @@ class OpenCartApiClient {
                 .header("User-Agent", "CartAdmin-Android/1.2.3")
                 .build()
 
-            client.newCall(request).execute().use { response ->
+            tlsClient.execute(request).use { response ->
                 val body = response.body?.string() ?: ""
                 if (response.isSuccessful) {
                     val json = JSONObject(body)
@@ -578,7 +572,7 @@ class OpenCartApiClient {
                 .header("User-Agent", "CartAdmin-Android/1.2.3")
                 .build()
 
-            client.newCall(request).execute().use { response ->
+            tlsClient.execute(request).use { response ->
                 val body = response.body?.string() ?: ""
                 if (response.isSuccessful) {
                     val json = JSONObject(body)
@@ -652,7 +646,7 @@ class OpenCartApiClient {
                 .header("User-Agent", "CartAdmin-Android/1.2.3")
                 .build()
 
-            client.newCall(request).execute().use { response ->
+            tlsClient.execute(request).use { response ->
                 Result.success(response.isSuccessful)
             }
         } catch (e: Exception) {
@@ -690,7 +684,7 @@ class OpenCartApiClient {
                 .header("User-Agent", "CartAdmin-Android/1.2.3")
                 .build()
 
-            client.newCall(request).execute().use { response ->
+            tlsClient.execute(request).use { response ->
                 Result.success(response.isSuccessful)
             }
         } catch (e: Exception) {
@@ -733,7 +727,7 @@ class OpenCartApiClient {
             .build()
 
         try {
-            client.newCall(request).execute().use { res ->
+            tlsClient.execute(request).use { res ->
                 res.isSuccessful
             }
         } catch (e: Exception) {
