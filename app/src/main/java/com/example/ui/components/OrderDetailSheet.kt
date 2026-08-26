@@ -1,7 +1,6 @@
 package com.example.ui.components
 
 import android.content.Intent
-import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -76,6 +75,7 @@ import com.example.model.Order
 import com.example.model.OrderDetail
 import com.example.model.OrderItem
 import com.example.model.OrderStatus
+import com.example.security.ExplicitExternalIntentFactory
 import com.example.ui.theme.CardSurfaceLight
 import com.example.ui.theme.CardSurfacePure
 import com.example.ui.theme.StatusAlertRed
@@ -394,14 +394,15 @@ fun OrderDetailSheet(
                             onClick = {
                                 val cleanPhone = orderDetail.customerPhone.filter { it.isDigit() || it == '+' }
                                 if (cleanPhone.isNotBlank()) {
-                                    val dialIntent = Intent(Intent.ACTION_DIAL).apply {
-                                        data = Uri.parse("tel:$cleanPhone")
-                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                    }
-                                    try {
-                                        context.startActivity(dialIntent)
-                                    } catch (e: Exception) {
+                                    val dialIntent = ExplicitExternalIntentFactory.dial(context, cleanPhone)
+                                    if (dialIntent == null) {
                                         Toast.makeText(context, "Nessuna app di composizione telefonica disponibile", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        try {
+                                            context.startActivity(dialIntent)
+                                        } catch (e: Exception) {
+                                            Toast.makeText(context, "Impossibile aprire l'app di composizione telefonica", Toast.LENGTH_SHORT).show()
+                                        }
                                     }
                                 } else {
                                     Toast.makeText(context, "Numero telefonico non disponibile", Toast.LENGTH_SHORT).show()
@@ -419,15 +420,19 @@ fun OrderDetailSheet(
                             onClick = {
                                 val cleanEmail = order.customerEmail.trim()
                                 if (cleanEmail.isNotBlank() && cleanEmail.contains("@")) {
-                                    val emailIntent = Intent(Intent.ACTION_SENDTO).apply {
-                                        data = Uri.parse("mailto:${Uri.encode(cleanEmail)}")
-                                        putExtra(Intent.EXTRA_SUBJECT, "Assistenza Ordine ${order.orderNumber}")
-                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                    }
-                                    try {
-                                        context.startActivity(emailIntent)
-                                    } catch (e: Exception) {
+                                    val emailIntent = ExplicitExternalIntentFactory.email(
+                                        context,
+                                        cleanEmail,
+                                        "Assistenza Ordine ${order.orderNumber}"
+                                    )
+                                    if (emailIntent == null) {
                                         Toast.makeText(context, "Nessun client email disponibile sul dispositivo", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        try {
+                                            context.startActivity(emailIntent)
+                                        } catch (e: Exception) {
+                                            Toast.makeText(context, "Impossibile aprire il client email", Toast.LENGTH_SHORT).show()
+                                        }
                                     }
                                 } else {
                                     Toast.makeText(context, "Indirizzo email non valido o mancante", Toast.LENGTH_SHORT).show()

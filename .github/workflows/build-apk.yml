@@ -107,6 +107,12 @@ jobs:
           chmod +x ./gradlew
           ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
+      - name: Run Unit Tests (CI)
+        if: steps.get_version.outputs.is_release != 'true'
+        env:
+          GRADLE_OPTS: "-Djava.awt.headless=true -Dorg.gradle.jvmargs=\"-Xmx4g -Dfile.encoding=UTF-8 -Djava.awt.headless=true\""
+        run: ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
+
       - name: Build and Sign Release APK
         if: steps.get_version.outputs.is_release == 'true'
         env:
