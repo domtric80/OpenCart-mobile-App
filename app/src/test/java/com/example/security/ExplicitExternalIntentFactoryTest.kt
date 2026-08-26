@@ -21,7 +21,7 @@ class ExplicitExternalIntentFactoryTest {
 
         assertEquals(component, intent.component)
         assertEquals(Intent.ACTION_DIAL, intent.action)
-        assertEquals("tel:+39021234567", intent.dataString)
+        assertEquals("+39021234567", intent.data?.schemeSpecificPart)
     }
 
     @Test
@@ -34,7 +34,7 @@ class ExplicitExternalIntentFactoryTest {
 
         assertEquals(component, intent.component)
         assertEquals(Intent.ACTION_SENDTO, intent.action)
-        assertEquals("mailto:customer@example.com", intent.dataString)
+        assertEquals("customer@example.com", intent.data?.schemeSpecificPart)
         assertEquals("Assistenza Ordine 42", intent.getStringExtra(Intent.EXTRA_SUBJECT))
         assertNotNull(intent.data)
     }

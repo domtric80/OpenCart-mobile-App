@@ -15,8 +15,9 @@ object ExplicitExternalIntentFactory {
 
     fun dial(context: Context, cleanPhone: String): Boolean {
         val component = resolveHandler(context, Intent.ACTION_DIAL, "tel") ?: return false
-        val intent = Intent(Intent.ACTION_DIAL).apply {
+        val intent = Intent().apply {
             setClassName(component.packageName, component.className)
+            action = Intent.ACTION_DIAL
             data = Uri.fromParts("tel", cleanPhone, null)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
@@ -32,8 +33,9 @@ object ExplicitExternalIntentFactory {
 
     fun email(context: Context, cleanEmail: String, subject: String): Boolean {
         val component = resolveHandler(context, Intent.ACTION_SENDTO, "mailto") ?: return false
-        val intent = Intent(Intent.ACTION_SENDTO).apply {
+        val intent = Intent().apply {
             setClassName(component.packageName, component.className)
+            action = Intent.ACTION_SENDTO
             data = Uri.fromParts("mailto", cleanEmail, null)
             putExtra(Intent.EXTRA_SUBJECT, subject)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
@@ -59,8 +61,9 @@ object ExplicitExternalIntentFactory {
     }
 
     internal fun buildDialIntent(component: ComponentName, cleanPhone: String): Intent =
-        Intent(Intent.ACTION_DIAL).apply {
+        Intent().apply {
             setClassName(component.packageName, component.className)
+            action = Intent.ACTION_DIAL
             data = Uri.fromParts("tel", cleanPhone, null)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
@@ -69,8 +72,9 @@ object ExplicitExternalIntentFactory {
         component: ComponentName,
         cleanEmail: String,
         subject: String
-    ): Intent = Intent(Intent.ACTION_SENDTO).apply {
+    ): Intent = Intent().apply {
         setClassName(component.packageName, component.className)
+        action = Intent.ACTION_SENDTO
         data = Uri.fromParts("mailto", cleanEmail, null)
         putExtra(Intent.EXTRA_SUBJECT, subject)
         flags = Intent.FLAG_ACTIVITY_NEW_TASK
