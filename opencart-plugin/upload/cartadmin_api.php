@@ -283,6 +283,37 @@ try {
             ]);
             break;
 
+        case 'categories':
+            $limit = isset($_GET['limit']) ? max(1, min(200, (int)$_GET['limit'])) : 100;
+            $res = $mysqli->query("SELECT c.category_id, cd.name, cd.description, c.status, c.sort_order,
+                                          (SELECT COUNT(p2c.product_id) FROM `{$db_prefix}product_to_category` p2c WHERE p2c.category_id = c.category_id) AS products_count
+                                   FROM `{$db_prefix}category` c
+                                   LEFT JOIN `{$db_prefix}category_description` cd ON (c.category_id = cd.category_id AND cd.language_id = 1)
+                                   GROUP BY c.category_id
+                                   ORDER BY c.sort_order ASC, cd.name ASC
+                                   LIMIT {$limit}");
+            $categories = [];
+            if ($res) {
+                while ($row = $res->fetch_assoc()) {
+                    $categories[] = [
+                        'id' => 'cat_' . (int)$row['category_id'],
+                        'category_id' => (int)$row['category_id'],
+                        'name' => html_entity_decode($row['name'] ?: ('Categoria #' . $row['category_id']), ENT_QUOTES | ENT_HTML5, 'UTF-8'),
+                        'description' => $row['description'] ?: '',
+                        'products_count' => (int)$row['products_count'],
+                        'status' => (int)$row['status'] === 1,
+                        'sort_order' => (int)$row['sort_order']
+                    ];
+                }
+            }
+
+            echo json_encode([
+                'success' => true,
+                'count' => count($categories),
+                'categories' => $categories
+            ]);
+            break;
+
         case 'update_stock':
             $productId = isset($_POST['product_id']) ? (int)$_POST['product_id'] : 0;
             $quantity = isset($_POST['quantity']) ? (int)$_POST['quantity'] : 0;
