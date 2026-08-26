@@ -56,7 +56,8 @@ enum class NavigationTab(val label: String, val icon: ImageVector, val tag: Stri
 fun BottomNavBar(
     selectedTab: NavigationTab,
     onTabSelected: (NavigationTab) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onOrdersTabMenuClick: (() -> Unit)? = null
 ) {
     // HTML: <nav class='h-20 bg-[#F3EDF7] flex justify-around items-center border-t border-[#CAC4D0]'>
     Box(
@@ -91,7 +92,12 @@ fun BottomNavBar(
                         .clickable(
                             interactionSource = interactionSource,
                             indication = null,
-                            onClick = { onTabSelected(tab) }
+                            onClick = {
+                                onTabSelected(tab)
+                                if (tab == NavigationTab.ORDERS && onOrdersTabMenuClick != null) {
+                                    onOrdersTabMenuClick()
+                                }
+                            }
                         )
                         .padding(horizontal = 6.dp, vertical = 4.dp)
                         .testTag(tab.tag),
@@ -118,7 +124,7 @@ fun BottomNavBar(
                     }
 
                     Text(
-                        text = tab.label,
+                        text = if (tab == NavigationTab.ORDERS) "Ordini ▾" else tab.label,
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             fontSize = 10.sp

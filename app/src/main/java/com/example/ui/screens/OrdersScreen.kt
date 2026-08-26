@@ -58,6 +58,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.Order
 import com.example.model.OrderStatus
+import com.example.model.OrdersSubSection
+import com.example.model.Subscription
+import com.example.model.SubscriptionStatus
+import com.example.model.OrderReturn
+import com.example.model.ReturnStatus
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.AssignmentReturn
+import androidx.compose.material.icons.filled.ShoppingCart
 import com.example.ui.theme.CardSurfaceLight
 import com.example.ui.theme.CardSurfacePure
 import com.example.ui.theme.StatusAlertRed
@@ -84,7 +93,197 @@ fun OrdersScreen(
     selectedFilter: OrderStatus?,
     onSelectFilter: (OrderStatus?) -> Unit,
     onOrderClick: (Order) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    subSection: OrdersSubSection = OrdersSubSection.ORDERS,
+    onSubSectionChange: (OrdersSubSection) -> Unit = {},
+    onOpenSubSectionMenu: () -> Unit = {},
+    subscriptions: List<Subscription> = emptyList(),
+    selectedSubscriptionFilter: SubscriptionStatus? = null,
+    onSelectSubscriptionFilter: (SubscriptionStatus?) -> Unit = {},
+    onUpdateSubscriptionStatus: (String, SubscriptionStatus) -> Unit = { _, _ -> },
+    returns: List<OrderReturn> = emptyList(),
+    selectedReturnFilter: ReturnStatus? = null,
+    onSelectReturnFilter: (ReturnStatus?) -> Unit = {},
+    onUpdateReturnStatus: (String, ReturnStatus, String) -> Unit = { _, _, _ -> }
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        // Top Sub-Section Selector Tabs (Ordini | Abbonamenti | Resi)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Segmented pill 1: Ordini
+            val isOrders = subSection == OrdersSubSection.ORDERS
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = if (isOrders) ThemePrimary else CardSurfacePure,
+                border = if (isOrders) null else androidx.compose.foundation.BorderStroke(1.dp, ThemeOutlineVariant.copy(alpha = 0.7f)),
+                shadowElevation = if (isOrders) 2.dp else 0.dp,
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable { onSubSectionChange(OrdersSubSection.ORDERS) }
+                    .testTag("tab_sub_orders")
+            ) {
+                Row(
+                    modifier = Modifier.padding(vertical = 9.dp, horizontal = 6.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ShoppingCart,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = if (isOrders) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Ordini (${orders.size})",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = if (isOrders) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isOrders) Color.White else MaterialTheme.colorScheme.onSurface,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+
+            // Segmented pill 2: Abbonamenti
+            val isSubs = subSection == OrdersSubSection.SUBSCRIPTIONS
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = if (isSubs) ThemePrimary else CardSurfacePure,
+                border = if (isSubs) null else androidx.compose.foundation.BorderStroke(1.dp, ThemeOutlineVariant.copy(alpha = 0.7f)),
+                shadowElevation = if (isSubs) 2.dp else 0.dp,
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable { onSubSectionChange(OrdersSubSection.SUBSCRIPTIONS) }
+                    .testTag("tab_sub_subscriptions")
+            ) {
+                Row(
+                    modifier = Modifier.padding(vertical = 9.dp, horizontal = 4.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Repeat,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = if (isSubs) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Abbonati (${subscriptions.size})",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = if (isSubs) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isSubs) Color.White else MaterialTheme.colorScheme.onSurface,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+
+            // Segmented pill 3: Resi
+            val isReturns = subSection == OrdersSubSection.RETURNS
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = if (isReturns) ThemePrimary else CardSurfacePure,
+                border = if (isReturns) null else androidx.compose.foundation.BorderStroke(1.dp, ThemeOutlineVariant.copy(alpha = 0.7f)),
+                shadowElevation = if (isReturns) 2.dp else 0.dp,
+                modifier = Modifier
+                    .weight(0.9f)
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable { onSubSectionChange(OrdersSubSection.RETURNS) }
+                    .testTag("tab_sub_returns")
+            ) {
+                Row(
+                    modifier = Modifier.padding(vertical = 9.dp, horizontal = 6.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AssignmentReturn,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = if (isReturns) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Resi (${returns.size})",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = if (isReturns) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isReturns) Color.White else MaterialTheme.colorScheme.onSurface,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+
+            // Quick Menu Button
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = CardSurfacePure,
+                border = androidx.compose.foundation.BorderStroke(1.dp, ThemeOutlineVariant.copy(alpha = 0.7f)),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable { onOpenSubSectionMenu() }
+                    .testTag("btn_orders_menu")
+            ) {
+                Box(
+                    modifier = Modifier.padding(8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Menu,
+                        contentDescription = "Menu sezioni ordini",
+                        tint = ThemePrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+
+        // SubSection Content Switcher
+        when (subSection) {
+            OrdersSubSection.ORDERS -> {
+                OrdersListContent(
+                    orders = orders,
+                    selectedFilter = selectedFilter,
+                    onSelectFilter = onSelectFilter,
+                    onOrderClick = onOrderClick
+                )
+            }
+            OrdersSubSection.SUBSCRIPTIONS -> {
+                SubscriptionsScreen(
+                    subscriptions = subscriptions,
+                    selectedFilter = selectedSubscriptionFilter,
+                    onSelectFilter = onSelectSubscriptionFilter,
+                    onUpdateStatus = onUpdateSubscriptionStatus
+                )
+            }
+            OrdersSubSection.RETURNS -> {
+                ReturnsScreen(
+                    returns = returns,
+                    selectedFilter = selectedReturnFilter,
+                    onSelectFilter = onSelectReturnFilter,
+                    onUpdateStatus = onUpdateReturnStatus
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun OrdersListContent(
+    orders: List<Order>,
+    selectedFilter: OrderStatus?,
+    onSelectFilter: (OrderStatus?) -> Unit,
+    onOrderClick: (Order) -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
 
@@ -104,7 +303,7 @@ fun OrdersScreen(
     }
 
     Column(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)

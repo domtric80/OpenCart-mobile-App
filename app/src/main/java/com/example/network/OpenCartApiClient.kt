@@ -1,12 +1,17 @@
 package com.example.network
 
 import android.util.Log
+import com.example.model.Category
 import com.example.model.Order
 import com.example.model.OrderDetail
 import com.example.model.OrderItem
+import com.example.model.OrderReturn
 import com.example.model.OrderStatus
 import com.example.model.Product
+import com.example.model.ReturnStatus
 import com.example.model.Store
+import com.example.model.Subscription
+import com.example.model.SubscriptionStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
@@ -352,6 +357,74 @@ class OpenCartApiClient {
     }
 
     /**
+     * Scarica l'albero delle categorie reali dal server OpenCart.
+     */
+    suspend fun fetchCategories(baseUrl: String, apiKey: String, username: String = "", limit: Int = 100): Result<List<Category>> = withContext(Dispatchers.IO) {
+        try {
+            var cleanUrl = baseUrl.trim().removeSuffix("/")
+            if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
+                cleanUrl = "https://$cleanUrl"
+            }
+            val encodedKey = java.net.URLEncoder.encode(apiKey, "UTF-8")
+            val encodedUser = java.net.URLEncoder.encode(username, "UTF-8")
+            val endpoint = "$cleanUrl/cartadmin_api.php?action=categories&limit=$limit&api_key=$encodedKey&username=$encodedUser"
+
+            val request = Request.Builder()
+                .url(endpoint)
+                .get()
+                .header("X-CartAdmin-Key", apiKey)
+                .header("X-CartAdmin-User", username)
+                .header("Authorization", "Bearer $apiKey")
+                .header("User-Agent", "CartAdmin-Android/1.2.3")
+                .header("Accept", "application/json")
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                val body = response.body?.string() ?: ""
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP ${response.code}: $body"))
+                }
+
+                val json = JSONObject(body)
+                val catArray = json.optJSONArray("categories") ?: JSONArray()
+                val list = mutableListOf<Category>()
+
+                for (i in 0 until catArray.length()) {
+                    val obj = catArray.getJSONObject(i)
+                    val rawCatId = if (obj.has("category_id")) {
+                        obj.optString("category_id")
+                    } else if (obj.has("id")) {
+                        obj.optString("id")
+                    } else {
+                        (i + 1).toString()
+                    }
+                    val catId = rawCatId.removePrefix("cat_").removePrefix("category_")
+                    val rawName = obj.optString("name", "Categoria #$catId")
+                    val cleanName = rawName.replace("&amp;", "&").replace("&quot;", "\"").replace("&#039;", "'").replace("&lt;", "<").replace("&gt;", ">")
+                    val desc = obj.optString("description", "")
+                    val count = obj.optInt("products_count", obj.optInt("count", 0))
+                    val status = obj.optBoolean("status", true)
+                    val sortOrder = obj.optInt("sort_order", 0)
+
+                    list.add(
+                        Category(
+                            id = catId,
+                            name = cleanName,
+                            description = desc,
+                            productsCount = count,
+                            status = status,
+                            sortOrder = sortOrder
+                        )
+                    )
+                }
+                Result.success(list)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
      * Aggiorna la giacenza di un prodotto direttamente su OpenCart.
      */
     suspend fun updateProductStock(baseUrl: String, apiKey: String, productId: String, newStock: Int, username: String = ""): Result<Boolean> = withContext(Dispatchers.IO) {
@@ -413,7 +486,7 @@ class OpenCartApiClient {
                 .header("X-CartAdmin-Key", apiKey)
                 .header("X-CartAdmin-User", username)
                 .header("Authorization", "Bearer $apiKey")
-                .header("User-Agent", "CartAdmin-Android/1.2.2")
+                .header("User-Agent", "CartAdmin-Android/1.2.3")
                 .build()
 
             client.newCall(request).execute().use { response ->
@@ -423,6 +496,208 @@ class OpenCartApiClient {
             Result.failure(e)
         }
     }
+
+    /**
+     * Recupera gli abbonamenti e pagamenti ricorrenti da OpenCart.
+     */
+    suspend fun fetchSubscriptions(baseUrl: String, apiKey: String, username: String = "", limit: Int = 50): Result<List<Subscription>> = withContext(Dispatchers.IO) {
+        try {
+            var cleanUrl = baseUrl.trim().removeSuffix("/")
+            if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
+                cleanUrl = "https://$cleanUrl"
+            }
+            val endpoint = "$cleanUrl/cartadmin_api.php?action=subscriptions&limit=$limit&api_key=$apiKey&username=$username"
+
+            val request = Request.Builder()
+                .url(endpoint)
+                .get()
+                .header("X-CartAdmin-Key", apiKey)
+                .header("X-CartAdmin-User", username)
+                .header("Authorization", "Bearer $apiKey")
+                .header("User-Agent", "CartAdmin-Android/1.2.3")
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                val body = response.body?.string() ?: ""
+                if (response.isSuccessful) {
+                    val json = JSONObject(body)
+                    val subsArray = json.optJSONArray("subscriptions") ?: JSONArray()
+                    val list = mutableListOf<Subscription>()
+                    for (i in 0 until subsArray.length()) {
+                        val obj = subsArray.getJSONObject(i)
+                        val stStr = obj.optString("status", "ACTIVE")
+                        val st = try {
+                            SubscriptionStatus.valueOf(stStr.uppercase())
+                        } catch (_: Exception) {
+                            SubscriptionStatus.ACTIVE
+                        }
+
+                        list.add(
+                            Subscription(
+                                id = obj.optString("id", "sub_$i"),
+                                subscriptionId = obj.optString("subscription_id", "#SUB-$i"),
+                                customerName = obj.optString("customer_name", "Cliente"),
+                                customerEmail = obj.optString("customer_email", "email@store.it"),
+                                planName = obj.optString("plan_name", "Piano Ricorrente"),
+                                cycleFrequency = obj.optString("cycle_frequency", "Mensile (30 gg)"),
+                                amount = obj.optDouble("amount", 29.90),
+                                status = st,
+                                nextPaymentDate = obj.optString("next_payment_date", "2026-09-25"),
+                                startDate = obj.optString("start_date", "2026-08-01"),
+                                paymentMethod = obj.optString("payment_method", "Stripe Ricorrente")
+                            )
+                        )
+                    }
+                    Result.success(list)
+                } else {
+                    Result.failure(Exception("HTTP ${response.code}: $body"))
+                }
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Recupera i resi merce RMA da OpenCart.
+     */
+    suspend fun fetchReturns(baseUrl: String, apiKey: String, username: String = "", limit: Int = 50): Result<List<OrderReturn>> = withContext(Dispatchers.IO) {
+        try {
+            var cleanUrl = baseUrl.trim().removeSuffix("/")
+            if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
+                cleanUrl = "https://$cleanUrl"
+            }
+            val endpoint = "$cleanUrl/cartadmin_api.php?action=returns&limit=$limit&api_key=$apiKey&username=$username"
+
+            val request = Request.Builder()
+                .url(endpoint)
+                .get()
+                .header("X-CartAdmin-Key", apiKey)
+                .header("X-CartAdmin-User", username)
+                .header("Authorization", "Bearer $apiKey")
+                .header("User-Agent", "CartAdmin-Android/1.2.3")
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                val body = response.body?.string() ?: ""
+                if (response.isSuccessful) {
+                    val json = JSONObject(body)
+                    val retArray = json.optJSONArray("returns") ?: JSONArray()
+                    val list = mutableListOf<OrderReturn>()
+                    for (i in 0 until retArray.length()) {
+                        val obj = retArray.getJSONObject(i)
+                        val stStr = obj.optString("status", "PENDING")
+                        val st = try {
+                            ReturnStatus.valueOf(stStr.uppercase())
+                        } catch (_: Exception) {
+                            ReturnStatus.PENDING
+                        }
+
+                        list.add(
+                            OrderReturn(
+                                id = obj.optString("id", "ret_$i"),
+                                returnId = obj.optString("return_id", "RMA-$i"),
+                                orderId = obj.optString("order_id", "#100$i"),
+                                customerName = obj.optString("customer_name", "Cliente"),
+                                customerEmail = obj.optString("customer_email", "email@store.it"),
+                                customerPhone = obj.optString("customer_phone", ""),
+                                productName = obj.optString("product_name", "Prodotto Reso"),
+                                productModel = obj.optString("product_model", "MOD-1"),
+                                quantity = obj.optInt("quantity", 1),
+                                reason = obj.optString("reason", "Difettoso / Danneggiato"),
+                                opened = obj.optBoolean("opened", true),
+                                status = st,
+                                action = obj.optString("action", "In attesa di verifica"),
+                                dateAdded = obj.optString("date_added", "2026-08-20"),
+                                comment = obj.optString("comment", "")
+                            )
+                        )
+                    }
+                    Result.success(list)
+                } else {
+                    Result.failure(Exception("HTTP ${response.code}: $body"))
+                }
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Aggiorna lo stato di un abbonamento su OpenCart.
+     */
+    suspend fun updateSubscriptionStatus(baseUrl: String, apiKey: String, subscriptionId: String, newStatus: String, username: String = ""): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            var cleanUrl = baseUrl.trim().removeSuffix("/")
+            if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
+                cleanUrl = "https://$cleanUrl"
+            }
+            val endpoint = "$cleanUrl/cartadmin_api.php"
+            val rawId = subscriptionId.removePrefix("#SUB-").removePrefix("#").removePrefix("sub_")
+
+            val formBody = FormBody.Builder()
+                .add("action", "update_subscription_status")
+                .add("subscription_id", rawId)
+                .add("status", newStatus)
+                .add("api_key", apiKey)
+                .add("username", username)
+                .build()
+
+            val request = Request.Builder()
+                .url(endpoint)
+                .post(formBody)
+                .header("X-CartAdmin-Key", apiKey)
+                .header("X-CartAdmin-User", username)
+                .header("Authorization", "Bearer $apiKey")
+                .header("User-Agent", "CartAdmin-Android/1.2.3")
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                Result.success(response.isSuccessful)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Aggiorna lo stato di un reso su OpenCart.
+     */
+    suspend fun updateReturnStatus(baseUrl: String, apiKey: String, returnId: String, statusId: Int, comment: String, username: String = ""): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            var cleanUrl = baseUrl.trim().removeSuffix("/")
+            if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
+                cleanUrl = "https://$cleanUrl"
+            }
+            val endpoint = "$cleanUrl/cartadmin_api.php"
+            val rawId = returnId.removePrefix("RMA-").removePrefix("#").removePrefix("ret_")
+
+            val formBody = FormBody.Builder()
+                .add("action", "update_return_status")
+                .add("return_id", rawId)
+                .add("status_id", statusId.toString())
+                .add("comment", comment)
+                .add("api_key", apiKey)
+                .add("username", username)
+                .build()
+
+            val request = Request.Builder()
+                .url(endpoint)
+                .post(formBody)
+                .header("X-CartAdmin-Key", apiKey)
+                .header("X-CartAdmin-User", username)
+                .header("Authorization", "Bearer $apiKey")
+                .header("User-Agent", "CartAdmin-Android/1.2.3")
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                Result.success(response.isSuccessful)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
 
     /**
      * Log an audit event to OpenCart remote database

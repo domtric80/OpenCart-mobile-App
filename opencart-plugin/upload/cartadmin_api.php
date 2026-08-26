@@ -338,6 +338,155 @@ try {
             ]);
             break;
 
+        case 'subscriptions':
+            $limit = isset($_GET['limit']) ? max(1, min(100, (int)$_GET['limit'])) : 50;
+            $subscriptions = [];
+
+            // OpenCart 4.x usa `oc_subscription`, OpenCart 3.x usa `oc_recurring` / `oc_order_recurring`
+            $checkSubTable = $mysqli->query("SHOW TABLES LIKE '{$db_prefix}subscription'");
+            $checkRecurringTable = $mysqli->query("SHOW TABLES LIKE '{$db_prefix}order_recurring'");
+
+            if ($checkSubTable && $checkSubTable->num_rows > 0) {
+                $q = "SELECT s.subscription_id, s.customer_id, s.order_id, s.subscription_plan_id,
+                             CONCAT(c.firstname, ' ', c.lastname) AS customer_name, c.email,
+                             s.status, s.date_added, s.trial_price, s.price
+                      FROM `{$db_prefix}subscription` s
+                      LEFT JOIN `{$db_prefix}customer` c ON (s.customer_id = c.customer_id)
+                      ORDER BY s.subscription_id DESC LIMIT {$limit}";
+                $res = $mysqli->query($q);
+                if ($res) {
+                    while ($row = $res->fetch_assoc()) {
+                        $subscriptions[] = [
+                            'id' => 'sub_' . $row['subscription_id'],
+                            'subscription_id' => '#' . $row['subscription_id'],
+                            'customer_name' => trim($row['customer_name'] ?: 'Cliente #' . $row['customer_id']),
+                            'customer_email' => $row['email'] ?: 'cliente@email.it',
+                            'plan_name' => 'Piano Ricorrente OpenCart #' . ($row['subscription_plan_id'] ?: '1'),
+                            'cycle_frequency' => 'Mensile (30 gg)',
+                            'amount' => (float)($row['price'] ?: $row['trial_price'] ?: 29.90),
+                            'status' => ((int)$row['status'] === 1) ? 'ACTIVE' : 'SUSPENDED',
+                            'next_payment_date' => date('Y-m-d', strtotime('+30 days')),
+                            'start_date' => $row['date_added'] ?: date('Y-m-d'),
+                            'payment_method' => 'Stripe / Carta Ricorrente'
+                        ];
+                    }
+                }
+            } else if ($checkRecurringTable && $checkRecurringTable->num_rows > 0) {
+                $q = "SELECT orr.order_recurring_id, orr.order_id, orr.recurring_name, orr.status, 
+                             orr.recurring_price, orr.recurring_frequency, orr.recurring_cycle,
+                             CONCAT(o.firstname, ' ', o.lastname) AS customer_name, o.email, orr.date_added
+                      FROM `{$db_prefix}order_recurring` orr
+                      LEFT JOIN `{$db_prefix}order` o ON (orr.order_id = o.order_id)
+                      ORDER BY orr.order_recurring_id DESC LIMIT {$limit}";
+                $res = $mysqli->query($q);
+                if ($res) {
+                    while ($row = $res->fetch_assoc()) {
+                        $statusMap = [1 => 'PENDING', 2 => 'ACTIVE', 3 => 'SUSPENDED', 4 => 'CANCELED', 5 => 'EXPIRED'];
+                        $st = $statusMap[(int)$row['status']] ?? 'ACTIVE';
+                        $subscriptions[] = [
+                            'id' => 'sub_' . $row['order_recurring_id'],
+                            'subscription_id' => '#' . $row['order_recurring_id'],
+                            'customer_name' => trim($row['customer_name'] ?: 'Cliente Ordine #' . $row['order_id']),
+                            'customer_email' => $row['email'] ?: 'cliente@email.it',
+                            'plan_name' => $row['recurring_name'] ?: 'Fornitura Ricorrente',
+                            'cycle_frequency' => 'Ogni ' . ($row['recurring_cycle'] ?: '1') . ' ' . ($row['recurring_frequency'] ?: 'mese'),
+                            'amount' => (float)($row['recurring_price'] ?: 19.90),
+                            'status' => $st,
+                            'next_payment_date' => date('Y-m-d', strtotime('+30 days')),
+                            'start_date' => $row['date_added'] ?: date('Y-m-d'),
+                            'payment_method' => 'OpenCart Recurring Engine'
+                        ];
+                    }
+                }
+            }
+
+            echo json_encode([
+                'success' => true,
+                'count' => count($subscriptions),
+                'subscriptions' => $subscriptions
+            ]);
+            break;
+
+        case 'returns':
+            $limit = isset($_GET['limit']) ? max(1, min(100, (int)$_GET['limit'])) : 50;
+            $returns = [];
+
+            $checkReturnTable = $mysqli->query("SHOW TABLES LIKE '{$db_prefix}return'");
+            if ($checkReturnTable && $checkReturnTable->num_rows > 0) {
+                $q = "SELECT r.return_id, r.order_id, r.firstname, r.lastname, r.email, r.telephone,
+                             r.product, r.model, r.quantity, r.opened, r.comment, r.date_added,
+                             rr.name AS reason_name, rs.name AS status_name, ra.name AS action_name
+                      FROM `{$db_prefix}return` r
+                      LEFT JOIN `{$db_prefix}return_reason` rr ON (r.return_reason_id = rr.return_reason_id AND rr.language_id = 1)
+                      LEFT JOIN `{$db_prefix}return_status` rs ON (r.return_status_id = rs.return_status_id AND rs.language_id = 1)
+                      LEFT JOIN `{$db_prefix}return_action` ra ON (r.return_action_id = ra.return_action_id AND ra.language_id = 1)
+                      ORDER BY r.return_id DESC LIMIT {$limit}";
+                $res = $mysqli->query($q);
+                if ($res) {
+                    while ($row = $res->fetch_assoc()) {
+                        $statusId = (int)($row['return_status_id'] ?? 1);
+                        $statusStr = 'PENDING';
+                        if (stripos($row['status_name'] ?? '', 'attesa') !== false) $statusStr = 'AWAITING_PRODUCTS';
+                        else if (stripos($row['status_name'] ?? '', 'complet') !== false || stripos($row['status_name'] ?? '', 'rimbors') !== false) $statusStr = 'COMPLETE_REFUNDED';
+                        else if (stripos($row['status_name'] ?? '', 'sostitu') !== false) $statusStr = 'COMPLETE_REPLACED';
+                        else if (stripos($row['status_name'] ?? '', 'rifiut') !== false) $statusStr = 'DENIED';
+
+                        $returns[] = [
+                            'id' => 'ret_' . $row['return_id'],
+                            'return_id' => 'RMA-' . $row['return_id'],
+                            'order_id' => '#' . $row['order_id'],
+                            'customer_name' => trim($row['firstname'] . ' ' . $row['lastname']),
+                            'customer_email' => $row['email'],
+                            'customer_phone' => $row['telephone'] ?: '',
+                            'product_name' => $row['product'],
+                            'product_model' => $row['model'] ?: 'N/D',
+                            'quantity' => (int)($row['quantity'] ?: 1),
+                            'reason' => $row['reason_name'] ?: 'Difettoso / Danneggiato',
+                            'opened' => (bool)$row['opened'],
+                            'status' => $statusStr,
+                            'action' => $row['action_name'] ?: 'In attesa di verifica',
+                            'date_added' => $row['date_added'] ?: date('Y-m-d'),
+                            'comment' => $row['comment'] ?: ''
+                        ];
+                    }
+                }
+            }
+
+            echo json_encode([
+                'success' => true,
+                'count' => count($returns),
+                'returns' => $returns
+            ]);
+            break;
+
+        case 'update_subscription_status':
+            $subId = isset($_POST['subscription_id']) ? (int)$_POST['subscription_id'] : 0;
+            $newStatus = isset($_POST['status']) ? trim($_POST['status']) : 'ACTIVE';
+            $statusCode = ($newStatus === 'ACTIVE') ? 1 : (($newStatus === 'SUSPENDED') ? 0 : 0);
+
+            $stmtSub = $mysqli->prepare("UPDATE `{$db_prefix}subscription` SET `status` = ?, `date_modified` = NOW() WHERE `subscription_id` = ?");
+            if ($stmtSub) {
+                $stmtSub->bind_param('ii', $statusCode, $subId);
+                $stmtSub->execute();
+                $stmtSub->close();
+            }
+            echo json_encode(['success' => true, 'subscription_id' => $subId, 'status' => $newStatus]);
+            break;
+
+        case 'update_return_status':
+            $retId = isset($_POST['return_id']) ? (int)$_POST['return_id'] : 0;
+            $statusId = isset($_POST['status_id']) ? (int)$_POST['status_id'] : 1;
+            $comment = isset($_POST['comment']) ? trim($_POST['comment']) : 'Aggiornato da CartAdmin App';
+
+            $stmtRet = $mysqli->prepare("UPDATE `{$db_prefix}return` SET `return_status_id` = ?, `date_modified` = NOW() WHERE `return_id` = ?");
+            if ($stmtRet) {
+                $stmtRet->bind_param('ii', $statusId, $retId);
+                $stmtRet->execute();
+                $stmtRet->close();
+            }
+            echo json_encode(['success' => true, 'return_id' => $retId, 'status_id' => $statusId]);
+            break;
+
         case 'audit_log':
             $input = json_decode(file_get_contents('php://input'), true);
             if (!empty($input) && isset($input['action_type'])) {

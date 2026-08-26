@@ -202,3 +202,59 @@ data class VisitorRealtimeStats(
     val liveEvents: List<LiveVisitorEvent> = emptyList()
 )
 
+enum class OrdersSubSection(val label: String, val shortDesc: String) {
+    ORDERS("Ordini", "Vendite e spedizioni"),
+    SUBSCRIPTIONS("Abbonamenti", "Ricorrenze e piani"),
+    RETURNS("Resi", "RMA e rimborsi")
+}
+
+enum class SubscriptionStatus(val label: String, val englishLabel: String) {
+    ACTIVE("Attivo", "Active"),
+    PENDING("In attesa", "Pending"),
+    SUSPENDED("Sospeso", "Suspended"),
+    CANCELED("Annullato", "Canceled"),
+    EXPIRED("Scaduto", "Expired")
+}
+
+data class Subscription(
+    val id: String,
+    val subscriptionId: String,
+    val customerName: String,
+    val customerEmail: String,
+    val planName: String,
+    val cycleFrequency: String = "Mensile (30 gg)",
+    val amount: Double,
+    val status: SubscriptionStatus = SubscriptionStatus.ACTIVE,
+    val nextPaymentDate: String,
+    val startDate: String,
+    val paymentMethod: String = "Stripe / Carta Ricorrente",
+    val failureCount: Int = 0
+)
+
+enum class ReturnStatus(val label: String, val englishLabel: String) {
+    PENDING("In Attesa", "Pending"),
+    AWAITING_PRODUCTS("Attesa Merce", "Awaiting Products"),
+    IN_INSPECTION("In Verifica", "In Inspection"),
+    COMPLETE_REFUNDED("Rimborsato", "Refunded"),
+    COMPLETE_REPLACED("Sostituito", "Replaced"),
+    DENIED("Rifiutato", "Denied")
+}
+
+data class OrderReturn(
+    val id: String,
+    val returnId: String,
+    val orderId: String,
+    val customerName: String,
+    val customerEmail: String,
+    val customerPhone: String = "",
+    val productName: String,
+    val productModel: String,
+    val quantity: Int = 1,
+    val reason: String,
+    val opened: Boolean = true,
+    val status: ReturnStatus = ReturnStatus.PENDING,
+    val action: String = "In attesa di verifica",
+    val dateAdded: String,
+    val comment: String = ""
+)
+

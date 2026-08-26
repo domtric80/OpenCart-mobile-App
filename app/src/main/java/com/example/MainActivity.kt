@@ -32,6 +32,7 @@ import com.example.ui.components.BottomNavBar
 import com.example.ui.components.HeaderSection
 import com.example.ui.components.NavigationTab
 import com.example.ui.components.OrderDetailSheet
+import com.example.ui.components.OrdersSubSectionSheet
 import com.example.ui.components.StoreSwitcherSheet
 import com.example.ui.screens.AuditScreen
 import com.example.ui.screens.CatalogScreen
@@ -86,6 +87,7 @@ fun MainAppContent(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var currentTab by remember { mutableStateOf(NavigationTab.HOME) }
+    var isOrdersMenuOpen by remember { mutableStateOf(false) }
 
     Scaffold(
         modifier = Modifier
@@ -116,6 +118,9 @@ fun MainAppContent(
                 selectedTab = currentTab,
                 onTabSelected = { selected ->
                     currentTab = selected
+                },
+                onOrdersTabMenuClick = {
+                    isOrdersMenuOpen = true
                 }
             )
         }
@@ -141,18 +146,21 @@ fun MainAppContent(
                             viewModel.selectTimeframe(timeframe)
                         },
                         onPendingOrdersClick = {
+                            viewModel.selectOrdersSubSection(com.example.model.OrdersSubSection.ORDERS)
                             currentTab = NavigationTab.ORDERS
                         },
                         onStockAlertsClick = {
                             currentTab = NavigationTab.CATALOG
                         },
                         onAovClick = {
+                            viewModel.selectOrdersSubSection(com.example.model.OrdersSubSection.ORDERS)
                             currentTab = NavigationTab.ORDERS
                         },
                         onVisitorsClick = {
                             currentTab = NavigationTab.VISITORS
                         },
                         onViewAllActivitiesClick = {
+                            viewModel.selectOrdersSubSection(com.example.model.OrdersSubSection.ORDERS)
                             currentTab = NavigationTab.ORDERS
                         },
                         onActivityClick = { activity ->
@@ -175,6 +183,29 @@ fun MainAppContent(
                         },
                         onOrderClick = { order ->
                             viewModel.selectOrderForDetail(order)
+                        },
+                        subSection = uiState.selectedOrdersSubSection,
+                        onSubSectionChange = { subSection ->
+                            viewModel.selectOrdersSubSection(subSection)
+                        },
+                        onOpenSubSectionMenu = {
+                            isOrdersMenuOpen = true
+                        },
+                        subscriptions = uiState.subscriptions,
+                        selectedSubscriptionFilter = uiState.selectedSubscriptionFilter,
+                        onSelectSubscriptionFilter = { filter ->
+                            viewModel.setSubscriptionFilter(filter)
+                        },
+                        onUpdateSubscriptionStatus = { subId, status ->
+                            viewModel.updateSubscriptionStatus(subId, status)
+                        },
+                        returns = uiState.returns,
+                        selectedReturnFilter = uiState.selectedReturnFilter,
+                        onSelectReturnFilter = { filter ->
+                            viewModel.setReturnFilter(filter)
+                        },
+                        onUpdateReturnStatus = { returnId, status, action ->
+                            viewModel.updateReturnStatus(returnId, status, action)
                         }
                     )
                 }
@@ -304,6 +335,24 @@ fun MainAppContent(
                     onDismiss = {
                         viewModel.clearSelectedOrder()
                     }
+                )
+            }
+
+            // Orders Sub-Sections Bottom Sheet (Ordini, Abbonamenti, Resi)
+            if (isOrdersMenuOpen) {
+                OrdersSubSectionSheet(
+                    selectedSubSection = uiState.selectedOrdersSubSection,
+                    onSelectSubSection = { sub ->
+                        viewModel.selectOrdersSubSection(sub)
+                        currentTab = NavigationTab.ORDERS
+                        isOrdersMenuOpen = false
+                    },
+                    onDismiss = {
+                        isOrdersMenuOpen = false
+                    },
+                    ordersCount = uiState.orders.size,
+                    subscriptionsCount = uiState.subscriptions.count { it.status == com.example.model.SubscriptionStatus.ACTIVE },
+                    returnsCount = uiState.returns.count { it.status == com.example.model.ReturnStatus.PENDING || it.status == com.example.model.ReturnStatus.AWAITING_PRODUCTS }
                 )
             }
         }

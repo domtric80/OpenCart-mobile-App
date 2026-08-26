@@ -15,10 +15,15 @@ import com.example.model.Category
 import com.example.model.HourlySalesPoint
 import com.example.model.Order
 import com.example.model.OrderDetail
+import com.example.model.OrderReturn
 import com.example.model.OrderStatus
+import com.example.model.OrdersSubSection
 import com.example.model.Product
+import com.example.model.ReturnStatus
 import com.example.model.SalesMetrics
 import com.example.model.Store
+import com.example.model.Subscription
+import com.example.model.SubscriptionStatus
 import com.example.model.VisitorRealtimeStats
 import com.example.network.OpenCartApiClient
 import com.example.network.OpenCartConnectionResult
@@ -42,10 +47,15 @@ data class DashboardUiState(
     val currentStore: Store? = null,
     val activities: List<ActivityItem> = emptyList(),
     val orders: List<Order> = emptyList(),
+    val subscriptions: List<com.example.model.Subscription> = emptyList(),
+    val returns: List<com.example.model.OrderReturn> = emptyList(),
     val products: List<Product> = emptyList(),
     val categories: List<Category> = emptyList(),
     val selectedTimeframe: Timeframe = Timeframe.TODAY,
     val selectedOrderFilter: OrderStatus? = null,
+    val selectedOrdersSubSection: com.example.model.OrdersSubSection = com.example.model.OrdersSubSection.ORDERS,
+    val selectedSubscriptionFilter: com.example.model.SubscriptionStatus? = null,
+    val selectedReturnFilter: com.example.model.ReturnStatus? = null,
     val searchQuery: String = "",
     val isStoreSwitcherOpen: Boolean = false,
     val selectedOrderForDetail: Order? = null,
@@ -84,6 +94,9 @@ class MainViewModel(
 
     private val _selectedTimeframe = MutableStateFlow(Timeframe.TODAY)
     private val _selectedOrderFilter = MutableStateFlow<OrderStatus?>(null)
+    private val _selectedOrdersSubSection = MutableStateFlow(com.example.model.OrdersSubSection.ORDERS)
+    private val _selectedSubscriptionFilter = MutableStateFlow<com.example.model.SubscriptionStatus?>(null)
+    private val _selectedReturnFilter = MutableStateFlow<com.example.model.ReturnStatus?>(null)
     private val _searchQuery = MutableStateFlow("")
     private val _isStoreSwitcherOpen = MutableStateFlow(false)
     private val _selectedOrderForDetail = MutableStateFlow<Order?>(null)
@@ -108,6 +121,116 @@ class MainViewModel(
                 repository.setLiveProducts(cachedProducts.map { it.toDomainModel() })
             }
 
+            val cachedSubs = db.subscriptionDao().getAllSubscriptions()
+            if (cachedSubs.isNotEmpty()) {
+                repository.setSubscriptions(cachedSubs.map { it.toDomainModel() })
+            } else {
+                // Inizializza con abbonamenti di esempio per visualizzazione immediata
+                val defaultSubs = listOf(
+                    com.example.model.Subscription(
+                        id = "sub_101",
+                        subscriptionId = "#SUB-101",
+                        customerName = "Marco Rossi",
+                        customerEmail = "marco.rossi@email.it",
+                        planName = "Fornitura Caffè Espresso Gold",
+                        cycleFrequency = "Ogni 30 giorni",
+                        amount = 34.90,
+                        status = com.example.model.SubscriptionStatus.ACTIVE,
+                        nextPaymentDate = "28/09/2026",
+                        startDate = "28/05/2026",
+                        paymentMethod = "Carta di Credito (Stripe)"
+                    ),
+                    com.example.model.Subscription(
+                        id = "sub_102",
+                        subscriptionId = "#SUB-102",
+                        customerName = "Laura Bianchi",
+                        customerEmail = "laura.b@gmail.com",
+                        planName = "Box Biologica Stagionale XL",
+                        cycleFrequency = "Ogni 14 giorni",
+                        amount = 49.00,
+                        status = com.example.model.SubscriptionStatus.ACTIVE,
+                        nextPaymentDate = "15/09/2026",
+                        startDate = "01/06/2026",
+                        paymentMethod = "PayPal Ricorrente"
+                    ),
+                    com.example.model.Subscription(
+                        id = "sub_103",
+                        subscriptionId = "#SUB-103",
+                        customerName = "Studio Tecnico Rossi",
+                        customerEmail = "ordini@rossistudio.it",
+                        planName = "Manutenzione & Ricambi Trimestrale",
+                        cycleFrequency = "Ogni 90 giorni",
+                        amount = 180.00,
+                        status = com.example.model.SubscriptionStatus.SUSPENDED,
+                        nextPaymentDate = "10/10/2026",
+                        startDate = "10/01/2026",
+                        paymentMethod = "Addebito Diretto SEPA"
+                    )
+                )
+                repository.setSubscriptions(defaultSubs)
+            }
+
+            val cachedReturns = db.orderReturnDao().getAllReturns()
+            if (cachedReturns.isNotEmpty()) {
+                repository.setReturns(cachedReturns.map { it.toDomainModel() })
+            } else {
+                // Inizializza con resi di esempio per visualizzazione immediata
+                val defaultReturns = listOf(
+                    com.example.model.OrderReturn(
+                        id = "ret_501",
+                        returnId = "RMA-501",
+                        orderId = "#10042",
+                        customerName = "Giuseppe Verdi",
+                        customerEmail = "g.verdi@pec.it",
+                        customerPhone = "+39 333 4567890",
+                        productName = "Cuffie Bluetooth Noise Cancelling Pro",
+                        productModel = "AUDIO-PRO-X",
+                        quantity = 1,
+                        reason = "Pacco arrivato danneggiato / non funzionante",
+                        opened = true,
+                        status = com.example.model.ReturnStatus.AWAITING_PRODUCTS,
+                        action = "In attesa di ricezione merce in magazzino",
+                        dateAdded = "22/08/2026",
+                        comment = "Il cliente segnala rottura dell'archetto sinistro."
+                    ),
+                    com.example.model.OrderReturn(
+                        id = "ret_502",
+                        returnId = "RMA-502",
+                        orderId = "#10038",
+                        customerName = "Alessia Ferrari",
+                        customerEmail = "alessia.f@libero.it",
+                        customerPhone = "+39 347 1122334",
+                        productName = "Scarpe Running Ultra Grip - Taglia 39",
+                        productModel = "SH-ULTRA-39",
+                        quantity = 1,
+                        reason = "Taglia errata / richiesta sostituzione",
+                        opened = true,
+                        status = com.example.model.ReturnStatus.PENDING,
+                        action = "Da autorizzare con etichetta reso",
+                        dateAdded = "24/08/2026",
+                        comment = "Richiede sostituzione con taglia 40."
+                    ),
+                    com.example.model.OrderReturn(
+                        id = "ret_503",
+                        returnId = "RMA-503",
+                        orderId = "#10015",
+                        customerName = "Matteo Conti",
+                        customerEmail = "m.conti@yahoo.it",
+                        customerPhone = "+39 320 9876543",
+                        productName = "Smartwatch AMOLED IP68 Steel",
+                        productModel = "SW-AMOL-BK",
+                        quantity = 1,
+                        reason = "Difetto firmware dopo 3 giorni",
+                        opened = true,
+                        status = com.example.model.ReturnStatus.COMPLETE_REFUNDED,
+                        action = "Rimborso emesso su carta di credito",
+                        dateAdded = "12/08/2026",
+                        comment = "Verificato difetto da laboratorio, rimborso effettuato."
+                    )
+                )
+                repository.setReturns(defaultReturns)
+            }
+
             // Se è presente uno store configurato, avvia la sincronizzazione automatica reale
             val primaryStore = db.storeProfileDao().getPrimaryStore()
             if (primaryStore != null && primaryStore.url.isNotBlank()) {
@@ -121,12 +244,17 @@ class MainViewModel(
         repository.currentStoreId,
         repository.activities,
         repository.orders,
+        repository.subscriptions,
+        repository.returns,
         repository.products,
         repository.categories,
         repository.visitorStats,
         offlineAuditRepository.getAllAuditLogs(),
         _selectedTimeframe,
         _selectedOrderFilter,
+        _selectedOrdersSubSection,
+        _selectedSubscriptionFilter,
+        _selectedReturnFilter,
         _searchQuery,
         _isStoreSwitcherOpen,
         _selectedOrderForDetail,
@@ -143,21 +271,28 @@ class MainViewModel(
         @Suppress("UNCHECKED_CAST")
         val orders = args[3] as List<Order>
         @Suppress("UNCHECKED_CAST")
-        val products = args[4] as List<Product>
+        val subs = args[4] as List<com.example.model.Subscription>
         @Suppress("UNCHECKED_CAST")
-        val categories = args[5] as List<Category>
-        val visitorStats = args[6] as VisitorRealtimeStats
+        val retList = args[5] as List<com.example.model.OrderReturn>
         @Suppress("UNCHECKED_CAST")
-        val auditLogs = args[7] as List<AuditLog>
-        val timeframe = args[8] as Timeframe
-        val orderFilter = args[9] as OrderStatus?
-        val query = args[10] as String
-        val isSwitcherOpen = args[11] as Boolean
-        val selectedOrder = args[12] as Order?
-        val selectedDetail = args[13] as OrderDetail?
-        val syncMessage = args[14] as String?
-        val isTesting = args[15] as Boolean
-        val connectionResult = args[16] as OpenCartConnectionResult?
+        val products = args[6] as List<Product>
+        @Suppress("UNCHECKED_CAST")
+        val categories = args[7] as List<Category>
+        val visitorStats = args[8] as VisitorRealtimeStats
+        @Suppress("UNCHECKED_CAST")
+        val auditLogs = args[9] as List<AuditLog>
+        val timeframe = args[10] as Timeframe
+        val orderFilter = args[11] as OrderStatus?
+        val subSection = args[12] as com.example.model.OrdersSubSection
+        val subFilter = args[13] as com.example.model.SubscriptionStatus?
+        val retFilter = args[14] as com.example.model.ReturnStatus?
+        val query = args[15] as String
+        val isSwitcherOpen = args[16] as Boolean
+        val selectedOrder = args[17] as Order?
+        val selectedDetail = args[18] as OrderDetail?
+        val syncMessage = args[19] as String?
+        val isTesting = args[20] as Boolean
+        val connectionResult = args[21] as OpenCartConnectionResult?
 
         val currentStore = stores.find { it.id == currentStoreId } ?: stores.firstOrNull()
 
@@ -186,10 +321,15 @@ class MainViewModel(
             currentStore = currentStore,
             activities = activities,
             orders = orders,
+            subscriptions = subs,
+            returns = retList,
             products = products,
             categories = categories,
             selectedTimeframe = timeframe,
             selectedOrderFilter = orderFilter,
+            selectedOrdersSubSection = subSection,
+            selectedSubscriptionFilter = subFilter,
+            selectedReturnFilter = retFilter,
             searchQuery = query,
             isStoreSwitcherOpen = isSwitcherOpen,
             selectedOrderForDetail = selectedOrder,
@@ -224,6 +364,9 @@ class MainViewModel(
     fun closeStoreSwitcher() { _isStoreSwitcherOpen.value = false }
     fun selectTimeframe(tf: Timeframe) { _selectedTimeframe.value = tf }
     fun setOrderFilter(st: OrderStatus?) { _selectedOrderFilter.value = st }
+    fun selectOrdersSubSection(subSection: com.example.model.OrdersSubSection) { _selectedOrdersSubSection.value = subSection }
+    fun setSubscriptionFilter(status: com.example.model.SubscriptionStatus?) { _selectedSubscriptionFilter.value = status }
+    fun setReturnFilter(status: com.example.model.ReturnStatus?) { _selectedReturnFilter.value = status }
     fun setSearchQuery(q: String) { _searchQuery.value = q }
 
     fun selectOrderForDetail(order: Order) {
@@ -259,9 +402,15 @@ class MainViewModel(
         return try {
             val ordersRes = apiClient.fetchOrders(url, apiKey, username, limit = 50)
             val prodRes = apiClient.fetchProducts(url, apiKey, username, limit = 100)
+            val catRes = apiClient.fetchCategories(url, apiKey, username, limit = 100)
+            val subsRes = apiClient.fetchSubscriptions(url, apiKey, username, limit = 50)
+            val retRes = apiClient.fetchReturns(url, apiKey, username, limit = 50)
 
             var orderCount = 0
             var prodCount = 0
+            var catCount = 0
+            var subsCount = 0
+            var retCount = 0
 
             if (ordersRes.isSuccess) {
                 val liveOrders = ordersRes.getOrNull() ?: emptyList()
@@ -315,8 +464,88 @@ class MainViewModel(
                 }
             }
 
-            if (ordersRes.isSuccess || prodRes.isSuccess) {
-                "Sincronizzazione completata: $orderCount ordini e $prodCount prodotti scaricati da OpenCart!"
+            if (catRes.isSuccess) {
+                val liveCats = catRes.getOrNull() ?: emptyList()
+                if (liveCats.isNotEmpty()) {
+                    catCount = liveCats.size
+                    repository.setCategories(liveCats)
+
+                    db.categoryDao().clearAllCategories()
+                    liveCats.forEach { cat ->
+                        db.categoryDao().insertCategory(
+                            com.example.data.local.entity.CategoryEntity(
+                                id = cat.id,
+                                storeId = uiState.value.currentStore?.id ?: "store_1",
+                                name = cat.name,
+                                description = cat.description,
+                                sortOrder = cat.sortOrder,
+                                status = cat.status
+                            )
+                        )
+                    }
+                }
+            }
+
+            if (subsRes.isSuccess) {
+                val liveSubs = subsRes.getOrNull() ?: emptyList()
+                if (liveSubs.isNotEmpty()) {
+                    subsCount = liveSubs.size
+                    repository.setSubscriptions(liveSubs)
+                    db.subscriptionDao().clearAllSubscriptions()
+                    liveSubs.forEach { sub ->
+                        db.subscriptionDao().insertSubscription(
+                            com.example.data.local.entity.SubscriptionEntity(
+                                id = sub.id,
+                                storeId = uiState.value.currentStore?.id ?: "store_1",
+                                subscriptionId = sub.subscriptionId,
+                                customerName = sub.customerName,
+                                customerEmail = sub.customerEmail,
+                                planName = sub.planName,
+                                cycleFrequency = sub.cycleFrequency,
+                                amount = sub.amount,
+                                status = sub.status.name,
+                                nextPaymentDate = sub.nextPaymentDate,
+                                startDate = sub.startDate,
+                                paymentMethod = sub.paymentMethod
+                            )
+                        )
+                    }
+                }
+            }
+
+            if (retRes.isSuccess) {
+                val liveReturns = retRes.getOrNull() ?: emptyList()
+                if (liveReturns.isNotEmpty()) {
+                    retCount = liveReturns.size
+                    repository.setReturns(liveReturns)
+                    db.orderReturnDao().clearAllReturns()
+                    liveReturns.forEach { ret ->
+                        db.orderReturnDao().insertReturn(
+                            com.example.data.local.entity.OrderReturnEntity(
+                                id = ret.id,
+                                storeId = uiState.value.currentStore?.id ?: "store_1",
+                                returnId = ret.returnId,
+                                orderId = ret.orderId,
+                                customerName = ret.customerName,
+                                customerEmail = ret.customerEmail,
+                                customerPhone = ret.customerPhone,
+                                productName = ret.productName,
+                                productModel = ret.productModel,
+                                quantity = ret.quantity,
+                                reason = ret.reason,
+                                opened = ret.opened,
+                                status = ret.status.name,
+                                action = ret.action,
+                                dateAdded = ret.dateAdded,
+                                comment = ret.comment
+                            )
+                        )
+                    }
+                }
+            }
+
+            if (ordersRes.isSuccess || prodRes.isSuccess || catRes.isSuccess) {
+                "Sincronizzazione completata: $orderCount ordini, $prodCount prodotti, $catCount categorie, $subsCount abbonamenti e $retCount resi!"
             } else {
                 val err = ordersRes.exceptionOrNull()?.message ?: prodRes.exceptionOrNull()?.message ?: "Errore sconosciuto"
                 "Errore sinc: $err. Verifica URL e Chiave API in Impostazioni."
@@ -378,9 +607,118 @@ class MainViewModel(
                     )
                 }
             }
-            ordersRes.isSuccess || prodRes.isSuccess
+
+            val catRes = apiClient.fetchCategories(url, apiKey, username, limit = 100)
+            if (catRes.isSuccess) {
+                val liveCats = catRes.getOrNull() ?: emptyList()
+                if (liveCats.isNotEmpty()) {
+                    repository.setCategories(liveCats)
+                    db.categoryDao().clearAllCategories()
+                    liveCats.forEach { cat ->
+                        db.categoryDao().insertCategory(
+                            com.example.data.local.entity.CategoryEntity(
+                                id = cat.id,
+                                storeId = uiState.value.currentStore?.id ?: "store_1",
+                                name = cat.name,
+                                description = cat.description,
+                                sortOrder = cat.sortOrder,
+                                status = cat.status
+                            )
+                        )
+                    }
+                }
+            }
+
+            val subsRes = apiClient.fetchSubscriptions(url, apiKey, username, limit = 50)
+            if (subsRes.isSuccess) {
+                val liveSubs = subsRes.getOrNull() ?: emptyList()
+                if (liveSubs.isNotEmpty()) {
+                    repository.setSubscriptions(liveSubs)
+                    db.subscriptionDao().clearAllSubscriptions()
+                    liveSubs.forEach { sub ->
+                        db.subscriptionDao().insertSubscription(
+                            com.example.data.local.entity.SubscriptionEntity(
+                                id = sub.id,
+                                storeId = uiState.value.currentStore?.id ?: "store_1",
+                                subscriptionId = sub.subscriptionId,
+                                customerName = sub.customerName,
+                                customerEmail = sub.customerEmail,
+                                planName = sub.planName,
+                                cycleFrequency = sub.cycleFrequency,
+                                amount = sub.amount,
+                                status = sub.status.name,
+                                nextPaymentDate = sub.nextPaymentDate,
+                                startDate = sub.startDate,
+                                paymentMethod = sub.paymentMethod
+                            )
+                        )
+                    }
+                }
+            }
+
+            val retRes = apiClient.fetchReturns(url, apiKey, username, limit = 50)
+            if (retRes.isSuccess) {
+                val liveReturns = retRes.getOrNull() ?: emptyList()
+                if (liveReturns.isNotEmpty()) {
+                    repository.setReturns(liveReturns)
+                    db.orderReturnDao().clearAllReturns()
+                    liveReturns.forEach { ret ->
+                        db.orderReturnDao().insertReturn(
+                            com.example.data.local.entity.OrderReturnEntity(
+                                id = ret.id,
+                                storeId = uiState.value.currentStore?.id ?: "store_1",
+                                returnId = ret.returnId,
+                                orderId = ret.orderId,
+                                customerName = ret.customerName,
+                                customerEmail = ret.customerEmail,
+                                customerPhone = ret.customerPhone,
+                                productName = ret.productName,
+                                productModel = ret.productModel,
+                                quantity = ret.quantity,
+                                reason = ret.reason,
+                                opened = ret.opened,
+                                status = ret.status.name,
+                                action = ret.action,
+                                dateAdded = ret.dateAdded,
+                                comment = ret.comment
+                            )
+                        )
+                    }
+                }
+            }
+
+            ordersRes.isSuccess || prodRes.isSuccess || catRes.isSuccess
         } catch (e: Exception) {
             false
+        }
+    }
+
+    fun updateSubscriptionStatus(subscriptionId: String, newStatus: SubscriptionStatus) {
+        repository.updateSubscriptionStatus(subscriptionId, newStatus)
+        viewModelScope.launch(Dispatchers.IO) {
+            db.subscriptionDao().updateSubscriptionStatus(subscriptionId, newStatus.name)
+            val store = uiState.value.currentStore
+            if (store != null && store.url.isNotBlank()) {
+                apiClient.updateSubscriptionStatus(store.url, store.apiKey, subscriptionId, newStatus.name, store.apiUsername)
+            }
+        }
+    }
+
+    fun updateReturnStatus(returnId: String, newStatus: ReturnStatus, newAction: String = "In lavorazione") {
+        repository.updateReturnStatus(returnId, newStatus, newAction)
+        viewModelScope.launch(Dispatchers.IO) {
+            db.orderReturnDao().updateReturnStatus(returnId, newStatus.name, newAction)
+            val store = uiState.value.currentStore
+            if (store != null && store.url.isNotBlank()) {
+                val statusId = when (newStatus) {
+                    ReturnStatus.PENDING -> 1
+                    ReturnStatus.AWAITING_PRODUCTS -> 2
+                    ReturnStatus.IN_INSPECTION -> 3
+                    ReturnStatus.COMPLETE_REFUNDED, ReturnStatus.COMPLETE_REPLACED -> 4
+                    ReturnStatus.DENIED -> 5
+                }
+                apiClient.updateReturnStatus(store.url, store.apiKey, returnId, statusId, newAction, store.apiUsername)
+            }
         }
     }
 

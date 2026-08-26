@@ -304,6 +304,133 @@ try {
             echo json_encode(['success' => true, 'products' => ${s}products, 'count' => count(${s}products)]);
             break;
 
+        case 'categories':
+            ${s}limit = isset(${s}_GET['limit']) ? min(200, max(1, (int)${s}_GET['limit'])) : 100;
+            ${s}sql = "SELECT c.category_id, cd.name, cd.description, c.status, c.sort_order,
+                               (SELECT COUNT(p2c.product_id) FROM `${s}db_prefix" . "product_to_category` p2c WHERE p2c.category_id = c.category_id) AS products_count
+                        FROM `${s}db_prefix" . "category` c
+                        LEFT JOIN `${s}db_prefix" . "category_description` cd ON (c.category_id = cd.category_id)
+                        GROUP BY c.category_id
+                        ORDER BY c.sort_order ASC, cd.name ASC
+                        LIMIT " . (int)${s}limit;
+            ${s}res = ${s}mysqli->query(${s}sql);
+            ${s}categories = [];
+            if (${s}res) {
+                while (${s}row = ${s}res->fetch_assoc()) {
+                    ${s}categories[] = [
+                        'id' => 'cat_' . (int)${s}row['category_id'],
+                        'category_id' => (int)${s}row['category_id'],
+                        'name' => ${s}row['name'] ?: ('Categoria #' . ${s}row['category_id']),
+                        'description' => ${s}row['description'] ?: '',
+                        'products_count' => (int)${s}row['products_count'],
+                        'status' => (int)${s}row['status'] == 1,
+                        'sort_order' => (int)${s}row['sort_order']
+                    ];
+                }
+            }
+            echo json_encode(['success' => true, 'categories' => ${s}categories, 'count' => count(${s}categories)]);
+            break;
+
+        case 'subscriptions':
+            ${s}limit = isset(${s}_GET['limit']) ? min(100, max(1, (int)${s}_GET['limit'])) : 50;
+            ${s}checkSubTable = ${s}mysqli->query("SHOW TABLES LIKE '${s}db_prefix" . "subscription'");
+            ${s}checkRecTable = ${s}mysqli->query("SHOW TABLES LIKE '${s}db_prefix" . "order_recurring'");
+            ${s}subs = [];
+            if (${s}checkSubTable && ${s}checkSubTable->num_rows > 0) {
+                ${s}sRes = ${s}mysqli->query("SELECT s.*, o.firstname, o.lastname, o.email, o.payment_method FROM `${s}db_prefix" . "subscription` s LEFT JOIN `${s}db_prefix" . "order` o ON (s.order_id = o.order_id) ORDER BY s.subscription_id DESC LIMIT " . (int)${s}limit);
+                if (${s}sRes) {
+                    while (${s}sRow = ${s}sRes->fetch_assoc()) {
+                        ${s}statusText = 'ACTIVE';
+                        ${s}subStatId = (int)(${s}sRow['subscription_status_id'] ?? 1);
+                        if (${s}subStatId == 1) ${s}statusText = 'ACTIVE';
+                        elseif (${s}subStatId == 2) ${s}statusText = 'PENDING';
+                        elseif (${s}subStatId == 3) ${s}statusText = 'SUSPENDED';
+                        elseif (${s}subStatId == 4) ${s}statusText = 'CANCELED';
+                        elseif (${s}subStatId == 5) ${s}statusText = 'EXPIRED';
+
+                        ${s}subs[] = [
+                            'id' => 'sub_' . ${s}sRow['subscription_id'],
+                            'subscription_id' => (string)${s}sRow['subscription_id'],
+                            'customer_name' => trim((${s}sRow['firstname'] ?? '') . ' ' . (${s}sRow['lastname'] ?? '')),
+                            'customer_email' => ${s}sRow['email'] ?? '',
+                            'plan_name' => !empty(${s}sRow['subscription_plan_id']) ? ('Piano #' . ${s}sRow['subscription_plan_id']) : 'Abbonamento Periodico',
+                            'cycle_frequency' => 'Mensile',
+                            'amount' => (float)(${s}sRow['price'] ?? 0.0),
+                            'status' => ${s}statusText,
+                            'next_payment_date' => ${s}sRow['date_next'] ?? date('Y-m-d', strtotime('+30 days')),
+                            'start_date' => ${s}sRow['date_added'] ?? date('Y-m-d'),
+                            'payment_method' => ${s}sRow['payment_method'] ?? 'Stripe / Carta'
+                        ];
+                    }
+                }
+            } elseif (${s}checkRecTable && ${s}checkRecTable->num_rows > 0) {
+                ${s}sRes = ${s}mysqli->query("SELECT r.*, o.firstname, o.lastname, o.email, o.payment_method FROM `${s}db_prefix" . "order_recurring` r LEFT JOIN `${s}db_prefix" . "order` o ON (r.order_id = o.order_id) ORDER BY r.order_recurring_id DESC LIMIT " . (int)${s}limit);
+                if (${s}sRes) {
+                    while (${s}sRow = ${s}sRes->fetch_assoc()) {
+                        ${s}subs[] = [
+                            'id' => 'sub_' . ${s}sRow['order_recurring_id'],
+                            'subscription_id' => (string)${s}sRow['order_recurring_id'],
+                            'customer_name' => trim((${s}sRow['firstname'] ?? '') . ' ' . (${s}sRow['lastname'] ?? '')),
+                            'customer_email' => ${s}sRow['email'] ?? '',
+                            'plan_name' => ${s}sRow['recurring_name'] ?? 'Abbonamento Ricorrente',
+                            'cycle_frequency' => (${s}sRow['recurring_frequency'] ?? 'Month') . ' (' . (${s}sRow['recurring_cycle'] ?? 1) . ')',
+                            'amount' => (float)(${s}sRow['recurring_price'] ?? 0.0),
+                            'status' => ((int)(${s}sRow['status'] ?? 1) == 1) ? 'ACTIVE' : 'SUSPENDED',
+                            'next_payment_date' => date('Y-m-d', strtotime('+30 days')),
+                            'start_date' => ${s}sRow['date_added'] ?? date('Y-m-d'),
+                            'payment_method' => ${s}sRow['payment_method'] ?? 'Carta di Credito'
+                        ];
+                    }
+                }
+            }
+            echo json_encode(['success' => true, 'subscriptions' => ${s}subs, 'count' => count(${s}subs)]);
+            break;
+
+        case 'returns':
+            ${s}limit = isset(${s}_GET['limit']) ? min(100, max(1, (int)${s}_GET['limit'])) : 50;
+            ${s}checkRetTable = ${s}mysqli->query("SHOW TABLES LIKE '${s}db_prefix" . "return'");
+            ${s}returns = [];
+            if (${s}checkRetTable && ${s}checkRetTable->num_rows > 0) {
+                ${s}sql = "SELECT r.*, rs.name as status_name, ra.name as action_name, rr.name as reason_name 
+                        FROM `${s}db_prefix" . "return` r 
+                        LEFT JOIN `${s}db_prefix" . "return_status` rs ON (r.return_status_id = rs.return_status_id) 
+                        LEFT JOIN `${s}db_prefix" . "return_action` ra ON (r.return_action_id = ra.return_action_id) 
+                        LEFT JOIN `${s}db_prefix" . "return_reason` rr ON (r.return_reason_id = rr.return_reason_id) 
+                        ORDER BY r.return_id DESC LIMIT " . (int)${s}limit;
+                ${s}rRes = ${s}mysqli->query(${s}sql);
+                if (${s}rRes) {
+                    while (${s}rRow = ${s}rRes->fetch_assoc()) {
+                        ${s}st = 'PENDING';
+                        ${s}stId = (int)(${s}rRow['return_status_id'] ?? 1);
+                        if (${s}stId == 1) ${s}st = 'PENDING';
+                        elseif (${s}stId == 2) ${s}st = 'AWAITING_PRODUCTS';
+                        elseif (${s}stId == 3) ${s}st = 'COMPLETE_REFUNDED';
+                        elseif (${s}stId == 4) ${s}st = 'COMPLETE_REPLACED';
+                        elseif (${s}stId == 5) ${s}st = 'DENIED';
+
+                        ${s}returns[] = [
+                            'id' => 'ret_' . ${s}rRow['return_id'],
+                            'return_id' => '#' . ${s}rRow['return_id'],
+                            'order_id' => '#' . (${s}rRow['order_id'] ?? '0'),
+                            'customer_name' => trim((${s}rRow['firstname'] ?? '') . ' ' . (${s}rRow['lastname'] ?? '')),
+                            'customer_email' => ${s}rRow['email'] ?? '',
+                            'customer_phone' => ${s}rRow['telephone'] ?? '',
+                            'product_name' => ${s}rRow['product'] ?? 'Prodotto reso',
+                            'product_model' => ${s}rRow['model'] ?? 'MOD',
+                            'quantity' => (int)(${s}rRow['quantity'] ?? 1),
+                            'reason' => ${s}rRow['reason_name'] ?: (${s}rRow['comment'] ?: 'Difettoso o non conforme'),
+                            'opened' => (int)(${s}rRow['opened'] ?? 1) == 1,
+                            'status' => ${s}st,
+                            'action' => ${s}rRow['action_name'] ?: (${s}rRow['status_name'] ?: 'In attesa'),
+                            'date_added' => ${s}rRow['date_added'] ?? date('Y-m-d'),
+                            'comment' => ${s}rRow['comment'] ?? ''
+                        ];
+                    }
+                }
+            }
+            echo json_encode(['success' => true, 'returns' => ${s}returns, 'count' => count(${s}returns)]);
+            break;
+
         case 'update_stock':
             ${s}rawInput = file_get_contents('php://input');
             ${s}data = json_decode(${s}rawInput, true);

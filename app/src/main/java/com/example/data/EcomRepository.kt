@@ -41,6 +41,12 @@ class EcomRepository(
     private val _products = MutableStateFlow<List<Product>>(emptyList())
     val products: StateFlow<List<Product>> = _products.asStateFlow()
 
+    private val _subscriptions = MutableStateFlow<List<com.example.model.Subscription>>(emptyList())
+    val subscriptions: StateFlow<List<com.example.model.Subscription>> = _subscriptions.asStateFlow()
+
+    private val _returns = MutableStateFlow<List<com.example.model.OrderReturn>>(emptyList())
+    val returns: StateFlow<List<com.example.model.OrderReturn>> = _returns.asStateFlow()
+
     private val _visitorStats = MutableStateFlow(
         VisitorRealtimeStats(
             activeVisitorsNow = 0,
@@ -366,10 +372,45 @@ class EcomRepository(
         }
     }
 
+    fun setSubscriptions(list: List<com.example.model.Subscription>) {
+        _subscriptions.value = list
+    }
+
+    fun setCategories(list: List<Category>) {
+        _categories.value = list
+    }
+
+    fun updateSubscriptionStatus(id: String, newStatus: com.example.model.SubscriptionStatus) {
+        _subscriptions.update { current ->
+            current.map {
+                if (it.id == id || it.subscriptionId == id) it.copy(status = newStatus) else it
+            }
+        }
+    }
+
+    fun setReturns(list: List<com.example.model.OrderReturn>) {
+        _returns.value = list
+    }
+
+    fun updateReturnStatus(id: String, newStatus: com.example.model.ReturnStatus, newAction: String? = null) {
+        _returns.update { current ->
+            current.map {
+                if (it.id == id || it.returnId == id) {
+                    it.copy(
+                        status = newStatus,
+                        action = newAction ?: it.action
+                    )
+                } else it
+            }
+        }
+    }
+
     suspend fun clearDummyData() {
         _orders.value = emptyList()
         _products.value = emptyList()
         _categories.value = emptyList()
+        _subscriptions.value = emptyList()
+        _returns.value = emptyList()
         _activities.value = emptyList()
         _stores.update { list ->
             list.map {
