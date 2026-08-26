@@ -87,7 +87,7 @@ jobs:
           echo "DUMMY_KEY=default" > .env
           mkdir -p ~/.android
           if [ ! -f "debug.keystore" ]; then
-            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" -noprompt
           fi
 
       - name: Build Debug APK (CI)
@@ -95,8 +95,12 @@ jobs:
         env:
           GRADLE_OPTS: "-Djava.awt.headless=true -Dorg.gradle.jvmargs=\"-Xmx4g -Dfile.encoding=UTF-8 -Djava.awt.headless=true\""
         run: |
-          chmod +x ./gradlew
-          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            ./gradlew :app:assembleDebug --no-daemon --stacktrace
+          else
+            gradle :app:assembleDebug --no-daemon --stacktrace
+          fi
 
       - name: Build and Sign Release APK
         if: steps.get_version.outputs.is_release == 'true'
@@ -119,8 +123,12 @@ jobs:
           export KEY_ALIAS="$RELEASE_KEY_ALIAS"
           export KEY_PASSWORD="$RELEASE_KEY_PASSWORD"
 
-          chmod +x ./gradlew
-          ./gradlew :app:assembleRelease --no-daemon --stacktrace
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            ./gradlew :app:assembleRelease --no-daemon --stacktrace
+          else
+            gradle :app:assembleRelease --no-daemon --stacktrace
+          fi
 
       - name: Prepare Artifacts (APK & OpenCart Plugin)
         shell: bash

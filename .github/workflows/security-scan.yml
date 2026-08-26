@@ -47,6 +47,10 @@ jobs:
         run: |
           touch .env
           echo "DUMMY_KEY=default" > .env
+          mkdir -p ~/.android
+          if [ ! -f "debug.keystore" ]; then
+            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" -noprompt
+          fi
           if [ -f "./gradlew" ]; then
             chmod +x ./gradlew
             ./gradlew :app:compileDebugKotlin --no-daemon
@@ -70,6 +74,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: php-cs-fixer
 
       - name: Verify expected plugin sources
         shell: bash
@@ -95,7 +105,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python - opencart-plugin/install.xml <<'PY'
+          python3 - opencart-plugin/install.xml <<'PY'
           import sys
           import xml.etree.ElementTree as ET
 
@@ -104,56 +114,23 @@ jobs:
           PY
 
       - name: Set up Python for Semgrep
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
+          python-version: '3.12'
 
       - name: Install Semgrep
-        run: python -m pip install --disable-pip-version-check "semgrep==1.174.0"
-
-      - name: Determine Semgrep baseline
-        id: semgrep_baseline
-        shell: bash
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PUSH_BEFORE_SHA: ${{ github.event.before }}
-        run: |
-          set -euo pipefail
-          baseline=""
-
-          if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$PR_BASE_SHA" ]; then
-            baseline="$PR_BASE_SHA"
-          elif [ "$EVENT_NAME" = "push" ] && [ -n "$PUSH_BEFORE_SHA" ] && ! [[ "$PUSH_BEFORE_SHA" =~ ^0+$ ]]; then
-            baseline="$PUSH_BEFORE_SHA"
-          elif [ "$EVENT_NAME" = "schedule" ] && git rev-parse HEAD^ >/dev/null 2>&1; then
-            baseline="$(git rev-parse HEAD^)"
-          fi
-
-          if [ -n "$baseline" ]; then
-            git cat-file -e "$baseline^{commit}"
-          fi
-          echo "commit=$baseline" >> "$GITHUB_OUTPUT"
-          echo "Semgrep baseline: ${baseline:-full scan}"
+        run: python3 -m pip install --disable-pip-version-check "semgrep==1.174.0"
 
       - name: Scan PHP plugin with Semgrep
         shell: bash
-        env:
-          BASELINE_COMMIT: ${{ steps.semgrep_baseline.outputs.commit }}
         run: |
           set -euo pipefail
-          baseline_args=()
-          if [ -n "$BASELINE_COMMIT" ]; then
-            baseline_args+=(--baseline-commit "$BASELINE_COMMIT")
-          fi
-
           semgrep scan \
             --config p/php \
             --config p/security-audit \
             --config p/secrets \
             --severity ERROR \
             --error \
-            "${baseline_args[@]}" \
             opencart-plugin
 
       - name: Build and validate OCMOD archive
