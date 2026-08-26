@@ -1,6 +1,7 @@
 package com.example.notification
 
 import android.util.Log
+import com.example.BuildConfig
 import com.example.data.local.AppDatabase
 import com.example.data.local.entity.OrderEntity
 import com.google.firebase.messaging.FirebaseMessagingService
@@ -15,13 +16,17 @@ class CartAdminFirebaseMessagingService : FirebaseMessagingService() {
 
     override fun onNewToken(token: String) {
         super.onNewToken(token)
-        Log.d(TAG, "New Firebase Cloud Messaging Token: $token")
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "Push token refreshed successfully")
+        }
         FcmTokenManager.saveToken(applicationContext, token)
     }
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         super.onMessageReceived(remoteMessage)
-        Log.d(TAG, "FCM Message received from: ${remoteMessage.from}")
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "Push message event received")
+        }
 
         val data = remoteMessage.data
         val notificationType = data["type"] ?: "new_order"
@@ -62,9 +67,10 @@ class CartAdminFirebaseMessagingService : FirebaseMessagingService() {
                             paymentMethod = data["payment_method"] ?: "Carta di Credito / Stripe"
                         )
                         db.orderDao().insertOrder(orderEntity)
-                        Log.d(TAG, "Cached order $orderNumber in Room database")
                     } catch (e: Exception) {
-                        Log.e(TAG, "Failed to cache order to Room", e)
+                        if (BuildConfig.DEBUG) {
+                            Log.e(TAG, "Failed to cache order to Room")
+                        }
                     }
                 }
             }
@@ -81,10 +87,6 @@ class CartAdminFirebaseMessagingService : FirebaseMessagingService() {
             }
 
             else -> {
-                // Fallback to standard title and body if provided
-                val title = remoteMessage.notification?.title ?: data["title"] ?: "🛍️ CartAdmin OpenCart"
-                val body = remoteMessage.notification?.body ?: data["message"] ?: data["body"] ?: "Nuovo aggiornamento dal tuo negozio OpenCart"
-
                 NotificationHelper.sendTestNotification(applicationContext)
             }
         }
@@ -94,4 +96,3 @@ class CartAdminFirebaseMessagingService : FirebaseMessagingService() {
         private const val TAG = "CartAdminFCM"
     }
 }
-

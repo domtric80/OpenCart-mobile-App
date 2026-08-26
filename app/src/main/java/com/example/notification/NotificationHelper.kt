@@ -3,6 +3,7 @@ package com.example.notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -15,18 +16,18 @@ object NotificationHelper {
     const val CHANNEL_ORDERS_ID = "opencart_orders_channel"
     const val CHANNEL_STOCK_ID = "opencart_stock_channel"
 
-    private const val NOTIFICATION_ID_TEST = 1001
-    private const val NOTIFICATION_ID_ORDER = 1002
-    private const val NOTIFICATION_ID_STOCK = 1003
+    const val NOTIFICATION_ID_TEST = 1001
+    const val NOTIFICATION_ID_ORDER = 1002
+    const val NOTIFICATION_ID_STOCK = 1003
 
     /**
      * Initializes notification channels for Android 8.0 (API 26) and higher
      */
     fun createNotificationChannels(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+                ?: return
 
-            // Orders Channel (High importance, sound, vibration)
             val ordersChannel = NotificationChannel(
                 CHANNEL_ORDERS_ID,
                 "Nuovi Ordini OpenCart",
@@ -37,7 +38,6 @@ object NotificationHelper {
                 setShowBadge(true)
             }
 
-            // Stock Channel (Default importance)
             val stockChannel = NotificationChannel(
                 CHANNEL_STOCK_ID,
                 "Allarmi Magazzino & Sottoscorta",
@@ -53,17 +53,38 @@ object NotificationHelper {
     }
 
     /**
+     * Creates an explicitly targeted PendingIntent for MainActivity
+     */
+    private fun createExplicitMainActivityPendingIntent(
+        context: Context,
+        requestCode: Int,
+        action: String? = null,
+        configureExtras: (Intent.() -> Unit)? = null
+    ): PendingIntent {
+        val intent = Intent().apply {
+            component = ComponentName(context.packageName, MainActivity::class.java.name)
+            setPackage(context.packageName)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            if (action != null) {
+                this.action = action
+            }
+            configureExtras?.invoke(this)
+        }
+
+        val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        return PendingIntent.getActivity(context, requestCode, intent, flags)
+    }
+
+    /**
      * Sends a test notification to verify delivery on the user's phone
      */
     fun sendTestNotification(context: Context): Boolean {
         createNotificationChannels(context)
 
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        }
-        val pendingIntent = PendingIntent.getActivity(
-            context, 0, intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        val pendingIntent = createExplicitMainActivityPendingIntent(
+            context = context,
+            requestCode = NOTIFICATION_ID_TEST,
+            action = "com.example.cartadmin.ACTION_TEST_NOTIFICATION"
         )
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ORDERS_ID)
@@ -98,13 +119,13 @@ object NotificationHelper {
     ): Boolean {
         createNotificationChannels(context)
 
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        val pendingIntent = createExplicitMainActivityPendingIntent(
+            context = context,
+            requestCode = NOTIFICATION_ID_ORDER,
+            action = "com.example.cartadmin.ACTION_ORDER_NOTIFICATION"
+        ) {
+            putExtra("notification_order_number", orderNumber)
         }
-        val pendingIntent = PendingIntent.getActivity(
-            context, 0, intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
 
         val formattedTotal = String.format("€%.2f", total)
         val notification = NotificationCompat.Builder(context, CHANNEL_ORDERS_ID)
@@ -138,13 +159,13 @@ object NotificationHelper {
     ): Boolean {
         createNotificationChannels(context)
 
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        val pendingIntent = createExplicitMainActivityPendingIntent(
+            context = context,
+            requestCode = NOTIFICATION_ID_STOCK,
+            action = "com.example.cartadmin.ACTION_STOCK_NOTIFICATION"
+        ) {
+            putExtra("notification_product_name", productName)
         }
-        val pendingIntent = PendingIntent.getActivity(
-            context, 0, intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
 
         val notification = NotificationCompat.Builder(context, CHANNEL_STOCK_ID)
             .setSmallIcon(android.R.drawable.stat_notify_error)

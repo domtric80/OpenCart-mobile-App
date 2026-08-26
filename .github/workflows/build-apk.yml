@@ -5,10 +5,12 @@ on:
     branches: [ "main", "master" ]
     tags:
       - "v*"
+  pull_request:
+    branches: [ "main", "master" ]
   workflow_dispatch:
     inputs:
       custom_tag:
-        description: 'Nuovo tag della release (deve coincidere con versionName, es. v1.2.2)'
+        description: 'Tag della release da pubblicare (es. v1.2.4). Lasciare vuoto per build CI senza pubblicazione release.'
         required: false
         default: ''
 
@@ -35,17 +37,7 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
-          gradle-version: '8.11.1'
-
-      - name: Prepare Secrets and Keystore
-        run: |
-          touch .env
-          echo "DUMMY_KEY=default" > .env
-
-          mkdir -p ~/.android
-          if [ ! -f "debug.keystore" ]; then
-            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          fi
+          gradle-version: '9.3.1'
 
       - name: Extract and validate release version
         id: get_version
@@ -54,43 +46,96 @@ jobs:
           set -euo pipefail
           VERSION_NAME=$(grep 'versionName = ' app/build.gradle.kts | head -n 1 | sed -E 's/.*"([^"]+)".*/\1/')
           if [ -z "$VERSION_NAME" ]; then
-            VERSION_NAME="1.2.3"
+            echo "::error::Could not extract versionName from app/build.gradle.kts"
+            exit 1
           fi
 
           CUSTOM_TAG="${{ inputs.custom_tag }}"
           RELEASE_TAG=""
+          IS_RELEASE="false"
 
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             RELEASE_TAG="${GITHUB_REF_NAME}"
+            IS_RELEASE="true"
           elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && -n "$CUSTOM_TAG" ]]; then
             RELEASE_TAG="$CUSTOM_TAG"
+            IS_RELEASE="true"
           else
             RELEASE_TAG="v${VERSION_NAME}"
+            IS_RELEASE="false"
+          fi
+
+          if [ "$IS_RELEASE" = "true" ]; then
+            if [ "$RELEASE_TAG" != "v${VERSION_NAME}" ]; then
+              echo "::error::Tag '${RELEASE_TAG}' does not match versionName 'v${VERSION_NAME}' in app/build.gradle.kts"
+              exit 1
+            fi
+            if [ "$RELEASE_TAG" = "v1.2.3" ]; then
+              echo "::error::Release v1.2.3 is immutable and cannot be re-published."
+              exit 1
+            fi
           fi
 
           echo "version=${VERSION_NAME}" >> "$GITHUB_OUTPUT"
           echo "tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
-          echo "Version: ${VERSION_NAME}; release tag: ${RELEASE_TAG}"
+          echo "is_release=${IS_RELEASE}" >> "$GITHUB_OUTPUT"
+          echo "Version: ${VERSION_NAME}; Release Tag: ${RELEASE_TAG}; Is Release: ${IS_RELEASE}"
 
-      - name: Build Debug APK
+      - name: Prepare Build Environment
+        run: |
+          touch .env
+          echo "DUMMY_KEY=default" > .env
+          mkdir -p ~/.android
+          if [ ! -f "debug.keystore" ]; then
+            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+      - name: Build Debug APK (CI)
+        if: steps.get_version.outputs.is_release != 'true'
         env:
           GRADLE_OPTS: "-Djava.awt.headless=true -Dorg.gradle.jvmargs=\"-Xmx4g -Dfile.encoding=UTF-8 -Djava.awt.headless=true\""
         run: |
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-            ./gradlew :app:assembleDebug --no-daemon --stacktrace
-          else
-            gradle :app:assembleDebug --no-daemon --stacktrace
+          chmod +x ./gradlew
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Build and Sign Release APK
+        if: steps.get_version.outputs.is_release == 'true'
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          GRADLE_OPTS: "-Djava.awt.headless=true -Dorg.gradle.jvmargs=\"-Xmx4g -Dfile.encoding=UTF-8 -Djava.awt.headless=true\""
+        run: |
+          set -euo pipefail
+          if [ -z "${RELEASE_KEYSTORE_BASE64:-}" ] || [ -z "${RELEASE_KEYSTORE_PASSWORD:-}" ] || [ -z "${RELEASE_KEY_ALIAS:-}" ] || [ -z "${RELEASE_KEY_PASSWORD:-}" ]; then
+            echo "::error::Release keystore secrets (RELEASE_KEYSTORE_BASE64, RELEASE_KEYSTORE_PASSWORD, RELEASE_KEY_ALIAS, RELEASE_KEY_PASSWORD) are required for publishing a release."
+            exit 1
           fi
 
-      - name: Prepare Release Assets (APK & OpenCart Plugin)
+          echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > "${RUNNER_TEMP}/release-upload.jks"
+          export KEYSTORE_PATH="${RUNNER_TEMP}/release-upload.jks"
+          export STORE_PASSWORD="$RELEASE_KEYSTORE_PASSWORD"
+          export KEY_ALIAS="$RELEASE_KEY_ALIAS"
+          export KEY_PASSWORD="$RELEASE_KEY_PASSWORD"
+
+          chmod +x ./gradlew
+          ./gradlew :app:assembleRelease --no-daemon --stacktrace
+
+      - name: Prepare Artifacts (APK & OpenCart Plugin)
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p release-assets
           VERSION="${{ steps.get_version.outputs.version }}"
+          IS_RELEASE="${{ steps.get_version.outputs.is_release }}"
 
-          APK_FILE=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          if [ "$IS_RELEASE" = "true" ]; then
+            APK_FILE=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          else
+            APK_FILE=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          fi
+
           if [ -z "$APK_FILE" ] || [ ! -f "$APK_FILE" ]; then
             echo "::error::No APK file generated."
             exit 1
@@ -109,15 +154,15 @@ jobs:
 
           unzip -t "release-assets/cartadmin-opencart-bridge-v${VERSION}.ocmod.zip"
 
-      - name: Upload Build Artifacts
+      - name: Upload Build Artifacts (CI)
         uses: actions/upload-artifact@v4
         with:
-          name: CartAdmin-Release-Assets
+          name: CartAdmin-Build-Assets
           path: release-assets/*
           if-no-files-found: error
 
-      - name: Publish a new GitHub Release
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+      - name: Publish GitHub Release (Only on valid tag / release dispatch)
+        if: steps.get_version.outputs.is_release == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG_NAME: ${{ steps.get_version.outputs.tag }}
@@ -128,6 +173,11 @@ jobs:
           APK_PATH="release-assets/CartAdmin-v${VERSION}.apk"
           PLUGIN_PATH="release-assets/cartadmin-opencart-bridge-v${VERSION}.ocmod.zip"
           RELEASE_TITLE="CartAdmin ${TAG_NAME} — OpenCart ITALIA by SOLO SOLUZIONI"
+
+          if gh release view "${TAG_NAME}" >/dev/null 2>&1; then
+            echo "::error::Release ${TAG_NAME} already exists and cannot be overwritten."
+            exit 1
+          fi
 
           cat << 'EOF' > release_notes.md
           ## 🛒 CartAdmin ${TAG_NAME} — App Ufficiale & Plugin OpenCart ITALIA
@@ -146,28 +196,22 @@ jobs:
           ---
 
           ### ✨ Novità & Note di Rilascio (${TAG_NAME})
-          - 🗄️ **Persistenza Reale Room Database**: Salvataggio permanente e sicuro di profili e chiavi API dei negozi su database SQLite crittografato (`store_profiles`).
-          - 🚫 **Eliminazione Dati Demo & Mock**: Rimozione definitiva dei dati di esempio e fittizi; l'app lavora esclusivamente con dati reali sincronizzati dal tuo store OpenCart.
-          - 🚀 **Doppio Rilascio Automatico**: Download separato e istantaneo dell'APK Android e del pacchetto OCMOD zip per OpenCart.
-          - 🔒 **Sicurezza Hardware TEE & Biometria**: Protezione accessi biometrica con impronta digitale/Face Unlock, crittografia AES-256 GCM e timeout di sicurezza a 5 minuti.
-          - 🔍 **Audit Log Completo**: Tracciamento di tutte le modifiche a ordini, scorte e impostazioni sincronizzate con OpenCart.
+          - 🔒 **Security Hardening Completo**: Risoluzione di tutti gli alert di sicurezza CodeQL e Semgrep.
+          - 🛡️ **Autenticazione Biometrica Crittografica**: Integrazione Hardware Keystore con verifica `CryptoObject` reale.
+          - 🌐 **Certificate Pinning SPKI Dinamico**: Protezione TLS e pinning SPKI SHA-256 avanzata per tutti i negozi OpenCart.
+          - ⚡ **Ottimizzazioni Build & Packaging**: Gradle 9.3.1, pipeline CI/CD protetta e pacchetto OCMOD verificato.
           EOF
 
           sed -i "s/\${TAG_NAME}/${TAG_NAME}/g" release_notes.md
           sed -i "s/\${VERSION}/${VERSION}/g" release_notes.md
 
-          if gh release view "${TAG_NAME}" >/dev/null 2>&1; then
-            echo "Release ${TAG_NAME} already exists. Updating release assets..."
-            gh release upload "${TAG_NAME}" "$APK_PATH" "$PLUGIN_PATH" --clobber
-          else
-            echo "Creating new release ${TAG_NAME}..."
-            gh release create "${TAG_NAME}" \
-              "$APK_PATH" \
-              "$PLUGIN_PATH" \
-              --target "$GITHUB_SHA" \
-              --title "$RELEASE_TITLE" \
-              --notes-file release_notes.md \
-              --latest
-          fi
+          echo "Creating new release ${TAG_NAME}..."
+          gh release create "${TAG_NAME}" \
+            "$APK_PATH" \
+            "$PLUGIN_PATH" \
+            --target "$GITHUB_SHA" \
+            --title "$RELEASE_TITLE" \
+            --notes-file release_notes.md \
+            --latest
 
-          echo "Release ${TAG_NAME} created successfully with APK and OCMOD plugin."
+          echo "Release ${TAG_NAME} created successfully with signed APK and OCMOD plugin."

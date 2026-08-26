@@ -392,10 +392,20 @@ fun OrderDetailSheet(
                     ) {
                         OutlinedButton(
                             onClick = {
-                                val intent = Intent(Intent.ACTION_DIAL).apply {
-                                    data = Uri.parse("tel:${orderDetail.customerPhone}")
+                                val cleanPhone = orderDetail.customerPhone.filter { it.isDigit() || it == '+' }
+                                if (cleanPhone.isNotBlank()) {
+                                    val dialIntent = Intent(Intent.ACTION_DIAL).apply {
+                                        data = Uri.parse("tel:$cleanPhone")
+                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                    }
+                                    try {
+                                        context.startActivity(dialIntent)
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "Nessuna app di composizione telefonica disponibile", Toast.LENGTH_SHORT).show()
+                                    }
+                                } else {
+                                    Toast.makeText(context, "Numero telefonico non disponibile", Toast.LENGTH_SHORT).show()
                                 }
-                                try { context.startActivity(intent) } catch (_: Exception) {}
                             },
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(12.dp)
@@ -407,11 +417,21 @@ fun OrderDetailSheet(
 
                         OutlinedButton(
                             onClick = {
-                                val intent = Intent(Intent.ACTION_SENDTO).apply {
-                                    data = Uri.parse("mailto:${order.customerEmail}")
-                                    putExtra(Intent.EXTRA_SUBJECT, "Riguardo il tuo ordine ${order.orderNumber} su OpenCart")
+                                val cleanEmail = order.customerEmail.trim()
+                                if (cleanEmail.isNotBlank() && cleanEmail.contains("@")) {
+                                    val emailIntent = Intent(Intent.ACTION_SENDTO).apply {
+                                        data = Uri.parse("mailto:${Uri.encode(cleanEmail)}")
+                                        putExtra(Intent.EXTRA_SUBJECT, "Assistenza Ordine ${order.orderNumber}")
+                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                    }
+                                    try {
+                                        context.startActivity(emailIntent)
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "Nessun client email disponibile sul dispositivo", Toast.LENGTH_SHORT).show()
+                                    }
+                                } else {
+                                    Toast.makeText(context, "Indirizzo email non valido o mancante", Toast.LENGTH_SHORT).show()
                                 }
-                                try { context.startActivity(intent) } catch (_: Exception) {}
                             },
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(12.dp)
