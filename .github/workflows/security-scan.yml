@@ -9,19 +9,18 @@ on:
     - cron: '30 2 * * 1' # Every Monday at 02:30 UTC
   workflow_dispatch:
 
-env:
-  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: "true"
-
 permissions:
-  actions: read
   contents: read
-  security-events: write
 
 jobs:
   codeql-analysis:
     name: CodeQL Code Analysis (Java / Kotlin)
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 60
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
 
     steps:
       - name: Checkout repository
@@ -54,12 +53,10 @@ jobs:
           if [ ! -f "debug.keystore" ]; then
             keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" -noprompt
           fi
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-            ./gradlew :app:compileDebugKotlin --no-daemon
-          else
-            gradle :app:compileDebugKotlin --no-daemon
-          fi
+          test -f ./gradlew
+          test -f gradle/wrapper/gradle-wrapper.jar
+          chmod +x ./gradlew
+          ./gradlew :app:compileDebugKotlin --no-daemon --stacktrace
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
@@ -161,7 +158,7 @@ jobs:
           unzip -t "$archive"
 
   dependency-review:
-    name: Dependency Review & Secrets Check
+    name: Dependency Review & Security Check
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     permissions:
@@ -172,6 +169,5 @@ jobs:
 
       - name: Dependency Review
         uses: actions/dependency-review-action@v4
-        continue-on-error: true
         with:
           fail-on-severity: high

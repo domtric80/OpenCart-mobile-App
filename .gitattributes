@@ -1,0 +1,12 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Explicitly declare binary files to prevent LF/CRLF and character corruption
+gradle/wrapper/gradle-wrapper.jar binary
+*.jar binary
+*.jks binary
+*.keystore binary
+*.zip binary
+*.png binary
+*.jpg binary
+*.webp binary
