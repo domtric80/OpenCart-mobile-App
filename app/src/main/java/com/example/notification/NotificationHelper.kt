@@ -3,7 +3,6 @@ package com.example.notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -55,15 +54,14 @@ object NotificationHelper {
     /**
      * Creates an explicitly targeted PendingIntent for MainActivity
      */
-    private fun createExplicitMainActivityPendingIntent(
+    internal fun createExplicitMainActivityPendingIntent(
         context: Context,
         requestCode: Int,
         action: String? = null,
         configureExtras: (Intent.() -> Unit)? = null
     ): PendingIntent {
         val intent = Intent().apply {
-            component = ComponentName(context.packageName, MainActivity::class.java.name)
-            setPackage(context.packageName)
+            setClassName(context.packageName, MainActivity::class.java.name)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             if (action != null) {
                 this.action = action
