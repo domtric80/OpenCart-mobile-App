@@ -2,6 +2,7 @@ package com.example.auth
 
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -84,8 +85,12 @@ fun AuthLockScreen(
             object : BiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                     super.onAuthenticationSucceeded(result)
-                    securityManager.recordSuccessfulAuth()
-                    onUnlockSuccess()
+                    if (securityManager.completeBiometricAuthentication(result.cryptoObject)) {
+                        securityManager.recordSuccessfulAuth()
+                        onUnlockSuccess()
+                    } else {
+                        errorMessage = "Verifica crittografica biometrica non riuscita. Usa la password."
+                    }
                 }
 
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
@@ -98,10 +103,16 @@ fun AuthLockScreen(
         val promptInfo = BiometricPrompt.PromptInfo.Builder()
             .setTitle("Sblocco CartAdmin")
             .setSubtitle("Autenticazione biometrica hardware richiesta")
+            .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
             .setNegativeButtonText("Usa password")
             .build()
 
-        prompt.authenticate(promptInfo)
+        val cryptoObject = securityManager.prepareBiometricCryptoObject()
+        if (cryptoObject == null) {
+            errorMessage = "Biometria hardware non disponibile. Usa la password."
+            return
+        }
+        prompt.authenticate(promptInfo, cryptoObject)
     }
 
     LaunchedEffect(Unit) {
