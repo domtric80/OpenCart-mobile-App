@@ -394,15 +394,9 @@ fun OrderDetailSheet(
                             onClick = {
                                 val cleanPhone = orderDetail.customerPhone.filter { it.isDigit() || it == '+' }
                                 if (cleanPhone.isNotBlank()) {
-                                    val dialIntent = ExplicitExternalIntentFactory.dial(context, cleanPhone)
-                                    if (dialIntent == null) {
+                                    val launched = ExplicitExternalIntentFactory.dial(context, cleanPhone)
+                                    if (!launched) {
                                         Toast.makeText(context, "Nessuna app di composizione telefonica disponibile", Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        try {
-                                            context.startActivity(dialIntent)
-                                        } catch (e: Exception) {
-                                            Toast.makeText(context, "Impossibile aprire l'app di composizione telefonica", Toast.LENGTH_SHORT).show()
-                                        }
                                     }
                                 } else {
                                     Toast.makeText(context, "Numero telefonico non disponibile", Toast.LENGTH_SHORT).show()
@@ -420,19 +414,13 @@ fun OrderDetailSheet(
                             onClick = {
                                 val cleanEmail = order.customerEmail.trim()
                                 if (cleanEmail.isNotBlank() && cleanEmail.contains("@")) {
-                                    val emailIntent = ExplicitExternalIntentFactory.email(
+                                    val launched = ExplicitExternalIntentFactory.email(
                                         context,
                                         cleanEmail,
                                         "Assistenza Ordine ${order.orderNumber}"
                                     )
-                                    if (emailIntent == null) {
+                                    if (!launched) {
                                         Toast.makeText(context, "Nessun client email disponibile sul dispositivo", Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        try {
-                                            context.startActivity(emailIntent)
-                                        } catch (e: Exception) {
-                                            Toast.makeText(context, "Impossibile aprire il client email", Toast.LENGTH_SHORT).show()
-                                        }
                                     }
                                 } else {
                                     Toast.makeText(context, "Indirizzo email non valido o mancante", Toast.LENGTH_SHORT).show()

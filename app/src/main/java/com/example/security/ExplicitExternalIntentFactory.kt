@@ -3,6 +3,7 @@ package com.example.security
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.ActivityNotFoundException
 import android.net.Uri
 import android.content.pm.PackageManager
 
@@ -12,14 +13,39 @@ import android.content.pm.PackageManager
  */
 object ExplicitExternalIntentFactory {
 
-    fun dial(context: Context, cleanPhone: String): Intent? {
-        val component = resolveHandler(context, Intent.ACTION_DIAL, "tel") ?: return null
-        return buildDialIntent(component, cleanPhone)
+    fun dial(context: Context, cleanPhone: String): Boolean {
+        val component = resolveHandler(context, Intent.ACTION_DIAL, "tel") ?: return false
+        val intent = Intent(Intent.ACTION_DIAL).apply {
+            setClassName(component.packageName, component.className)
+            data = Uri.fromParts("tel", cleanPhone, null)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        return try {
+            context.startActivity(intent)
+            true
+        } catch (_: ActivityNotFoundException) {
+            false
+        } catch (_: SecurityException) {
+            false
+        }
     }
 
-    fun email(context: Context, cleanEmail: String, subject: String): Intent? {
-        val component = resolveHandler(context, Intent.ACTION_SENDTO, "mailto") ?: return null
-        return buildEmailIntent(component, cleanEmail, subject)
+    fun email(context: Context, cleanEmail: String, subject: String): Boolean {
+        val component = resolveHandler(context, Intent.ACTION_SENDTO, "mailto") ?: return false
+        val intent = Intent(Intent.ACTION_SENDTO).apply {
+            setClassName(component.packageName, component.className)
+            data = Uri.fromParts("mailto", cleanEmail, null)
+            putExtra(Intent.EXTRA_SUBJECT, subject)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        return try {
+            context.startActivity(intent)
+            true
+        } catch (_: ActivityNotFoundException) {
+            false
+        } catch (_: SecurityException) {
+            false
+        }
     }
 
     private fun resolveHandler(context: Context, action: String, scheme: String): ComponentName? {
