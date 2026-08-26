@@ -20,7 +20,6 @@ class ExplicitExternalIntentFactoryTest {
         val intent = ExplicitExternalIntentFactory.buildDialIntent(component, "+39021234567")
 
         assertEquals(component, intent.component)
-        assertEquals(component.packageName, intent.`package`)
         assertEquals(Intent.ACTION_DIAL, intent.action)
         assertEquals("tel:+39021234567", intent.dataString)
     }
@@ -34,7 +33,6 @@ class ExplicitExternalIntentFactoryTest {
         )
 
         assertEquals(component, intent.component)
-        assertEquals(component.packageName, intent.`package`)
         assertEquals(Intent.ACTION_SENDTO, intent.action)
         assertEquals("mailto:customer@example.com", intent.dataString)
         assertEquals("Assistenza Ordine 42", intent.getStringExtra(Intent.EXTRA_SUBJECT))

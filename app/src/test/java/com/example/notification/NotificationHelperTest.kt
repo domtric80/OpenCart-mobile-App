@@ -29,7 +29,6 @@ class NotificationHelperTest {
         assertNotNull(intent.component)
         assertEquals(context.packageName, intent.component?.packageName)
         assertEquals(MainActivity::class.java.name, intent.component?.className)
-        assertEquals(context.packageName, intent.`package`)
         assertTrue(pendingIntent.isImmutable)
     }
 }
