@@ -693,7 +693,6 @@ fun ConfigScreen(
                                 val targetId = currentStore?.id ?: "store_${System.currentTimeMillis()}"
                                 onSaveStoreCredentials(targetId, storeName.ifBlank { "Mio Negozio OpenCart" }, storeUrl, apiUsername, apiKey, storeVersion)
                                 // Crittografa i parametri con il chip hardware (TEE / AndroidKeyStore)
-                                securityManager.saveEncryptedStoreCredentials("$storeUrl|$apiUsername|$apiKey")
                                 Toast.makeText(context, "Parametri salvati e sincronizzazione avviata!", Toast.LENGTH_SHORT).show()
                             },
                             modifier = Modifier

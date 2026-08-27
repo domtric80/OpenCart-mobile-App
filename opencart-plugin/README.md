@@ -1,33 +1,43 @@
-# CartAdmin Bridge Plugin per OpenCart 2.x, 3.x & 4.x
-**OpenCart ITALIA by SOLO SOLUZIONI** (https://www.solosoluzioni.it - https://www.opencartitalia.it)
+# CartAdmin Bridge Plugin per OpenCart
 
-Questo plugin abilita il collegamento bidirezionale e sicuro tra il tuo negozio OpenCart e l'applicazione mobile **CartAdmin Android**.
+Bridge HTTPS tra CartAdmin Android e OpenCart, sviluppato da SOLO SOLUZIONI per OpenCart ITALIA.
 
----
+## Requisiti di sicurezza
 
-## 🚀 Metodo 1: Installazione Rapida tramite Pannello OpenCart (OCMOD)
+- Il negozio deve essere raggiungibile esclusivamente tramite HTTPS con certificato valido.
+- Per una nuova installazione, crea dal pannello OpenCart un utente API dedicato, attivo e con una chiave casuale univoca.
+- Non inserire mai chiavi API in URL, screenshot, ticket o log.
+- L'endpoint non espone e non genera chiavi tramite richieste pubbliche.
 
-1. Scarica il file **`cartadmin-opencart-bridge.ocmod.zip`** dalla sezione [Releases](https://github.com) di questo repository.
-2. Accedi al pannello amministratore del tuo OpenCart (*Admin Panel*).
-3. Vai in **Estensioni > Programma di Installazione** (*Extensions > Installer*).
-4. Clicca su **Carica** (*Upload*) e seleziona il file `cartadmin-opencart-bridge.ocmod.zip`.
-5. Vai in **Estensioni > Modifiche** (*Extensions > Modifications*) e clicca sul pulsante arancione/blu **Aggiorna** (*Refresh*).
+Le chiavi bridge già configurate da versioni precedenti continuano a funzionare, ma è consigliata la loro rotazione dopo l'aggiornamento.
 
----
+## Installazione OCMOD
 
-## 🛠️ Metodo 2: Installazione Manuale via FTP / File Manager
+1. Scarica `cartadmin-opencart-bridge-<versione>.ocmod.zip` dalla sezione Releases del repository.
+2. Nel pannello OpenCart apri **Estensioni > Programma di installazione** e carica il pacchetto.
+3. Apri **Estensioni > Modifiche** e aggiorna la cache delle modifiche.
+4. Verifica che nella root OpenCart siano presenti `cartadmin_api.php` e `cartadmin_auth.php`.
 
-1. Estrai il contenuto del pacchetto.
-2. Carica il file `upload/cartadmin_api.php` nella directory principale (root) della tua installazione OpenCart (dove si trovano `config.php`, `index.php`, `admin/`, `catalog/`).
-3. Verifica i permessi del file (consigliato: `644`).
+## Installazione manuale
 
----
+1. Copia `upload/cartadmin_api.php` e `upload/cartadmin_auth.php` nella root di OpenCart, accanto a `config.php`.
+2. Imposta permessi restrittivi compatibili con il web server; normalmente `0644` per entrambi i file.
+3. Crea o seleziona un utente API dedicato dal pannello amministrativo OpenCart.
 
-## 🔑 Configurazione nell'App Android CartAdmin
+## Configurazione CartAdmin
 
-1. Apri l'app **CartAdmin** sul tuo smartphone o tablet Android.
-2. Vai nella schermata **Impostazioni** (icona ingranaggio o tocca la tua immagine profilo).
-3. Inserisci l'URL del tuo negozio (es. `https://tuonegozio.it`).
-4. Inserisci la **Chiave Segreta API**:
-   - Per visualizzare la chiave generata dal plugin, apri nel browser `https://tuonegozio.it/cartadmin_api.php?action=get_key_setup` (oppure definiscine una personalizzata).
-5. Tocca **Test API** e poi **Salva**. I tuoi ordini, prodotti e log di audit saranno sincronizzati istantaneamente in tempo reale con crittografia hardware!
+1. Apri **Impostazioni > Negozio** nell'app.
+2. Inserisci l'URL HTTPS dello store.
+3. Inserisci lo username e la chiave dell'utente API OpenCart dedicato.
+4. Tocca **Test API** e salva soltanto dopo una risposta valida.
+
+Le credenziali vengono inviate negli header `X-CartAdmin-User` e `X-CartAdmin-Key`; query string e form body non vengono accettati per l'autenticazione.
+
+## Aggiornamento di sicurezza
+
+Le versioni fino alla 1.2.5 esponevano un endpoint di provisioning pubblico. Dopo l'aggiornamento:
+
+1. sostituisci entrambi i file PHP;
+2. ruota la chiave API usata precedentemente;
+3. controlla i log web per richieste a `action=get_key_setup`;
+4. verifica gli utenti API OpenCart e disabilita quelli non riconosciuti.

@@ -11,6 +11,8 @@
  * - Strict regex allowlist validation on DB_PREFIX
  * - Centralized sendJson() function with secure encoding and error masking
  * - Zero reflection of arbitrary unvalidated input (Semgrep compliant)
+ * - Header-only credentials to prevent URL and form-data leakage
+ * - No unauthenticated provisioning or first-request key adoption
  * - Brute-force throttling (timed delay on unauthorized requests)
  * - Safe OpenCart root config.php loader
  * - Remote audit trail logging in 'cartadmin_audit' table
@@ -21,14 +23,13 @@ header('Content-Type: application/json; charset=UTF-8');
 header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: DENY');
 header('X-XSS-Protection: 1; mode=block');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-CartAdmin-Key, X-Requested-With');
+header('Cache-Control: no-store');
 
 if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit;
+    sendJson(['success' => false, 'error' => 'Metodo non consentito.'], 405);
 }
+
+require_once __DIR__ . '/cartadmin_auth.php';
 
 /**
  * Centralized secure JSON output handler
@@ -95,80 +96,18 @@ if ($resKey && $row = $resKey->fetch_assoc()) {
     $configuredKey = trim($row['value']);
 }
 
-// 6. Verifica Autenticazione Multi-Livello (Bridge Key, OpenCart API User Key, o Setup)
-$receivedKey = '';
-$receivedUsername = '';
-
-if (isset($_SERVER['HTTP_X_CARTADMIN_KEY']) && !empty(trim($_SERVER['HTTP_X_CARTADMIN_KEY']))) {
-    $receivedKey = trim($_SERVER['HTTP_X_CARTADMIN_KEY']);
-} elseif (isset($_REQUEST['api_key']) && !empty(trim($_REQUEST['api_key']))) {
-    $receivedKey = trim($_REQUEST['api_key']);
-} elseif (isset($_SERVER['HTTP_AUTHORIZATION']) && !empty(trim($_SERVER['HTTP_AUTHORIZATION']))) {
-    $receivedKey = trim(str_replace('Bearer ', '', $_SERVER['HTTP_AUTHORIZATION']));
-}
-
-if (isset($_REQUEST['username'])) {
-    $receivedUsername = trim($_REQUEST['username']);
-} elseif (isset($_SERVER['HTTP_X_CARTADMIN_USER'])) {
-    $receivedUsername = trim($_SERVER['HTTP_X_CARTADMIN_USER']);
-}
-
-// Supporto Setup / Inizializzazione Chiave API
-$isSetupCall = isset($_GET['action']) && $_GET['action'] === 'get_key_setup';
-if ($isSetupCall) {
-    if (empty($configuredKey)) {
-        $configuredKey = 'CARTADMIN_' . bin2hex(random_bytes(16));
-        $stmtInit = $mysqli->prepare("INSERT INTO `{$db_prefix}cartadmin_setting` (`key`, `value`, `date_updated`) VALUES ('api_key', ?, NOW()) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`), `date_updated` = NOW()");
-        if ($stmtInit) {
-            $stmtInit->bind_param('s', $configuredKey);
-            $stmtInit->execute();
-            $stmtInit->close();
-        }
-    }
-    sendJson([
-        'success' => true,
-        'plugin' => 'CartAdmin OpenCart Bridge',
-        'version' => '1.2.4',
-        'api_key' => $configuredKey,
-        'message' => 'Configura questa chiave nell\'App Android CartAdmin in Impostazioni > Negozio.'
-    ]);
-}
+// 6. Verifica autenticazione. Le credenziali in URL o nel form body non sono accettate.
+[$receivedKey, $receivedUsername] = cartadminExtractCredentials($_SERVER);
 
 $isAuthenticated = false;
 
-// Metodo A: Corrispondenza con la chiave specifica configurata in oc_cartadmin_setting
-if (!empty($configuredKey) && !empty($receivedKey) && hash_equals($configuredKey, $receivedKey)) {
+// Compatibilita con una chiave bridge configurata da una versione precedente.
+if (cartadminLegacyKeyMatches($configuredKey, $receivedKey)) {
     $isAuthenticated = true;
 }
 
-// Metodo B: Se oc_cartadmin_setting non ha ancora una chiave, associa la chiave inviata dall'app
-if (!$isAuthenticated && empty($configuredKey) && !empty($receivedKey)) {
-    $configuredKey = $receivedKey;
-    $stmtInitKey = $mysqli->prepare("INSERT INTO `{$db_prefix}cartadmin_setting` (`key`, `value`, `date_updated`) VALUES ('api_key', ?, NOW()) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`), `date_updated` = NOW()");
-    if ($stmtInitKey) {
-        $stmtInitKey->bind_param('s', $configuredKey);
-        $stmtInitKey->execute();
-        $stmtInitKey->close();
-    }
-    $isAuthenticated = true;
-}
-
-// Metodo C: Corrispondenza con la tabella nativa oc_api di OpenCart
-if (!$isAuthenticated && !empty($receivedKey)) {
-    $stmtApi = $mysqli->prepare("SELECT `api_id` FROM `{$db_prefix}api` WHERE `status` = 1 AND (`key` = ? OR `username` = ?) LIMIT 1");
-    if ($stmtApi) {
-        $stmtApi->bind_param('ss', $receivedKey, $receivedKey);
-        $stmtApi->execute();
-        $resApi = $stmtApi->get_result();
-        if ($resApi && $resApi->num_rows > 0) {
-            $isAuthenticated = true;
-        }
-        $stmtApi->close();
-    }
-}
-
-// Metodo D: Corrispondenza combinata username + key su oc_api
-if (!$isAuthenticated && !empty($receivedUsername) && !empty($receivedKey)) {
+// Nuove installazioni usano una coppia username/key creata nel pannello API nativo OpenCart.
+if (!$isAuthenticated && cartadminNativeCredentialsAreComplete($receivedUsername, $receivedKey)) {
     $stmtApiUser = $mysqli->prepare("SELECT `api_id` FROM `{$db_prefix}api` WHERE `status` = 1 AND `username` = ? AND `key` = ? LIMIT 1");
     if ($stmtApiUser) {
         $stmtApiUser->bind_param('ss', $receivedUsername, $receivedKey);
@@ -211,7 +150,7 @@ try {
             sendJson([
                 'success' => true,
                 'status' => 'online',
-                'bridge_version' => '1.2.4',
+                'bridge_version' => '1.2.6-dev',
                 'author' => 'SOLO SOLUZIONI (OpenCart ITALIA)',
                 'store_name' => $storeName,
                 'total_orders' => $totalOrders,

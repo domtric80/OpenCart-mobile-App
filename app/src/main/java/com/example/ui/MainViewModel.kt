@@ -27,6 +27,8 @@ import com.example.model.SubscriptionStatus
 import com.example.model.VisitorRealtimeStats
 import com.example.network.OpenCartApiClient
 import com.example.network.OpenCartConnectionResult
+import com.example.security.AndroidKeystoreCredentialProtector
+import com.example.security.CredentialProtectionException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -86,7 +88,8 @@ class MainViewModel(
 
     private val db = AppDatabase.getDatabase(application)
     private val apiClient = OpenCartApiClient(application)
-    private val repository = EcomRepository(db.storeProfileDao(), apiClient)
+    private val credentialProtector = AndroidKeystoreCredentialProtector(application)
+    private val repository = EcomRepository(db.storeProfileDao(), apiClient, credentialProtector)
     private val offlineOrderRepository = OfflineOrderRepository(db.orderDao())
     private val offlineCatalogRepository = OfflineCatalogRepository(db.productDao(), db.categoryDao())
     private val offlineAuditRepository = OfflineAuditRepository(db.auditLogDao())
@@ -108,7 +111,16 @@ class MainViewModel(
     init {
         viewModelScope.launch(Dispatchers.IO) {
             // Carica store salvati sul database Room
-            repository.loadPersistedStores()
+            try {
+                val migrated = repository.loadPersistedStores()
+                if (migrated && !db.sanitizeAfterCredentialMigration()) {
+                    _syncSuccessMessage.value =
+                        "Credenziali cifrate; pulizia delle pagine SQLite da ripetere."
+                }
+            } catch (error: CredentialProtectionException) {
+                _syncSuccessMessage.value =
+                    "Credenziali bloccate: il dispositivo richiede TEE o StrongBox funzionante."
+            }
 
             // Carica ordini locali cached dal DB Room
             val cachedOrders = db.orderDao().getAllOrders()
@@ -898,19 +910,31 @@ class MainViewModel(
         version: String
     ) {
         viewModelScope.launch(Dispatchers.IO) {
-            repository.updateStoreCredentials(storeId, name, url, username, key, version)
-            _syncSuccessMessage.value = "Parametri store salvati su memoria permanente!"
-            syncDataFromOpenCart(url, key, username)
+            try {
+                repository.updateStoreCredentials(storeId, name, url, username, key, version)
+                _syncSuccessMessage.value = "Parametri store cifrati nel chip hardware."
+                syncDataFromOpenCart(url, key, username)
+            } catch (_: CredentialProtectionException) {
+                _syncSuccessMessage.value =
+                    "Salvataggio rifiutato: TEE o StrongBox hardware non disponibile."
+            }
             kotlinx.coroutines.delay(2500)
             _syncSuccessMessage.value = null
         }
     }
 
-    fun addStore(name: String, url: String, version: String, username: String = "api_user", key: String = "api_key_secret") {
+    fun addStore(name: String, url: String, version: String, username: String = "", key: String = "") {
         viewModelScope.launch(Dispatchers.IO) {
-            repository.addStore(name, url, version, username, key)
-            _isStoreSwitcherOpen.value = false
-            syncDataFromOpenCart(url, key, username)
+            try {
+                repository.addStore(name, url, version, username, key)
+                _isStoreSwitcherOpen.value = false
+                if (username.isNotBlank() && key.isNotBlank()) {
+                    syncDataFromOpenCart(url, key, username)
+                }
+            } catch (_: CredentialProtectionException) {
+                _syncSuccessMessage.value =
+                    "Store non salvato: TEE o StrongBox hardware non disponibile."
+            }
         }
     }
 

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.data.local.dao.AuditLogDao
 import com.example.data.local.dao.CategoryDao
 import com.example.data.local.dao.OrderDao
@@ -47,6 +48,20 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun categoryDao(): CategoryDao
     abstract fun auditLogDao(): AuditLogDao
 
+    /**
+     * Removes plaintext remnants from SQLite free pages and the write-ahead log
+     * after the one-time credential migration.
+     */
+    fun sanitizeAfterCredentialMigration(): Boolean = runCatching {
+        val sqlite = openHelper.writableDatabase
+        sqlite.query("PRAGMA wal_checkpoint(TRUNCATE)").use { cursor ->
+            while (cursor.moveToNext()) {
+                // Consuming the result ensures the checkpoint has completed.
+            }
+        }
+        sqlite.execSQL("VACUUM")
+    }.isSuccess
+
     companion object {
         @Volatile
         private var INSTANCE: AppDatabase? = null
@@ -58,6 +73,16 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "opencart_admin_database"
                 )
+                    .addCallback(object : Callback() {
+                        override fun onOpen(db: SupportSQLiteDatabase) {
+                            super.onOpen(db)
+                            db.query("PRAGMA secure_delete=ON").use { cursor ->
+                                while (cursor.moveToNext()) {
+                                    // Consuming the result applies the connection-level setting.
+                                }
+                            }
+                        }
+                    })
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

@@ -55,8 +55,8 @@ class SecurityManager(private val context: Context) {
         private const val KEY_LAST_ACTIVE_TIME = "sec_vault_last_active_time"
         private const val KEY_PWD_CREATED_AT = "sec_vault_pwd_created_at"
         private const val KEY_BIOMETRIC_PREF = "sec_vault_biometric_enabled"
-        private const val KEY_ENCRYPTED_STORE_CREDS = "sec_vault_enc_store_creds"
-        private const val KEY_STORE_CREDS_IV = "sec_vault_store_creds_iv"
+        private const val LEGACY_KEY_ENCRYPTED_STORE_CREDS = "sec_vault_enc_store_creds"
+        private const val LEGACY_KEY_STORE_CREDS_IV = "sec_vault_store_creds_iv"
         private const val KEY_BIOMETRIC_PROOF = "sec_vault_biometric_proof"
         private const val KEY_BIOMETRIC_PROOF_IV = "sec_vault_biometric_proof_iv"
 
@@ -66,7 +66,7 @@ class SecurityManager(private val context: Context) {
         const val TIMEOUT_90_DAYS_MS = 90L * 24 * 60 * 60 * 1000
 
         private const val ANDROID_KEYSTORE = "AndroidKeyStore"
-        private const val KEYSTORE_ALIAS = "CartAdmin_HardwareMasterKey_v2"
+        private const val LEGACY_KEYSTORE_ALIAS = "CartAdmin_HardwareMasterKey_v2"
         private const val BIOMETRIC_KEYSTORE_ALIAS = "CartAdmin_BiometricProofKey_v1"
         private const val AES_GCM_NOPADDING = "AES/GCM/NoPadding"
         private const val GCM_TAG_LENGTH = 128
@@ -74,101 +74,22 @@ class SecurityManager(private val context: Context) {
     }
 
     init {
-        ensureHardwareMasterKey()
+        purgeLegacyCredentialCopy()
     }
 
-    /**
-     * Inizializza o recupera la chiave crittografica simmetrica AES-256 generata nel chip hardware sicuro (TEE/StrongBox).
-     */
-    private fun ensureHardwareMasterKey() {
+    private fun purgeLegacyCredentialCopy() {
+        prefs.edit()
+            .remove(LEGACY_KEY_ENCRYPTED_STORE_CREDS)
+            .remove(LEGACY_KEY_STORE_CREDS_IV)
+            .apply()
         try {
-            val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
-            if (!keyStore.containsAlias(KEYSTORE_ALIAS)) {
-                val keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
-                val keyGenSpecBuilder = KeyGenParameterSpec.Builder(
-                    KEYSTORE_ALIAS,
-                    KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
-                )
-                    .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                    .setKeySize(256)
-                    .setRandomizedEncryptionRequired(true)
-
-                keyGenerator.init(keyGenSpecBuilder.build())
-                keyGenerator.generateKey()
+            KeyStore.getInstance(ANDROID_KEYSTORE).apply {
+                load(null)
+                deleteEntry(LEGACY_KEYSTORE_ALIAS)
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
+        } catch (_: Exception) {
+            // The obsolete duplicate was never the authoritative credential store.
         }
-    }
-
-    private fun getSecretKey(): SecretKey? {
-        return try {
-            val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
-            keyStore.getKey(KEYSTORE_ALIAS, null) as? SecretKey
-        } catch (e: Exception) {
-            null
-        }
-    }
-
-    /**
-     * Cripta una stringa (es. token API OpenCart o credenziali) utilizzando la chiave hardware TEE/StrongBox AES-GCM.
-     */
-    fun encryptDataWithHardwareKey(plainText: String): Pair<String, String>? {
-        return try {
-            val secretKey = getSecretKey() ?: return null
-            val cipher = Cipher.getInstance(AES_GCM_NOPADDING)
-            cipher.init(Cipher.ENCRYPT_MODE, secretKey)
-            val iv = cipher.iv
-            val cipherText = cipher.doFinal(plainText.toByteArray(Charsets.UTF_8))
-            val base64CipherText = Base64.encodeToString(cipherText, Base64.NO_WRAP)
-            val base64Iv = Base64.encodeToString(iv, Base64.NO_WRAP)
-            Pair(base64CipherText, base64Iv)
-        } catch (e: Exception) {
-            e.printStackTrace()
-            null
-        }
-    }
-
-    /**
-     * Decripta i dati memorizzati con la chiave hardware AES-GCM.
-     */
-    fun decryptDataWithHardwareKey(base64CipherText: String, base64Iv: String): String? {
-        return try {
-            val secretKey = getSecretKey() ?: return null
-            val iv = Base64.decode(base64Iv, Base64.NO_WRAP)
-            val cipherText = Base64.decode(base64CipherText, Base64.NO_WRAP)
-            val cipher = Cipher.getInstance(AES_GCM_NOPADDING)
-            val spec = GCMParameterSpec(GCM_TAG_LENGTH, iv)
-            cipher.init(Cipher.DECRYPT_MODE, secretKey, spec)
-            val decryptedBytes = cipher.doFinal(cipherText)
-            String(decryptedBytes, Charsets.UTF_8)
-        } catch (e: Exception) {
-            e.printStackTrace()
-            null
-        }
-    }
-
-    /**
-     * Salva in modo cifrato su chip hardware le credenziali API dello store OpenCart
-     */
-    fun saveEncryptedStoreCredentials(payload: String) {
-        val encrypted = encryptDataWithHardwareKey(payload)
-        if (encrypted != null) {
-            prefs.edit()
-                .putString(KEY_ENCRYPTED_STORE_CREDS, encrypted.first)
-                .putString(KEY_STORE_CREDS_IV, encrypted.second)
-                .apply()
-        }
-    }
-
-    /**
-     * Recupera e decifra con il chip hardware le credenziali memorizzate
-     */
-    fun getDecryptedStoreCredentials(): String? {
-        val cipherText = prefs.getString(KEY_ENCRYPTED_STORE_CREDS, null) ?: return null
-        val iv = prefs.getString(KEY_STORE_CREDS_IV, null) ?: return null
-        return decryptDataWithHardwareKey(cipherText, iv)
     }
 
     /**
@@ -400,8 +321,23 @@ class SecurityManager(private val context: Context) {
         val savedHash = prefs.getString(KEY_PWD_HASH, null) ?: return false
         val savedSalt = prefs.getString(KEY_PWD_SALT, null) ?: return false
 
-        val inputHash = hashPassword(password, savedSalt)
-        if (savedHash == inputHash) {
+        val passwordChars = password.toCharArray()
+        val isModernHash = PasswordHasher.isModernHash(savedHash)
+        val isValid = if (isModernHash) {
+            PasswordHasher.verify(passwordChars, savedSalt, savedHash)
+        } else {
+            PasswordHasher.verifyLegacySha256(passwordChars, savedSalt, savedHash)
+        }
+        passwordChars.fill('\u0000')
+
+        if (isValid) {
+            if (!isModernHash) {
+                val migratedSalt = generateSalt()
+                prefs.edit()
+                    .putString(KEY_PWD_SALT, migratedSalt)
+                    .putString(KEY_PWD_HASH, hashPassword(password, migratedSalt))
+                    .apply()
+            }
             recordSuccessfulAuth()
             return true
         }
@@ -486,10 +422,12 @@ class SecurityManager(private val context: Context) {
     }
 
     private fun hashPassword(password: String, salt: String): String {
-        val md = MessageDigest.getInstance("SHA-256")
-        val bytes = "$password:$salt".toByteArray(Charsets.UTF_8)
-        val digest = md.digest(bytes)
-        return digest.joinToString("") { "%02x".format(it) }
+        val passwordChars = password.toCharArray()
+        return try {
+            PasswordHasher.hash(passwordChars, salt)
+        } finally {
+            passwordChars.fill('\u0000')
+        }
     }
 }
 
