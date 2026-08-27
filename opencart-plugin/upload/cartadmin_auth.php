@@ -31,12 +31,19 @@ function cartadminExtractCredentials(array $server): array {
     return [$key, $username];
 }
 
-function cartadminLegacyKeyMatches(string $configuredKey, string $receivedKey): bool {
-    return $configuredKey !== ''
-        && $receivedKey !== ''
-        && hash_equals($configuredKey, $receivedKey);
+function cartadminHashToken(string $token): string {
+    $algorithm = defined('PASSWORD_ARGON2ID') ? PASSWORD_ARGON2ID : PASSWORD_DEFAULT;
+    $hash = password_hash($token, $algorithm);
+
+    if (!is_string($hash) || $hash === '') {
+        throw new RuntimeException('Impossibile proteggere il token CartAdmin.');
+    }
+
+    return $hash;
 }
 
-function cartadminNativeCredentialsAreComplete(string $username, string $key): bool {
-    return $username !== '' && $key !== '';
+function cartadminTokenMatches(string $configuredHash, string $receivedToken): bool {
+    return $configuredHash !== ''
+        && $receivedToken !== ''
+        && password_verify($receivedToken, $configuredHash);
 }

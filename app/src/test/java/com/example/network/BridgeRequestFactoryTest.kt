@@ -29,6 +29,7 @@ class BridgeRequestFactoryTest {
         assertNull(request.url.queryParameter("username"))
         assertFalse(request.url.toString().contains("secret-key-value"))
         assertTrue(request.url.isHttps)
+        assertEquals("/opencart/extension/cartadmin/cartadmin_api.php", request.url.encodedPath)
     }
 
     @Test

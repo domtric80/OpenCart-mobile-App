@@ -269,7 +269,7 @@ fun ConfigScreen(
                                     )
                                 }
                                 Text(
-                                    text = "MODULO PHP INTEGRATO NELL'APP",
+                                    text = "ESTENSIONE OPENCART 4.1",
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 11.sp,
@@ -297,7 +297,7 @@ fun ConfigScreen(
                         }
 
                         Text(
-                            text = "Modulo Bridge 'cartadmin_api.php'",
+                            text = "CartAdmin Bridge",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp
@@ -306,7 +306,7 @@ fun ConfigScreen(
                         )
 
                         Text(
-                            text = "Questo modulo risolve i limiti delle API native di OpenCart: elimina il blocco dell'IP fisso e abilita la modifica immediata dello stato ordini e l'aggiornamento del magazzino da smartphone.",
+                            text = "Installa e configura il bridge dal pannello OpenCart. Il token viene mostrato una sola volta e nel database resta soltanto un hash non reversibile.",
                             style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, lineHeight = 17.sp),
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -326,7 +326,7 @@ fun ConfigScreen(
                             Icon(Icons.Default.Code, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Visualizza, Copia & Scarica Modulo",
+                                text = "Installa e configura il bridge",
                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
                             )
                         }
@@ -626,7 +626,7 @@ fun ConfigScreen(
                     OutlinedTextField(
                         value = apiUsername,
                         onValueChange = { apiUsername = it },
-                        label = { Text("Nome Utente API (OpenCart Admin > Users > API)") },
+                        label = { Text("Nome operatore (audit) / utente API nativa") },
                         leadingIcon = {
                             Icon(Icons.Default.Store, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         },
@@ -638,7 +638,7 @@ fun ConfigScreen(
                     OutlinedTextField(
                         value = apiKey,
                         onValueChange = { apiKey = it },
-                        label = { Text("Chiave Segreta API / Token OpenCart") },
+                        label = { Text("Token CartAdmin Bridge / chiave API nativa") },
                         leadingIcon = {
                             Icon(Icons.Default.Key, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         },
@@ -839,8 +839,8 @@ fun ConfigScreen(
 
                             GuideStepItem(
                                 stepNumber = "A",
-                                title = "Metodo Modulo Bridge (Consigliato al 100%)",
-                                description = "Clicca su 'Visualizza, Copia & Scarica Modulo' sopra, inserisci il file cartadmin_api.php nella cartella root del tuo sito OpenCart e inserisci qui la chiave segreta."
+                                title = "Metodo CartAdmin Bridge (consigliato)",
+                                description = "Installa cartadmin.ocmod.zip, apri CartAdmin Bridge nel pannello OpenCart e genera il token. Non modificare file PHP manualmente."
                             )
 
                             GuideStepItem(
@@ -1316,13 +1316,7 @@ fun ConfigScreen(
 
         // OpenCart Module Viewer Modal Sheet
         if (showModuleSheet) {
-            OpenCartModuleSheet(
-                currentApiKey = apiKey,
-                onDismiss = { showModuleSheet = false },
-                onApiKeyGenerated = { newKey ->
-                    apiKey = newKey
-                }
-            )
+            OpenCartModuleSheet(onDismiss = { showModuleSheet = false })
         }
     }
 }

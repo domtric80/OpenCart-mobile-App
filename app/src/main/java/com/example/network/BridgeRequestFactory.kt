@@ -14,7 +14,7 @@ internal object BridgeRequestFactory {
         username: String = "",
         queryParameters: Map<String, String> = emptyMap()
     ): Request {
-        require(apiKey.isNotBlank()) { "La chiave API non può essere vuota" }
+        require(apiKey.isNotBlank()) { "Il token CartAdmin non può essere vuoto" }
         require(action.matches(Regex("[a-z_]+"))) { "Azione bridge non valida" }
         require(queryParameters.keys.none { it.equals("api_key", true) || it.equals("username", true) }) {
             "Le credenziali non possono essere inserite nella URL"
@@ -63,7 +63,7 @@ internal object BridgeRequestFactory {
         apiKey: String,
         username: String = ""
     ): Request.Builder {
-        require(apiKey.isNotBlank()) { "La chiave API non può essere vuota" }
+        require(apiKey.isNotBlank()) { "Il token CartAdmin non può essere vuoto" }
         return builder
             .header("X-CartAdmin-Key", apiKey)
             .apply {
@@ -77,7 +77,7 @@ internal object BridgeRequestFactory {
 
     private fun bridgeEndpoint(baseUrl: String) = baseUrl.trim().removeSuffix("/").let {
         val normalized = if (it.startsWith("http://") || it.startsWith("https://")) it else "https://$it"
-        val endpoint = "$normalized/cartadmin_api.php".toHttpUrlOrNull()
+        val endpoint = "$normalized/extension/cartadmin/cartadmin_api.php".toHttpUrlOrNull()
             ?: throw IllegalArgumentException("URL OpenCart non valida")
         require(endpoint.isHttps) { "CartAdmin richiede HTTPS" }
         require(endpoint.username.isEmpty() && endpoint.password.isEmpty()) {

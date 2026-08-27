@@ -43,7 +43,7 @@ class OpenCartApiClient(context: Context) {
 
     /**
      * Test connection to OpenCart store:
-     * 1. Checks for CartAdmin Bridge script (cartadmin_api.php?action=status)
+     * 1. Checks the CartAdmin Bridge extension endpoint.
      * 2. If not present, checks standard OpenCart API (index.php?route=api/login)
      */
     suspend fun testConnection(
@@ -156,7 +156,7 @@ class OpenCartApiClient(context: Context) {
                             statusCode = code,
                             responseTimeMs = duration,
                             message = "OpenCart API errore: $errorMsg",
-                            details = "Consiglio: Installa l'estensione cartadmin_api.php per bypassare il blocco IP dinamico di OpenCart."
+                            details = "Consiglio: installa e configura CartAdmin Bridge dal pannello OpenCart."
                         )
                     }
 
@@ -173,7 +173,7 @@ class OpenCartApiClient(context: Context) {
                         statusCode = code,
                         responseTimeMs = duration,
                         message = "Errore HTTP $code dal server OpenCart.",
-                        details = "Carica il file cartadmin_api.php nella cartella principale del tuo OpenCart oppure verifica i permessi API."
+                        details = "Installa cartadmin.ocmod.zip dal pannello OpenCart oppure verifica i permessi API."
                     )
                 }
             }
@@ -646,7 +646,7 @@ class OpenCartApiClient(context: Context) {
             cleanUrl = "https://$cleanUrl"
         }
 
-        val bridgeUrl = "$cleanUrl/cartadmin_api.php?action=audit_log"
+        val bridgeUrl = "$cleanUrl/extension/cartadmin/cartadmin_api.php?action=audit_log"
         val payload = JSONObject().apply {
             put("action_type", actionType)
             put("description", description)

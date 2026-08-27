@@ -1,12 +1,12 @@
 <?php
 /**
- * CartAdmin Mobile Bridge Plugin for OpenCart 2.x, 3.x & 4.x
+ * CartAdmin Mobile Bridge Plugin for OpenCart 4.1.x
  * Developed by SOLO SOLUZIONI - Official OpenCart ITALIA Partner (https://www.solosoluzioni.it)
  * 
  * Enterprise-grade secure API endpoint and webhook receiver for CartAdmin Android App.
  *
  * Security measures:
- * - Constant-time API Key verification with hash_equals()
+ * - Non-reversible Argon2id/bcrypt token hashing in the OpenCart database
  * - SQL Injection prevention via MySQLi prepared statements (all parameters including LIMIT bound)
  * - Strict regex allowlist validation on DB_PREFIX
  * - Centralized sendJson() function with secure encoding and error masking
@@ -89,42 +89,42 @@ $mysqli->query("CREATE TABLE IF NOT EXISTS `{$db_prefix}cartadmin_audit` (
     INDEX `idx_timestamp` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-// 5. Recupero Chiave API configurata
-$resKey = $mysqli->query("SELECT `value` FROM `{$db_prefix}cartadmin_setting` WHERE `key` = 'api_key' LIMIT 1");
-$configuredKey = '';
+// 5. Recupero dell'hash del token configurato dal pannello amministrativo.
+$resKey = $mysqli->query("SELECT `value` FROM `{$db_prefix}cartadmin_setting` WHERE `key` = 'token_hash' LIMIT 1");
+$configuredHash = '';
 if ($resKey && $row = $resKey->fetch_assoc()) {
-    $configuredKey = trim($row['value']);
+    $configuredHash = trim($row['value']);
+}
+
+// Migrazione una tantum: trasforma l'eventuale vecchio token in chiaro in un hash
+// non reversibile e rimuove immediatamente il valore precedente dal database.
+if ($configuredHash === '') {
+    $resLegacy = $mysqli->query("SELECT `value` FROM `{$db_prefix}cartadmin_setting` WHERE `key` = 'api_key' LIMIT 1");
+    $legacyToken = ($resLegacy && $row = $resLegacy->fetch_assoc()) ? trim($row['value']) : '';
+
+    if ($legacyToken !== '') {
+        $configuredHash = cartadminHashToken($legacyToken);
+        $stmtMigrate = $mysqli->prepare("INSERT INTO `{$db_prefix}cartadmin_setting` (`key`, `value`, `date_updated`) VALUES ('token_hash', ?, NOW()) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`), `date_updated` = NOW()");
+
+        if ($stmtMigrate) {
+            $stmtMigrate->bind_param('s', $configuredHash);
+            $stmtMigrate->execute();
+            $stmtMigrate->close();
+            $mysqli->query("DELETE FROM `{$db_prefix}cartadmin_setting` WHERE `key` = 'api_key'");
+        }
+    }
 }
 
 // 6. Verifica autenticazione. Le credenziali in URL o nel form body non sono accettate.
 [$receivedKey, $receivedUsername] = cartadminExtractCredentials($_SERVER);
 
-$isAuthenticated = false;
-
-// Compatibilita con una chiave bridge configurata da una versione precedente.
-if (cartadminLegacyKeyMatches($configuredKey, $receivedKey)) {
-    $isAuthenticated = true;
-}
-
-// Nuove installazioni usano una coppia username/key creata nel pannello API nativo OpenCart.
-if (!$isAuthenticated && cartadminNativeCredentialsAreComplete($receivedUsername, $receivedKey)) {
-    $stmtApiUser = $mysqli->prepare("SELECT `api_id` FROM `{$db_prefix}api` WHERE `status` = 1 AND `username` = ? AND `key` = ? LIMIT 1");
-    if ($stmtApiUser) {
-        $stmtApiUser->bind_param('ss', $receivedUsername, $receivedKey);
-        $stmtApiUser->execute();
-        $resApiUser = $stmtApiUser->get_result();
-        if ($resApiUser && $resApiUser->num_rows > 0) {
-            $isAuthenticated = true;
-        }
-        $stmtApiUser->close();
-    }
-}
+$isAuthenticated = cartadminTokenMatches($configuredHash, $receivedKey);
 
 if (!$isAuthenticated) {
     usleep(200000); // 200ms anti-bruteforce delay
     sendJson([
         'success' => false,
-        'error' => 'Non autorizzato. Chiave API OpenCart non valida o mancante.',
+        'error' => 'Non autorizzato. Token CartAdmin non valido, mancante o non ancora configurato dal pannello OpenCart.',
         'code' => 401
     ], 401);
 }
@@ -150,7 +150,7 @@ try {
             sendJson([
                 'success' => true,
                 'status' => 'online',
-                'bridge_version' => '1.2.6-dev',
+                'bridge_version' => '1.2.6-dev.1',
                 'author' => 'SOLO SOLUZIONI (OpenCart ITALIA)',
                 'store_name' => $storeName,
                 'total_orders' => $totalOrders,

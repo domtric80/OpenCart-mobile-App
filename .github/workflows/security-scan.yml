@@ -85,9 +85,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -f opencart-plugin/install.xml
+          test -f opencart-plugin/install.json
           test -f opencart-plugin/upload/cartadmin_api.php
           test -f opencart-plugin/upload/cartadmin_auth.php
+          test -f opencart-plugin/admin/controller/module/cartadmin.php
+          test -f opencart-plugin/admin/model/module/cartadmin.php
           test -f opencart-plugin/tests/auth_test.php
 
       - name: Validate PHP syntax
@@ -106,16 +108,20 @@ jobs:
       - name: Run bridge authentication regression tests
         run: php opencart-plugin/tests/auth_test.php
 
-      - name: Validate OCMOD manifest XML
+      - name: Validate OpenCart 4 manifest JSON
         shell: bash
         run: |
           set -euo pipefail
-          python3 - opencart-plugin/install.xml <<'PY'
+          python3 - opencart-plugin/install.json <<'PY'
+          import json
           import sys
-          import xml.etree.ElementTree as ET
 
-          ET.parse(sys.argv[1])
-          print(f"Valid XML: {sys.argv[1]}")
+          with open(sys.argv[1], encoding="utf-8") as manifest_file:
+              manifest = json.load(manifest_file)
+          for field in ("name", "description", "version", "author", "link"):
+              if not manifest.get(field):
+                  raise SystemExit(f"Missing install.json field: {field}")
+          print(f"Valid OpenCart 4 manifest: {sys.argv[1]}")
           PY
 
       - name: Set up Python for Semgrep
@@ -145,16 +151,20 @@ jobs:
           mkdir -p validation-assets
           (
             cd opencart-plugin
-            zip -q -r ../validation-assets/cartadmin-opencart-bridge.ocmod.zip install.xml upload/ README.md
+            zip -q -r ../validation-assets/cartadmin.ocmod.zip install.json admin/ README.md
+            cd upload
+            zip -q -j ../../validation-assets/cartadmin.ocmod.zip cartadmin_api.php cartadmin_auth.php
           )
 
-          archive="validation-assets/cartadmin-opencart-bridge.ocmod.zip"
+          archive="validation-assets/cartadmin.ocmod.zip"
           entries="$(unzip -Z1 "$archive")"
           printf '%s\n' "$entries"
 
-          grep -Fxq 'install.xml' <<<"$entries"
-          grep -Fxq 'upload/cartadmin_api.php' <<<"$entries"
-          grep -Fxq 'upload/cartadmin_auth.php' <<<"$entries"
+          grep -Fxq 'install.json' <<<"$entries"
+          grep -Fxq 'cartadmin_api.php' <<<"$entries"
+          grep -Fxq 'cartadmin_auth.php' <<<"$entries"
+          grep -Fxq 'admin/controller/module/cartadmin.php' <<<"$entries"
+          grep -Fxq 'admin/model/module/cartadmin.php' <<<"$entries"
 
           if grep -Eq '(^/|(^|/)\.\.(/|$)|\\)' <<<"$entries"; then
             echo "::error::Unsafe path found in OCMOD archive."

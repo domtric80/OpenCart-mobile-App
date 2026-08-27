@@ -168,13 +168,18 @@ jobs:
 
           (
             cd opencart-plugin
-            zip -q -r "../release-assets/cartadmin-opencart-bridge-v${VERSION}.ocmod.zip" install.xml upload/ README.md
+            zip -q -r "../release-assets/cartadmin.ocmod.zip" install.json admin/ README.md
+            cd upload
+            zip -q -j "../../release-assets/cartadmin.ocmod.zip" cartadmin_api.php cartadmin_auth.php
           )
 
-          unzip -t "release-assets/cartadmin-opencart-bridge-v${VERSION}.ocmod.zip"
-          entries="$(unzip -Z1 "release-assets/cartadmin-opencart-bridge-v${VERSION}.ocmod.zip")"
-          grep -Fxq 'upload/cartadmin_api.php' <<<"$entries"
-          grep -Fxq 'upload/cartadmin_auth.php' <<<"$entries"
+          unzip -t "release-assets/cartadmin.ocmod.zip"
+          entries="$(unzip -Z1 "release-assets/cartadmin.ocmod.zip")"
+          grep -Fxq 'install.json' <<<"$entries"
+          grep -Fxq 'cartadmin_api.php' <<<"$entries"
+          grep -Fxq 'cartadmin_auth.php' <<<"$entries"
+          grep -Fxq 'admin/controller/module/cartadmin.php' <<<"$entries"
+          grep -Fxq 'admin/model/module/cartadmin.php' <<<"$entries"
 
       - name: Upload Build Artifacts (CI)
         uses: actions/upload-artifact@v7
@@ -207,7 +212,7 @@ jobs:
         run: |
           set -euo pipefail
           APK_PATH="release-assets/CartAdmin-v${VERSION}.apk"
-          PLUGIN_PATH="release-assets/cartadmin-opencart-bridge-v${VERSION}.ocmod.zip"
+          PLUGIN_PATH="release-assets/cartadmin.ocmod.zip"
           RELEASE_TITLE="CartAdmin ${TAG_NAME} — OpenCart ITALIA by SOLO SOLUZIONI"
           RELEASE_FLAGS=(--latest)
 
@@ -235,16 +240,18 @@ jobs:
           - migrazione dei dati Room precedentemente in chiaro e bonifica del database SQLite;
           - migrazione delle password locali a PBKDF2;
           - regole di backup Android aggiornate per escludere dati sensibili.
+          - pacchetto installabile da OpenCart 4.1.x con `install.json` e configurazione dal pannello amministrativo;
+          - token bridge mostrato una sola volta e memorizzato nel database esclusivamente come hash non reversibile Argon2id/bcrypt;
+          - rimosso dall'app il generatore PHP che incorporava il token in un file.
 
           ### Artefatti
 
           - [CartAdmin-v${VERSION}.apk](https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/CartAdmin-v${VERSION}.apk) — APK release firmato dal workflow GitHub Actions;
-          - [cartadmin-opencart-bridge-v${VERSION}.ocmod.zip](https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/cartadmin-opencart-bridge-v${VERSION}.ocmod.zip) — bridge per OpenCart 3.x e 4.x.
+          - [cartadmin.ocmod.zip](https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/cartadmin.ocmod.zip) — estensione per OpenCart 4.1.x.
 
           ### Verifiche eseguite
 
           - build release, test unitari e Android Lint nel workflow;
-          - 22 test unitari e 3 test strumentali superati localmente su emulatore Pixel 8 / Android 16 (API 36);
           - contenuto del pacchetto OCMOD validato dal workflow.
 
           Rimane obbligatoria la prova su dispositivo fisico con TEE o StrongBox. L'aggiornamento diretto funziona solo se l'app già installata è firmata con la stessa chiave di rilascio.
@@ -256,7 +263,7 @@ jobs:
           ### Artefatti
 
           - [CartAdmin-v${VERSION}.apk](https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/CartAdmin-v${VERSION}.apk) — APK release firmato dal workflow GitHub Actions;
-          - [cartadmin-opencart-bridge-v${VERSION}.ocmod.zip](https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/cartadmin-opencart-bridge-v${VERSION}.ocmod.zip) — bridge per OpenCart 3.x e 4.x.
+          - [cartadmin.ocmod.zip](https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/cartadmin.ocmod.zip) — estensione per OpenCart 4.1.x.
 
           Build, test unitari, compilazione dei test strumentali, Android Lint e struttura del pacchetto OCMOD sono stati verificati dal workflow di pubblicazione.
           EOF
