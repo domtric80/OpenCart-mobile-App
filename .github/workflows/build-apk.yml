@@ -92,6 +92,9 @@ jobs:
         run: |
           touch .env
           echo "DUMMY_KEY=default" > .env
+          test -f ./gradlew
+          test -f gradle/wrapper/gradle-wrapper.jar
+          chmod +x ./gradlew
           mkdir -p ~/.android
           if [ ! -f "debug.keystore" ]; then
             keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" -noprompt
@@ -102,9 +105,6 @@ jobs:
         env:
           GRADLE_OPTS: "-Djava.awt.headless=true -Dorg.gradle.jvmargs=\"-Xmx4g -Dfile.encoding=UTF-8 -Djava.awt.headless=true\""
         run: |
-          test -f ./gradlew
-          test -f gradle/wrapper/gradle-wrapper.jar
-          chmod +x ./gradlew
           ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
       - name: Run Android Verification Gates
@@ -139,9 +139,6 @@ jobs:
           export KEY_ALIAS="$RELEASE_KEY_ALIAS"
           export KEY_PASSWORD="$RELEASE_KEY_PASSWORD"
 
-          test -f ./gradlew
-          test -f gradle/wrapper/gradle-wrapper.jar
-          chmod +x ./gradlew
           ./gradlew :app:assembleRelease --no-daemon --stacktrace
 
       - name: Prepare Artifacts (APK & OpenCart Plugin)
