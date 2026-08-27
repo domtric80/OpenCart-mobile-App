@@ -13,6 +13,8 @@ import com.example.model.Store
 import com.example.model.VisitorRealtimeStats
 import com.example.network.OpenCartApiClient
 import com.example.network.OpenCartConnectionResult
+import com.example.security.CredentialField
+import com.example.security.CredentialProtector
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,7 +22,8 @@ import kotlinx.coroutines.flow.update
 
 class EcomRepository(
     private val storeProfileDao: StoreProfileDao? = null,
-    private val apiClient: OpenCartApiClient
+    private val apiClient: OpenCartApiClient,
+    private val credentialProtector: CredentialProtector
 ) {
 
     private val _stores = MutableStateFlow<List<Store>>(emptyList())
@@ -65,18 +68,50 @@ class EcomRepository(
     )
     val visitorStats: StateFlow<VisitorRealtimeStats> = _visitorStats.asStateFlow()
 
-    suspend fun loadPersistedStores() {
-        val dao = storeProfileDao ?: return
+    suspend fun loadPersistedStores(): Boolean {
+        val dao = storeProfileDao ?: return false
         val entities = dao.getAllStores()
+        var credentialsMigrated = false
         if (entities.isNotEmpty()) {
-            val domainStores = entities.map { entity ->
+            val revealedStores = entities.map { entity ->
+                val username = credentialProtector.reveal(
+                    entity.id,
+                    CredentialField.API_USERNAME,
+                    entity.adminUsername
+                )
+                val apiKey = credentialProtector.reveal(
+                    entity.id,
+                    CredentialField.API_KEY,
+                    entity.apiKey
+                )
+
+                if (username.requiresMigration || apiKey.requiresMigration) {
+                    dao.updateProtectedCredentials(
+                        storeId = entity.id,
+                        protectedUsername = credentialProtector.protect(
+                            entity.id,
+                            CredentialField.API_USERNAME,
+                            username.value
+                        ),
+                        protectedApiKey = credentialProtector.protect(
+                            entity.id,
+                            CredentialField.API_KEY,
+                            apiKey.value
+                        )
+                    )
+                    credentialsMigrated = true
+                }
+
+                Triple(entity, username.value, apiKey.value)
+            }
+            val domainStores = revealedStores.map { (entity, username, apiKey) ->
                 Store(
                     id = entity.id,
                     name = entity.name,
                     url = entity.url,
                     version = entity.openCartVersion,
-                    apiUsername = entity.adminUsername,
-                    apiKey = entity.apiKey,
+                    apiUsername = username,
+                    apiKey = apiKey,
                     todayRevenue = 0.0,
                     revenueGrowthPercent = 0.0,
                     pendingOrdersCount = 0,
@@ -91,6 +126,7 @@ class EcomRepository(
             _stores.value = emptyList()
             _currentStoreId.value = ""
         }
+        return credentialsMigrated
     }
 
     suspend fun testStoreConnection(url: String, username: String, key: String): OpenCartConnectionResult {
@@ -117,22 +153,26 @@ class EcomRepository(
             lastSyncTime = "Proprio adesso"
         )
 
-        _stores.update { it + newStore }
-        _currentStoreId.value = newId
-
         storeProfileDao?.insertOrUpdate(
             StoreProfileEntity(
                 id = newId,
                 name = newStore.name,
                 url = newStore.url,
-                apiKey = key,
-                adminUsername = username,
+                apiKey = credentialProtector.protect(newId, CredentialField.API_KEY, key),
+                adminUsername = credentialProtector.protect(
+                    newId,
+                    CredentialField.API_USERNAME,
+                    username
+                ),
                 isPrimary = _stores.value.size == 1,
                 isActive = true,
                 lastSyncTimestamp = System.currentTimeMillis(),
                 openCartVersion = newStore.version
             )
         )
+
+        _stores.update { it + newStore }
+        _currentStoreId.value = newId
 
         return newStore
     }
@@ -145,6 +185,27 @@ class EcomRepository(
         key: String,
         version: String
     ) {
+        val protectedApiKey = credentialProtector.protect(storeId, CredentialField.API_KEY, key)
+        val protectedUsername = credentialProtector.protect(
+            storeId,
+            CredentialField.API_USERNAME,
+            username
+        )
+
+        storeProfileDao?.insertOrUpdate(
+            StoreProfileEntity(
+                id = storeId,
+                name = name,
+                url = url,
+                apiKey = protectedApiKey,
+                adminUsername = protectedUsername,
+                isPrimary = true,
+                isActive = true,
+                lastSyncTimestamp = System.currentTimeMillis(),
+                openCartVersion = version
+            )
+        )
+
         _stores.update { list ->
             list.map { s ->
                 if (s.id == storeId) {
@@ -160,19 +221,6 @@ class EcomRepository(
             }
         }
 
-        storeProfileDao?.insertOrUpdate(
-            StoreProfileEntity(
-                id = storeId,
-                name = name,
-                url = url,
-                apiKey = key,
-                adminUsername = username,
-                isPrimary = true,
-                isActive = true,
-                lastSyncTimestamp = System.currentTimeMillis(),
-                openCartVersion = version
-            )
-        )
     }
 
     suspend fun deleteStore(storeId: String) {

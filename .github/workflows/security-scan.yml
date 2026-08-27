@@ -32,10 +32,10 @@ jobs:
           languages: 'java-kotlin'
           queries: security-extended
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v6
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
 
       - name: Setup Gradle
@@ -87,6 +87,8 @@ jobs:
           set -euo pipefail
           test -f opencart-plugin/install.xml
           test -f opencart-plugin/upload/cartadmin_api.php
+          test -f opencart-plugin/upload/cartadmin_auth.php
+          test -f opencart-plugin/tests/auth_test.php
 
       - name: Validate PHP syntax
         shell: bash
@@ -100,6 +102,9 @@ jobs:
           for php_file in "${php_files[@]}"; do
             php -l "$php_file"
           done
+
+      - name: Run bridge authentication regression tests
+        run: php opencart-plugin/tests/auth_test.php
 
       - name: Validate OCMOD manifest XML
         shell: bash
@@ -149,6 +154,7 @@ jobs:
 
           grep -Fxq 'install.xml' <<<"$entries"
           grep -Fxq 'upload/cartadmin_api.php' <<<"$entries"
+          grep -Fxq 'upload/cartadmin_auth.php' <<<"$entries"
 
           if grep -Eq '(^/|(^|/)\.\.(/|$)|\\)' <<<"$entries"; then
             echo "::error::Unsafe path found in OCMOD archive."

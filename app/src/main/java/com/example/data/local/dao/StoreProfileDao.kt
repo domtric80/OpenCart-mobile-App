@@ -29,6 +29,16 @@ interface StoreProfileDao {
     @Update
     suspend fun update(store: StoreProfileEntity)
 
+    @Query(
+        "UPDATE store_profiles SET apiKey = :protectedApiKey, " +
+            "adminUsername = :protectedUsername WHERE id = :storeId"
+    )
+    suspend fun updateProtectedCredentials(
+        storeId: String,
+        protectedUsername: String,
+        protectedApiKey: String
+    )
+
     @Query("UPDATE store_profiles SET isPrimary = CASE WHEN id = :storeId THEN 1 ELSE 0 END")
     suspend fun setPrimaryStore(storeId: String)
 

@@ -1,5 +1,7 @@
 package com.example.data
 
+import java.util.UUID
+
 object OpenCartBridgeModule {
 
     const val FILE_NAME = "cartadmin_api.php"
@@ -15,7 +17,9 @@ object OpenCartBridgeModule {
      */
     fun generatePhpScript(secretApiKey: String): String {
         val s = "$"
-        val cleanKey = if (secretApiKey.isNotBlank()) secretApiKey else "CARTADMIN_" + (10000000..99999999).random()
+        val cleanKey = secretApiKey.trim()
+            .takeIf { it.matches(Regex("[A-Za-z0-9._-]{16,128}")) }
+            ?: "CARTADMIN_${UUID.randomUUID().toString().replace("-", "")}"
 
         return """<?php
 /**
@@ -30,13 +34,10 @@ header('Content-Type: application/json; charset=UTF-8');
 header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: DENY');
 header('X-XSS-Protection: 1; mode=block');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization, X-CartAdmin-Key, X-Requested-With');
+header('Cache-Control: no-store');
 
 if (isset(${s}_SERVER['REQUEST_METHOD']) && ${s}_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(200);
-    exit;
+    sendJson(['success' => false, 'error' => 'Metodo non consentito.'], 405);
 }
 
 function sendJson(array ${s}data, int ${s}statusCode = 200): void {
@@ -73,13 +74,7 @@ if (${s}mysqli->connect_error) {
 }
 ${s}mysqli->set_charset('utf8mb4');
 
-// 4. Inizializzazione Tabelle CartAdmin
-${s}mysqli->query("CREATE TABLE IF NOT EXISTS `${s}{db_prefix}cartadmin_setting` (
-    `key` VARCHAR(64) NOT NULL PRIMARY KEY,
-    `value` TEXT NOT NULL,
-    `date_updated` DATETIME NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-
+// 4. Inizializzazione tabella audit CartAdmin
 ${s}mysqli->query("CREATE TABLE IF NOT EXISTS `${s}{db_prefix}cartadmin_audit` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
     `log_id` VARCHAR(64) NOT NULL,
@@ -94,84 +89,30 @@ ${s}mysqli->query("CREATE TABLE IF NOT EXISTS `${s}{db_prefix}cartadmin_audit` (
     INDEX `idx_timestamp` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-${s}resKey = ${s}mysqli->query("SELECT `value` FROM `${s}{db_prefix}cartadmin_setting` WHERE `key` = 'api_key' LIMIT 1");
-${s}configuredKey = '';
-if (${s}resKey && ${s}row = ${s}resKey->fetch_assoc()) {
-    ${s}configuredKey = trim(${s}row['value']);
-}
-
-// 5. Verifica Autenticazione
+// 5. Verifica autenticazione header-only. La chiave non viene mai esposta da un endpoint.
+${s}configuredKey = '$cleanKey';
 ${s}receivedKey = '';
-${s}receivedUsername = '';
 
 if (isset(${s}_SERVER['HTTP_X_CARTADMIN_KEY']) && !empty(trim(${s}_SERVER['HTTP_X_CARTADMIN_KEY']))) {
     ${s}receivedKey = trim(${s}_SERVER['HTTP_X_CARTADMIN_KEY']);
-} elseif (isset(${s}_REQUEST['api_key']) && !empty(trim(${s}_REQUEST['api_key']))) {
-    ${s}receivedKey = trim(${s}_REQUEST['api_key']);
 } elseif (isset(${s}_SERVER['HTTP_AUTHORIZATION']) && !empty(trim(${s}_SERVER['HTTP_AUTHORIZATION']))) {
-    ${s}receivedKey = trim(str_replace('Bearer ', '', ${s}_SERVER['HTTP_AUTHORIZATION']));
-}
-
-if (isset(${s}_REQUEST['username'])) {
-    ${s}receivedUsername = trim(${s}_REQUEST['username']);
-} elseif (isset(${s}_SERVER['HTTP_X_CARTADMIN_USER'])) {
-    ${s}receivedUsername = trim(${s}_SERVER['HTTP_X_CARTADMIN_USER']);
-}
-
-${s}isSetupCall = isset(${s}_GET['action']) && ${s}_GET['action'] === 'get_key_setup';
-if (${s}isSetupCall) {
-    if (empty(${s}configuredKey)) {
-        ${s}configuredKey = '$cleanKey';
-        ${s}stmtInit = ${s}mysqli->prepare("INSERT INTO `${s}{db_prefix}cartadmin_setting` (`key`, `value`, `date_updated`) VALUES ('api_key', ?, NOW()) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`), `date_updated` = NOW()");
-        if (${s}stmtInit) {
-            ${s}stmtInit->bind_param('s', ${s}configuredKey);
-            ${s}stmtInit->execute();
-            ${s}stmtInit->close();
-        }
-    }
-    sendJson([
-        'success' => true,
-        'plugin' => 'CartAdmin OpenCart Bridge',
-        'version' => '1.2.4',
-        'api_key' => ${s}configuredKey,
-        'message' => 'Configura questa chiave nell\'App Android CartAdmin.'
-    ]);
-}
-
-${s}isAuthenticated = false;
-if (!empty(${s}configuredKey) && !empty(${s}receivedKey) && hash_equals(${s}configuredKey, ${s}receivedKey)) {
-    ${s}isAuthenticated = true;
-}
-
-if (!${s}isAuthenticated && empty(${s}configuredKey) && !empty(${s}receivedKey)) {
-    ${s}configuredKey = ${s}receivedKey;
-    ${s}stmtInitKey = ${s}mysqli->prepare("INSERT INTO `${s}{db_prefix}cartadmin_setting` (`key`, `value`, `date_updated`) VALUES ('api_key', ?, NOW()) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`), `date_updated` = NOW()");
-    if (${s}stmtInitKey) {
-        ${s}stmtInitKey->bind_param('s', ${s}configuredKey);
-        ${s}stmtInitKey->execute();
-        ${s}stmtInitKey->close();
-    }
-    ${s}isAuthenticated = true;
-}
-
-if (!${s}isAuthenticated && !empty(${s}receivedKey)) {
-    ${s}stmtApi = ${s}mysqli->prepare("SELECT `api_id` FROM `${s}{db_prefix}api` WHERE `status` = 1 AND (`key` = ? OR `username` = ?) LIMIT 1");
-    if (${s}stmtApi) {
-        ${s}stmtApi->bind_param('ss', ${s}receivedKey, ${s}receivedKey);
-        ${s}stmtApi->execute();
-        ${s}resApi = ${s}stmtApi->get_result();
-        if (${s}resApi && ${s}resApi->num_rows > 0) {
-            ${s}isAuthenticated = true;
-        }
-        ${s}stmtApi->close();
+    ${s}authorization = trim(${s}_SERVER['HTTP_AUTHORIZATION']);
+    if (preg_match('/^Bearer\s+([^\s]+)${s}/i', ${s}authorization, ${s}matches) === 1) {
+        ${s}receivedKey = ${s}matches[1];
     }
 }
+
+if (strlen(${s}receivedKey) > 512) {
+    ${s}receivedKey = '';
+}
+
+${s}isAuthenticated = ${s}receivedKey !== '' && hash_equals(${s}configuredKey, ${s}receivedKey);
 
 if (!${s}isAuthenticated) {
     usleep(200000);
     sendJson([
         'success' => false,
-        'error' => 'Non autorizzato. Chiave API OpenCart non valida o mancante.',
+        'error' => 'Non autorizzato. Chiave CartAdmin non valida o mancante.',
         'code' => 401
     ], 401);
 }
@@ -196,7 +137,7 @@ try {
             sendJson([
                 'success' => true,
                 'status' => 'online',
-                'bridge_version' => '1.2.4',
+                'bridge_version' => '1.2.6-dev',
                 'author' => 'SOLO SOLUZIONI (OpenCart ITALIA)',
                 'store_name' => ${s}storeName,
                 'total_orders' => ${s}totalOrders,

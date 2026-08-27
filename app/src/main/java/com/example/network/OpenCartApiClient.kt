@@ -2,6 +2,7 @@ package com.example.network
 
 import android.content.Context
 import android.util.Log
+import com.example.BuildConfig
 import com.example.model.Category
 import com.example.model.Order
 import com.example.model.OrderDetail
@@ -68,17 +69,12 @@ class OpenCartApiClient(context: Context) {
         }
 
         // 1. Check CartAdmin Bridge Module
-        val encodedKey = java.net.URLEncoder.encode(apiKey, "UTF-8")
-        val encodedUser = java.net.URLEncoder.encode(apiUsername, "UTF-8")
-        val bridgeUrl = "$cleanUrl/cartadmin_api.php?action=status&api_key=$encodedKey&username=$encodedUser"
-        val bridgeRequest = Request.Builder()
-            .url(bridgeUrl)
-            .get()
-            .header("X-CartAdmin-Key", apiKey)
-            .header("X-CartAdmin-User", apiUsername)
-            .header("Authorization", "Bearer $apiKey")
-            .header("User-Agent", "CartAdmin-Android/1.2.2")
-            .build()
+        val bridgeRequest = BridgeRequestFactory.authenticatedGet(
+            baseUrl = cleanUrl,
+            action = "status",
+            apiKey = apiKey,
+            username = apiUsername
+        )
 
         try {
             tlsClient.execute(bridgeRequest).use { response ->
@@ -127,7 +123,7 @@ class OpenCartApiClient(context: Context) {
         val nativeRequest = Request.Builder()
             .url(nativeUrl)
             .post(formBody)
-            .header("User-Agent", "CartAdmin-Android/1.2.2")
+            .header("User-Agent", "CartAdmin-Android/${BuildConfig.VERSION_NAME}")
             .header("Accept", "application/json")
             .build()
 
@@ -202,19 +198,13 @@ class OpenCartApiClient(context: Context) {
             if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
                 cleanUrl = "https://$cleanUrl"
             }
-            val encodedKey = java.net.URLEncoder.encode(apiKey, "UTF-8")
-            val encodedUser = java.net.URLEncoder.encode(username, "UTF-8")
-            val endpoint = "$cleanUrl/cartadmin_api.php?action=orders&limit=$limit&api_key=$encodedKey&username=$encodedUser"
-
-            val request = Request.Builder()
-                .url(endpoint)
-                .get()
-                .header("X-CartAdmin-Key", apiKey)
-                .header("X-CartAdmin-User", username)
-                .header("Authorization", "Bearer $apiKey")
-                .header("User-Agent", "CartAdmin-Android/1.2.2")
-                .header("Accept", "application/json")
-                .build()
+            val request = BridgeRequestFactory.authenticatedGet(
+                baseUrl = cleanUrl,
+                action = "orders",
+                apiKey = apiKey,
+                username = username,
+                queryParameters = mapOf("limit" to limit.toString())
+            )
 
             tlsClient.execute(request).use { response ->
                 val body = response.body?.string() ?: ""
@@ -284,19 +274,13 @@ class OpenCartApiClient(context: Context) {
             if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
                 cleanUrl = "https://$cleanUrl"
             }
-            val encodedKey = java.net.URLEncoder.encode(apiKey, "UTF-8")
-            val encodedUser = java.net.URLEncoder.encode(username, "UTF-8")
-            val endpoint = "$cleanUrl/cartadmin_api.php?action=products&limit=$limit&api_key=$encodedKey&username=$encodedUser"
-
-            val request = Request.Builder()
-                .url(endpoint)
-                .get()
-                .header("X-CartAdmin-Key", apiKey)
-                .header("X-CartAdmin-User", username)
-                .header("Authorization", "Bearer $apiKey")
-                .header("User-Agent", "CartAdmin-Android/1.2.2")
-                .header("Accept", "application/json")
-                .build()
+            val request = BridgeRequestFactory.authenticatedGet(
+                baseUrl = cleanUrl,
+                action = "products",
+                apiKey = apiKey,
+                username = username,
+                queryParameters = mapOf("limit" to limit.toString())
+            )
 
             tlsClient.execute(request).use { response ->
                 val body = response.body?.string() ?: ""
@@ -359,19 +343,13 @@ class OpenCartApiClient(context: Context) {
             if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
                 cleanUrl = "https://$cleanUrl"
             }
-            val encodedKey = java.net.URLEncoder.encode(apiKey, "UTF-8")
-            val encodedUser = java.net.URLEncoder.encode(username, "UTF-8")
-            val endpoint = "$cleanUrl/cartadmin_api.php?action=categories&limit=$limit&api_key=$encodedKey&username=$encodedUser"
-
-            val request = Request.Builder()
-                .url(endpoint)
-                .get()
-                .header("X-CartAdmin-Key", apiKey)
-                .header("X-CartAdmin-User", username)
-                .header("Authorization", "Bearer $apiKey")
-                .header("User-Agent", "CartAdmin-Android/1.2.3")
-                .header("Accept", "application/json")
-                .build()
+            val request = BridgeRequestFactory.authenticatedGet(
+                baseUrl = cleanUrl,
+                action = "categories",
+                apiKey = apiKey,
+                username = username,
+                queryParameters = mapOf("limit" to limit.toString())
+            )
 
             tlsClient.execute(request).use { response ->
                 val body = response.body?.string() ?: ""
@@ -427,24 +405,13 @@ class OpenCartApiClient(context: Context) {
             if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
                 cleanUrl = "https://$cleanUrl"
             }
-            val endpoint = "$cleanUrl/cartadmin_api.php"
-
-            val formBody = FormBody.Builder()
-                .add("action", "update_stock")
-                .add("product_id", productId)
-                .add("quantity", newStock.toString())
-                .add("api_key", apiKey)
-                .add("username", username)
-                .build()
-
-            val request = Request.Builder()
-                .url(endpoint)
-                .post(formBody)
-                .header("X-CartAdmin-Key", apiKey)
-                .header("X-CartAdmin-User", username)
-                .header("Authorization", "Bearer $apiKey")
-                .header("User-Agent", "CartAdmin-Android/1.2.2")
-                .build()
+            val request = BridgeRequestFactory.authenticatedFormPost(
+                baseUrl = cleanUrl,
+                action = "update_stock",
+                apiKey = apiKey,
+                username = username,
+                fields = mapOf("product_id" to productId, "quantity" to newStock.toString())
+            )
 
             tlsClient.execute(request).use { response ->
                 Result.success(response.isSuccessful)
@@ -463,25 +430,17 @@ class OpenCartApiClient(context: Context) {
             if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
                 cleanUrl = "https://$cleanUrl"
             }
-            val endpoint = "$cleanUrl/cartadmin_api.php"
-
-            val formBody = FormBody.Builder()
-                .add("action", "update_order_status")
-                .add("order_id", orderId)
-                .add("status_id", statusId.toString())
-                .add("comment", comment)
-                .add("api_key", apiKey)
-                .add("username", username)
-                .build()
-
-            val request = Request.Builder()
-                .url(endpoint)
-                .post(formBody)
-                .header("X-CartAdmin-Key", apiKey)
-                .header("X-CartAdmin-User", username)
-                .header("Authorization", "Bearer $apiKey")
-                .header("User-Agent", "CartAdmin-Android/1.2.3")
-                .build()
+            val request = BridgeRequestFactory.authenticatedFormPost(
+                baseUrl = cleanUrl,
+                action = "update_order_status",
+                apiKey = apiKey,
+                username = username,
+                fields = mapOf(
+                    "order_id" to orderId,
+                    "status_id" to statusId.toString(),
+                    "comment" to comment
+                )
+            )
 
             tlsClient.execute(request).use { response ->
                 Result.success(response.isSuccessful)
@@ -500,16 +459,13 @@ class OpenCartApiClient(context: Context) {
             if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
                 cleanUrl = "https://$cleanUrl"
             }
-            val endpoint = "$cleanUrl/cartadmin_api.php?action=subscriptions&limit=$limit&api_key=$apiKey&username=$username"
-
-            val request = Request.Builder()
-                .url(endpoint)
-                .get()
-                .header("X-CartAdmin-Key", apiKey)
-                .header("X-CartAdmin-User", username)
-                .header("Authorization", "Bearer $apiKey")
-                .header("User-Agent", "CartAdmin-Android/1.2.3")
-                .build()
+            val request = BridgeRequestFactory.authenticatedGet(
+                baseUrl = cleanUrl,
+                action = "subscriptions",
+                apiKey = apiKey,
+                username = username,
+                queryParameters = mapOf("limit" to limit.toString())
+            )
 
             tlsClient.execute(request).use { response ->
                 val body = response.body?.string() ?: ""
@@ -561,16 +517,13 @@ class OpenCartApiClient(context: Context) {
             if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
                 cleanUrl = "https://$cleanUrl"
             }
-            val endpoint = "$cleanUrl/cartadmin_api.php?action=returns&limit=$limit&api_key=$apiKey&username=$username"
-
-            val request = Request.Builder()
-                .url(endpoint)
-                .get()
-                .header("X-CartAdmin-Key", apiKey)
-                .header("X-CartAdmin-User", username)
-                .header("Authorization", "Bearer $apiKey")
-                .header("User-Agent", "CartAdmin-Android/1.2.3")
-                .build()
+            val request = BridgeRequestFactory.authenticatedGet(
+                baseUrl = cleanUrl,
+                action = "returns",
+                apiKey = apiKey,
+                username = username,
+                queryParameters = mapOf("limit" to limit.toString())
+            )
 
             tlsClient.execute(request).use { response ->
                 val body = response.body?.string() ?: ""
@@ -626,25 +579,15 @@ class OpenCartApiClient(context: Context) {
             if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
                 cleanUrl = "https://$cleanUrl"
             }
-            val endpoint = "$cleanUrl/cartadmin_api.php"
             val rawId = subscriptionId.removePrefix("#SUB-").removePrefix("#").removePrefix("sub_")
 
-            val formBody = FormBody.Builder()
-                .add("action", "update_subscription_status")
-                .add("subscription_id", rawId)
-                .add("status", newStatus)
-                .add("api_key", apiKey)
-                .add("username", username)
-                .build()
-
-            val request = Request.Builder()
-                .url(endpoint)
-                .post(formBody)
-                .header("X-CartAdmin-Key", apiKey)
-                .header("X-CartAdmin-User", username)
-                .header("Authorization", "Bearer $apiKey")
-                .header("User-Agent", "CartAdmin-Android/1.2.3")
-                .build()
+            val request = BridgeRequestFactory.authenticatedFormPost(
+                baseUrl = cleanUrl,
+                action = "update_subscription_status",
+                apiKey = apiKey,
+                username = username,
+                fields = mapOf("subscription_id" to rawId, "status" to newStatus)
+            )
 
             tlsClient.execute(request).use { response ->
                 Result.success(response.isSuccessful)
@@ -663,26 +606,19 @@ class OpenCartApiClient(context: Context) {
             if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
                 cleanUrl = "https://$cleanUrl"
             }
-            val endpoint = "$cleanUrl/cartadmin_api.php"
             val rawId = returnId.removePrefix("RMA-").removePrefix("#").removePrefix("ret_")
 
-            val formBody = FormBody.Builder()
-                .add("action", "update_return_status")
-                .add("return_id", rawId)
-                .add("status_id", statusId.toString())
-                .add("comment", comment)
-                .add("api_key", apiKey)
-                .add("username", username)
-                .build()
-
-            val request = Request.Builder()
-                .url(endpoint)
-                .post(formBody)
-                .header("X-CartAdmin-Key", apiKey)
-                .header("X-CartAdmin-User", username)
-                .header("Authorization", "Bearer $apiKey")
-                .header("User-Agent", "CartAdmin-Android/1.2.3")
-                .build()
+            val request = BridgeRequestFactory.authenticatedFormPost(
+                baseUrl = cleanUrl,
+                action = "update_return_status",
+                apiKey = apiKey,
+                username = username,
+                fields = mapOf(
+                    "return_id" to rawId,
+                    "status_id" to statusId.toString(),
+                    "comment" to comment
+                )
+            )
 
             tlsClient.execute(request).use { response ->
                 Result.success(response.isSuccessful)
@@ -719,12 +655,13 @@ class OpenCartApiClient(context: Context) {
             put("device_model", device)
         }
 
-        val request = Request.Builder()
-            .url(bridgeUrl)
-            .post(payload.toString().toRequestBody(jsonMediaType))
-            .header("X-CartAdmin-Key", store.apiKey)
-            .header("User-Agent", "CartAdmin-Android/1.2.1")
-            .build()
+        val request = BridgeRequestFactory.authenticate(
+            Request.Builder()
+                .url(bridgeUrl)
+                .post(payload.toString().toRequestBody(jsonMediaType)),
+            store.apiKey,
+            store.apiUsername
+        ).build()
 
         try {
             tlsClient.execute(request).use { res ->
