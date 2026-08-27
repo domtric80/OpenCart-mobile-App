@@ -227,7 +227,10 @@ jobs:
           ---
 
           ### ✨ Novità & Note di Rilascio (${TAG_NAME})
-          - 🔒 **Pipeline di sicurezza aggiornata**: controlli CodeQL, Dependency Review e Semgrep attivi.
+          - 🛡️ **Zero alert CodeQL aperti**: corretti gli alert Android rilevati nella precedente versione.
+          - 🔐 **Biometria protetta da Android Keystore**: lo sblocco richiede una prova crittografica AES-GCM con biometria forte.
+          - 🌐 **Pinning TLS per ogni negozio**: HTTPS obbligatorio e pin SPKI persistenti per gli host OpenCart configurati.
+          - 🔔 **Intent Android protetti**: PendingIntent immutabili ed espliciti e invio sicuro dei dati di contatto.
           - 🔐 **APK release firmato**: artifact Android prodotto con la chiave di rilascio protetta nei GitHub Actions secrets.
           - ⚡ **Build e packaging verificati**: Gradle 9.3.1 con checksum e pacchetto OCMOD validato.
           EOF
