@@ -164,7 +164,7 @@ class EcomRepository(
                     CredentialField.API_USERNAME,
                     username
                 ),
-                isPrimary = _stores.value.size == 1,
+                isPrimary = _stores.value.isEmpty(),
                 isActive = true,
                 lastSyncTimestamp = System.currentTimeMillis(),
                 openCartVersion = newStore.version
@@ -185,7 +185,13 @@ class EcomRepository(
         key: String,
         version: String
     ) {
-        val protectedApiKey = credentialProtector.protect(storeId, CredentialField.API_KEY, key)
+        val currentStore = _stores.value.find { it.id == storeId }
+        val effectiveKey = key.ifBlank { currentStore?.apiKey.orEmpty() }
+        val protectedApiKey = credentialProtector.protect(
+            storeId,
+            CredentialField.API_KEY,
+            effectiveKey
+        )
         val protectedUsername = credentialProtector.protect(
             storeId,
             CredentialField.API_USERNAME,
@@ -213,7 +219,7 @@ class EcomRepository(
                         name = name,
                         url = url,
                         apiUsername = username,
-                        apiKey = key,
+                        apiKey = effectiveKey,
                         version = version,
                         lastSyncTime = "Proprio adesso"
                     )

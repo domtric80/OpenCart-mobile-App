@@ -123,8 +123,8 @@ fun OrdersScreen(
             val isOrders = subSection == OrdersSubSection.ORDERS
             Surface(
                 shape = RoundedCornerShape(14.dp),
-                color = if (isOrders) ThemePrimary else CardSurfacePure,
-                border = if (isOrders) null else androidx.compose.foundation.BorderStroke(1.dp, ThemeOutlineVariant.copy(alpha = 0.7f)),
+                color = if (isOrders) MaterialTheme.colorScheme.primary else CardSurfacePure,
+                border = if (isOrders) null else androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 shadowElevation = if (isOrders) 2.dp else 0.dp,
                 modifier = Modifier
                     .weight(1f)
@@ -141,14 +141,14 @@ fun OrdersScreen(
                         imageVector = Icons.Default.ShoppingCart,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
-                        tint = if (isOrders) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = if (isOrders) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = "Ordini (${orders.size})",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = if (isOrders) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isOrders) Color.White else MaterialTheme.colorScheme.onSurface,
+                        color = if (isOrders) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                         fontSize = 12.sp
                     )
                 }
@@ -158,8 +158,8 @@ fun OrdersScreen(
             val isSubs = subSection == OrdersSubSection.SUBSCRIPTIONS
             Surface(
                 shape = RoundedCornerShape(14.dp),
-                color = if (isSubs) ThemePrimary else CardSurfacePure,
-                border = if (isSubs) null else androidx.compose.foundation.BorderStroke(1.dp, ThemeOutlineVariant.copy(alpha = 0.7f)),
+                color = if (isSubs) MaterialTheme.colorScheme.primary else CardSurfacePure,
+                border = if (isSubs) null else androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 shadowElevation = if (isSubs) 2.dp else 0.dp,
                 modifier = Modifier
                     .weight(1f)
@@ -176,14 +176,14 @@ fun OrdersScreen(
                         imageVector = Icons.Default.Repeat,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
-                        tint = if (isSubs) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = if (isSubs) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = "Abbonati (${subscriptions.size})",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = if (isSubs) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isSubs) Color.White else MaterialTheme.colorScheme.onSurface,
+                        color = if (isSubs) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                         fontSize = 11.sp
                     )
                 }
@@ -193,8 +193,8 @@ fun OrdersScreen(
             val isReturns = subSection == OrdersSubSection.RETURNS
             Surface(
                 shape = RoundedCornerShape(14.dp),
-                color = if (isReturns) ThemePrimary else CardSurfacePure,
-                border = if (isReturns) null else androidx.compose.foundation.BorderStroke(1.dp, ThemeOutlineVariant.copy(alpha = 0.7f)),
+                color = if (isReturns) MaterialTheme.colorScheme.primary else CardSurfacePure,
+                border = if (isReturns) null else androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 shadowElevation = if (isReturns) 2.dp else 0.dp,
                 modifier = Modifier
                     .weight(0.9f)
@@ -211,14 +211,14 @@ fun OrdersScreen(
                         imageVector = Icons.Default.AssignmentReturn,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
-                        tint = if (isReturns) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = if (isReturns) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = "Resi (${returns.size})",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = if (isReturns) FontWeight.Bold else FontWeight.Medium,
-                        color = if (isReturns) Color.White else MaterialTheme.colorScheme.onSurface,
+                        color = if (isReturns) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                         fontSize = 12.sp
                     )
                 }
@@ -228,7 +228,7 @@ fun OrdersScreen(
             Surface(
                 shape = RoundedCornerShape(14.dp),
                 color = CardSurfacePure,
-                border = androidx.compose.foundation.BorderStroke(1.dp, ThemeOutlineVariant.copy(alpha = 0.7f)),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 modifier = Modifier
                     .clip(RoundedCornerShape(14.dp))
                     .clickable { onOpenSubSectionMenu() }
@@ -241,7 +241,7 @@ fun OrdersScreen(
                     Icon(
                         imageVector = Icons.Default.Menu,
                         contentDescription = "Menu sezioni ordini",
-                        tint = ThemePrimary,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -432,7 +432,7 @@ private fun OrdersListContent(
                     modifier = Modifier
                         .clip(RoundedCornerShape(14.dp))
                         .background(
-                            if (isSelected) ThemePrimaryContainer
+                            if (isSelected) MaterialTheme.colorScheme.primaryContainer
                             else MaterialTheme.colorScheme.surfaceVariant
                         )
                         .clickable { onSelectFilter(null) }
@@ -446,7 +446,7 @@ private fun OrdersListContent(
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             fontSize = 12.sp
                         ),
-                        color = if (isSelected) ThemeOnPrimaryContainer
+                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
                         else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }

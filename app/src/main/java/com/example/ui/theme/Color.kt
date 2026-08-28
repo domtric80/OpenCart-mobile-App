@@ -89,7 +89,10 @@ val ThemeSurfaceVariantDark = Color(0xFF334155)
 val ThemeOnSurfaceVariantDark = Color(0xFFE2E8F0)
 
 val ThemePrimaryDark = Color(0xFF818CF8)
-val ThemeOnPrimaryDark = Color(0xFF1E1B4B)
+// Several legacy components still use the fixed deep-indigo ThemePrimary as
+// their container in dark mode. White is the only safe shared foreground for
+// both that color and Material buttons using the dark color scheme.
+val ThemeOnPrimaryDark = Color(0xFFFFFFFF)
 val ThemePrimaryContainerDark = Color(0xFF3730A3)
 val ThemeOnPrimaryContainerDark = Color(0xFFE0E7FF)
 

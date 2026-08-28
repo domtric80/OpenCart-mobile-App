@@ -244,9 +244,15 @@ class MainViewModel(
             }
 
             // Se è presente uno store configurato, avvia la sincronizzazione automatica reale
-            val primaryStore = db.storeProfileDao().getPrimaryStore()
+            val primaryStore = repository.stores.value.find {
+                it.id == repository.currentStoreId.value
+            }
             if (primaryStore != null && primaryStore.url.isNotBlank()) {
-                syncDataFromOpenCart(primaryStore.url, primaryStore.apiKey, primaryStore.adminUsername)
+                syncDataFromOpenCart(
+                    primaryStore.url,
+                    primaryStore.apiKey,
+                    primaryStore.apiUsername
+                )
             }
         }
     }
@@ -365,8 +371,13 @@ class MainViewModel(
             val store = db.storeProfileDao().getStoreById(storeId)
             if (store != null) {
                 db.storeProfileDao().setPrimaryStore(storeId)
-                if (store.url.isNotBlank()) {
-                    syncDataFromOpenCart(store.url, store.apiKey, store.adminUsername)
+                val revealedStore = repository.stores.value.find { it.id == storeId }
+                if (revealedStore != null && revealedStore.url.isNotBlank()) {
+                    syncDataFromOpenCart(
+                        revealedStore.url,
+                        revealedStore.apiKey,
+                        revealedStore.apiUsername
+                    )
                 }
             }
         }
@@ -911,9 +922,14 @@ class MainViewModel(
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                val effectiveKey = key.ifBlank {
+                    repository.stores.value.find { it.id == storeId }?.apiKey.orEmpty()
+                }
                 repository.updateStoreCredentials(storeId, name, url, username, key, version)
                 _syncSuccessMessage.value = "Parametri store cifrati nel chip hardware."
-                syncDataFromOpenCart(url, key, username)
+                if (effectiveKey.isNotBlank()) {
+                    syncDataFromOpenCart(url, effectiveKey, username)
+                }
             } catch (_: CredentialProtectionException) {
                 _syncSuccessMessage.value =
                     "Salvataggio rifiutato: TEE o StrongBox hardware non disponibile."
@@ -928,7 +944,7 @@ class MainViewModel(
             try {
                 repository.addStore(name, url, version, username, key)
                 _isStoreSwitcherOpen.value = false
-                if (username.isNotBlank() && key.isNotBlank()) {
+                if (key.isNotBlank()) {
                     syncDataFromOpenCart(url, key, username)
                 }
             } catch (_: CredentialProtectionException) {

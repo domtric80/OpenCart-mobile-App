@@ -240,7 +240,7 @@ jobs:
           - migrazione dei dati Room precedentemente in chiaro e bonifica del database SQLite;
           - migrazione delle password locali a PBKDF2;
           - regole di backup Android aggiornate per escludere dati sensibili.
-          - pacchetto installabile da OpenCart 4.1.x con `install.json` e configurazione dal pannello amministrativo;
+          - pacchetto installabile da OpenCart 4.1.x con \`install.json\` e configurazione dal pannello amministrativo;
           - token bridge mostrato una sola volta e memorizzato nel database esclusivamente come hash non reversibile Argon2id/bcrypt;
           - rimosso dall'app il generatore PHP che incorporava il token in un file.
 
@@ -260,12 +260,28 @@ jobs:
             cat << EOF > release_notes.md
           ## CartAdmin ${TAG_NAME}
 
+          Release stabile dedicata alla configurazione sicura del bridge CartAdmin per OpenCart 4.1.x.
+
+          ### Novità confermate
+
+          - installazione del bridge dal pannello OpenCart tramite pacchetto \`cartadmin.ocmod.zip\` e \`install.json\`;
+          - generazione e rotazione del token esclusivamente dal pannello amministrativo;
+          - nel database OpenCart viene conservato soltanto l'hash non reversibile del token;
+          - nell'app il token è cifrato AES-256-GCM con chiave Android Keystore hardware-backed (StrongBox preferito, TEE obbligatorio);
+          - il token salvato non viene più ripopolato né mostrato nell'interfaccia; un campo vuoto mantiene la credenziale protetta;
+          - configurazione iniziale semplificata: in assenza di negozi il pulsante **Aggiungi** crea davvero il primo profilo;
+          - contrasto corretto in tema scuro per Audit, diagnostica Config e selettore Ordini/Abbonamenti/Resi;
+          - credenziali trasmesse solo negli header su HTTPS e rimosso il provisioning pubblico tramite file PHP;
+          - migrazione delle credenziali Room preesistenti e protezione PBKDF2 della password locale.
+
           ### Artefatti
 
           - [CartAdmin-v${VERSION}.apk](https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/CartAdmin-v${VERSION}.apk) — APK release firmato dal workflow GitHub Actions;
           - [cartadmin.ocmod.zip](https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/cartadmin.ocmod.zip) — estensione per OpenCart 4.1.x.
 
-          Build, test unitari, compilazione dei test strumentali, Android Lint e struttura del pacchetto OCMOD sono stati verificati dal workflow di pubblicazione.
+          ### Verifiche automatiche
+
+          Build release firmata, test unitari, compilazione dei test strumentali, Android Lint e struttura del pacchetto OCMOD sono verificati dal workflow di pubblicazione. I workflow di sicurezza eseguono inoltre CodeQL, Semgrep, controllo sintattico PHP e test dell'autenticazione del bridge.
           EOF
           fi
 

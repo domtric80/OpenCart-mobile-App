@@ -274,6 +274,9 @@ fun MainAppContent(
                         onSaveStoreCredentials = { storeId, name, url, user, key, ver ->
                             viewModel.saveStoreCredentials(storeId, name, url, user, key, ver)
                         },
+                        onAddStore = { name, url, user, key, ver ->
+                            viewModel.addStore(name, url, ver, user, key)
+                        },
                         onTriggerSync = { url, key, user ->
                             viewModel.triggerSync(url, key, user)
                         },

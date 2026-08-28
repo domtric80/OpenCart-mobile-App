@@ -78,6 +78,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.Store
@@ -104,6 +105,7 @@ fun ConfigScreen(
     connectionResult: OpenCartConnectionResult?,
     onTestConnection: (url: String, username: String, key: String) -> Unit,
     onSaveStoreCredentials: (storeId: String, name: String, url: String, username: String, key: String, version: String) -> Unit,
+    onAddStore: (name: String, url: String, username: String, key: String, version: String) -> Unit,
     onTriggerSync: (url: String, key: String, username: String) -> Unit,
     onClearDummyData: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -113,7 +115,7 @@ fun ConfigScreen(
     var storeName by remember { mutableStateOf(currentStore?.name ?: "") }
     var storeUrl by remember { mutableStateOf(currentStore?.url ?: "") }
     var apiUsername by remember { mutableStateOf(currentStore?.apiUsername ?: "api_admin_sync") }
-    var apiKey by remember { mutableStateOf(currentStore?.apiKey ?: "") }
+    var apiKey by remember { mutableStateOf("") }
     var storeVersion by remember { mutableStateOf(currentStore?.version ?: "OpenCart 3.0.3.8") }
     var showGuide by remember { mutableStateOf(false) }
     var showModuleSheet by remember { mutableStateOf(false) }
@@ -131,13 +133,19 @@ fun ConfigScreen(
         fcmToken = FcmTokenManager.fetchCurrentToken(context)
     }
 
-    LaunchedEffect(currentStore) {
+    LaunchedEffect(currentStore?.id) {
         if (currentStore != null) {
             storeName = currentStore.name
             storeUrl = currentStore.url
             apiUsername = currentStore.apiUsername
-            apiKey = currentStore.apiKey
+            apiKey = ""
             storeVersion = currentStore.version
+        } else {
+            storeName = ""
+            storeUrl = ""
+            apiUsername = "api_admin_sync"
+            apiKey = ""
+            storeVersion = "OpenCart 4.1.x"
         }
     }
 
@@ -145,7 +153,8 @@ fun ConfigScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 16.dp)
+                .testTag("config_screen_list"),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
@@ -166,7 +175,7 @@ fun ConfigScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(22.dp))
-                        .background(if (isSuccess) ThemePrimaryContainer else AlertRedContainer)
+                        .background(if (isSuccess) TrendGreenLight else AlertRedContainer)
                         .padding(18.dp)
                         .testTag("opencart_status_card")
                 ) {
@@ -211,7 +220,7 @@ fun ConfigScreen(
                                         fontSize = 11.sp,
                                         letterSpacing = 1.1.sp
                                     ),
-                                    color = if (isSuccess) ThemeOnPrimaryContainer else AlertRed
+                                    color = if (isSuccess) TrendGreen else AlertRed
                                 )
                             }
 
@@ -221,12 +230,12 @@ fun ConfigScreen(
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 16.sp
                                 ),
-                                color = if (isSuccess) ThemeOnPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                color = if (isSuccess) TrendGreen else AlertRed
                             )
                             Text(
                                 text = "${currentStore?.url} • ${currentStore?.version}",
                                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                                color = if (isSuccess) ThemeOnPrimaryContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
+                                color = if (isSuccess) TrendGreen else AlertRed
                             )
                         }
                     }
@@ -240,7 +249,7 @@ fun ConfigScreen(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(22.dp))
                         .background(CardSurfacePure)
-                        .border(1.5.dp, ThemePrimary.copy(alpha = 0.4f), RoundedCornerShape(22.dp))
+                        .border(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.7f), RoundedCornerShape(22.dp))
                         .padding(18.dp)
                         .testTag("embedded_module_card")
                 ) {
@@ -264,7 +273,7 @@ fun ConfigScreen(
                                     Icon(
                                         imageVector = Icons.Default.DataObject,
                                         contentDescription = null,
-                                        tint = ThemePrimary,
+                                        tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(18.dp)
                                     )
                                 }
@@ -275,7 +284,7 @@ fun ConfigScreen(
                                         fontSize = 11.sp,
                                         letterSpacing = 1.1.sp
                                     ),
-                                    color = ThemePrimary
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
 
@@ -319,7 +328,7 @@ fun ConfigScreen(
                                 .testTag("open_module_sheet_btn"),
                             shape = RoundedCornerShape(14.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = ThemePrimary,
+                                containerColor = MaterialTheme.colorScheme.primary,
                                 contentColor = MaterialTheme.colorScheme.onPrimary
                             )
                         ) {
@@ -495,7 +504,10 @@ fun ConfigScreen(
                             },
                             modifier = Modifier.weight(1f).height(44.dp).testTag("simulate_order_push_btn"),
                             shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = ThemePrimary)
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
+                            )
                         ) {
                             Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
@@ -525,7 +537,7 @@ fun ConfigScreen(
                                         fontSize = 10.sp,
                                         letterSpacing = 0.8.sp
                                     ),
-                                    color = ThemePrimary
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                                 Row(
                                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -535,7 +547,7 @@ fun ConfigScreen(
                                         text = "Copia Token",
                                         style = MaterialTheme.typography.labelSmall.copy(
                                             fontWeight = FontWeight.Bold,
-                                            color = ThemePrimary
+                                            color = MaterialTheme.colorScheme.primary
                                         ),
                                         modifier = Modifier
                                             .clickable {
@@ -573,6 +585,23 @@ fun ConfigScreen(
                         .padding(18.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
+                    if (currentStore == null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(ThemePrimaryContainer)
+                                .padding(12.dp)
+                                .testTag("first_store_help")
+                        ) {
+                            Text(
+                                text = "Nessun negozio configurato. Compila questi dati e premi Aggiungi negozio: il profilo verrà creato e salvato sul dispositivo.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -643,7 +672,18 @@ fun ConfigScreen(
                             Icon(Icons.Default.Key, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         },
                         modifier = Modifier.fillMaxWidth().testTag("config_api_key_input"),
-                        shape = RoundedCornerShape(14.dp)
+                        shape = RoundedCornerShape(14.dp),
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        supportingText = {
+                            Text(
+                                if (currentStore == null) {
+                                    "Incolla il token generato nel pannello OpenCart. Non sarà più mostrato dopo il salvataggio."
+                                } else {
+                                    "Token già salvato e protetto. Lascia vuoto per mantenerlo oppure inseriscine uno nuovo per sostituirlo."
+                                }
+                            )
+                        }
                     )
 
                     OutlinedTextField(
@@ -662,9 +702,14 @@ fun ConfigScreen(
                     ) {
                         Button(
                             onClick = {
-                                onTestConnection(storeUrl, apiUsername, apiKey)
+                                onTestConnection(
+                                    storeUrl,
+                                    apiUsername,
+                                    apiKey.ifBlank { currentStore?.apiKey.orEmpty() }
+                                )
                             },
-                            enabled = !isTestingConnection && storeUrl.isNotBlank(),
+                            enabled = !isTestingConnection && storeUrl.isNotBlank() &&
+                                (apiKey.isNotBlank() || currentStore?.apiKey?.isNotBlank() == true),
                             modifier = Modifier
                                 .weight(1f)
                                 .height(48.dp)
@@ -679,7 +724,7 @@ fun ConfigScreen(
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(18.dp),
                                     strokeWidth = 2.dp,
-                                    color = ThemePrimary
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             } else {
                                 Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -690,52 +735,62 @@ fun ConfigScreen(
 
                         Button(
                             onClick = {
-                                val targetId = currentStore?.id ?: "store_${System.currentTimeMillis()}"
-                                onSaveStoreCredentials(targetId, storeName.ifBlank { "Mio Negozio OpenCart" }, storeUrl, apiUsername, apiKey, storeVersion)
-                                // Crittografa i parametri con il chip hardware (TEE / AndroidKeyStore)
-                                Toast.makeText(context, "Parametri salvati e sincronizzazione avviata!", Toast.LENGTH_SHORT).show()
+                                val safeName = storeName.ifBlank { "Mio Negozio OpenCart" }
+                                if (currentStore == null) {
+                                    onAddStore(safeName, storeUrl, apiUsername, apiKey, storeVersion)
+                                    Toast.makeText(context, "Negozio aggiunto e parametri protetti.", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    onSaveStoreCredentials(currentStore.id, safeName, storeUrl, apiUsername, apiKey, storeVersion)
+                                    Toast.makeText(context, "Parametri aggiornati e protetti.", Toast.LENGTH_SHORT).show()
+                                }
+                                apiKey = ""
                             },
+                            enabled = storeUrl.isNotBlank() &&
+                                (currentStore != null || apiKey.isNotBlank()),
                             modifier = Modifier
                                 .weight(1f)
                                 .height(48.dp)
                                 .testTag("save_opencart_credentials_btn"),
                             shape = RoundedCornerShape(14.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = ThemePrimary,
+                            containerColor = MaterialTheme.colorScheme.primary,
                                 contentColor = MaterialTheme.colorScheme.onPrimary
                             )
                         ) {
                             Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Salva")
+                            Text(if (currentStore == null) "Aggiungi" else "Salva")
                         }
                     }
 
                     // Direct Sync Button
                     Button(
                         onClick = {
-                            val targetId = currentStore?.id ?: "store_${System.currentTimeMillis()}"
-                            onSaveStoreCredentials(targetId, storeName.ifBlank { "Mio Negozio OpenCart" }, storeUrl, apiUsername, apiKey, storeVersion)
-                            onTriggerSync(storeUrl, apiKey, apiUsername)
+                            onTriggerSync(
+                                storeUrl,
+                                apiKey.ifBlank { currentStore?.apiKey.orEmpty() },
+                                apiUsername
+                            )
                             Toast.makeText(context, "Sincronizzazione avviata per $storeUrl...", Toast.LENGTH_SHORT).show()
                         },
-                        enabled = storeUrl.isNotBlank(),
+                        enabled = currentStore != null && storeUrl.isNotBlank() &&
+                            (apiKey.isNotBlank() || currentStore.apiKey.isNotBlank()),
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(48.dp)
                             .testTag("manual_sync_now_btn"),
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = ThemeSecondaryContainer,
-                            contentColor = ThemePrimary
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                         )
                     ) {
-                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp), tint = ThemePrimary)
+                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "Sincronizza Dati Adesso (Ordini & Catalogo)",
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                            color = ThemePrimary
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
                     }
 
@@ -772,7 +827,7 @@ fun ConfigScreen(
                                     Text(
                                         text = connectionResult.details,
                                         style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = if (connectionResult.isSuccess) TrendGreen else AlertRed
                                     )
                                 }
                             }
@@ -958,15 +1013,23 @@ fun ConfigScreen(
                     }
 
                     Button(
-                        onClick = { onTriggerSync(storeUrl, apiKey, apiUsername) },
+                        onClick = {
+                            onTriggerSync(
+                                storeUrl,
+                                apiKey.ifBlank { currentStore?.apiKey.orEmpty() },
+                                apiUsername
+                            )
+                        },
+                        enabled = currentStore != null && storeUrl.isNotBlank() &&
+                            (apiKey.isNotBlank() || currentStore.apiKey.isNotBlank()),
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp)
                             .testTag("full_sync_button"),
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = ThemePrimaryContainer,
-                            contentColor = ThemeOnPrimaryContainer
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                     ) {
                         Icon(Icons.Default.CloudDone, contentDescription = null, modifier = Modifier.size(18.dp))

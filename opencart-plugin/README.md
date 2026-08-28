@@ -4,7 +4,7 @@ Estensione HTTPS tra CartAdmin Android e OpenCart 4.1.x, sviluppata da OpenCart 
 
 ## Installazione
 
-1. Scarica `cartadmin.ocmod.zip` dalla pre-release GitHub.
+1. Scarica `cartadmin.ocmod.zip` dalla release stabile GitHub.
 2. Nel pannello OpenCart apri **Estensioni > Installer**, carica lo ZIP e completa l'installazione.
 3. Apri **Estensioni > Estensioni**, seleziona **Moduli** e installa **CartAdmin Bridge**.
 4. Apri il modulo e premi **Genera token**.

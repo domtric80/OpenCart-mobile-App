@@ -159,7 +159,7 @@ fun AuditScreen(
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .background(ThemeBackground)
+            .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 16.dp),
         contentPadding = PaddingValues(top = 16.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -234,13 +234,13 @@ private fun AuditHeaderCard(
                         modifier = Modifier
                             .size(44.dp)
                             .clip(CircleShape)
-                            .background(ThemePrimaryContainer),
+                            .background(MaterialTheme.colorScheme.primaryContainer),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.History,
                             contentDescription = null,
-                            tint = ThemePrimary,
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(24.dp)
                         )
                     }
@@ -251,12 +251,12 @@ private fun AuditHeaderCard(
                                 fontWeight = FontWeight.ExtraBold,
                                 fontSize = 20.sp
                             ),
-                            color = ThemeOnSurface
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = "$totalLogsCount operazioni tracciate dal dispositivo",
                             style = MaterialTheme.typography.bodySmall,
-                            color = ThemeOnSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -269,7 +269,7 @@ private fun AuditHeaderCard(
                         Icon(
                             imageVector = Icons.Default.Delete,
                             contentDescription = "Svuota registro",
-                            tint = ThemeOnSurfaceVariant
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -302,7 +302,7 @@ private fun OpenCartProfileInfoCard() {
                 Icon(
                     imageVector = Icons.Default.Security,
                     contentDescription = null,
-                    tint = OpenCartBluePrimary,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(18.dp)
                 )
                 Text(
@@ -312,7 +312,7 @@ private fun OpenCartProfileInfoCard() {
                         fontSize = 11.sp,
                         letterSpacing = 0.8.sp
                     ),
-                    color = OpenCartBluePrimary
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
 
@@ -320,7 +320,7 @@ private fun OpenCartProfileInfoCard() {
                 text = "L'app opera tramite sessione diretta come Amministratore (Admin API Session Token / REST Integration). Tutte le operazioni di scrittura (stato ordini, modifiche giacenze, creazione prodotti) vengono eseguite con i privilegi dell'account operatore configurato e certificate con il fingerprint hardware del dispositivo.",
                 style = MaterialTheme.typography.bodySmall.copy(
                     lineHeight = 18.sp,
-                    color = ThemeOnSurface
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             )
 
@@ -338,13 +338,13 @@ private fun OpenCartProfileInfoCard() {
                     Icon(
                         imageVector = Icons.Default.PhoneAndroid,
                         contentDescription = null,
-                        tint = ThemeSecondary,
+                        tint = MaterialTheme.colorScheme.secondary,
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
                         text = "Dispositivo: ${android.os.Build.MANUFACTURER?.replaceFirstChar { it.uppercase() } ?: ""} ${android.os.Build.MODEL ?: "Android"}",
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = ThemeOnSurface
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
 
@@ -391,7 +391,7 @@ private fun AuditFilterSection(
                 Icon(
                     imageVector = Icons.Default.Search,
                     contentDescription = null,
-                    tint = ThemeOnSurfaceVariant
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             },
             trailingIcon = {
@@ -400,7 +400,7 @@ private fun AuditFilterSection(
                         Icon(
                             imageVector = Icons.Default.CleaningServices,
                             contentDescription = "Cancella",
-                            tint = ThemeOnSurfaceVariant,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -410,8 +410,8 @@ private fun AuditFilterSection(
             colors = OutlinedTextFieldDefaults.colors(
                 focusedContainerColor = CardSurfacePure,
                 unfocusedContainerColor = CardSurfacePure,
-                focusedTextColor = ThemeOnSurface,
-                unfocusedTextColor = ThemeOnSurface
+                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                unfocusedTextColor = MaterialTheme.colorScheme.onSurface
             ),
             singleLine = true
         )
@@ -433,10 +433,10 @@ private fun AuditFilterSection(
                     },
                     shape = RoundedCornerShape(10.dp),
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = ThemePrimaryContainer,
-                        selectedLabelColor = ThemeOnPrimaryContainer,
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
                         containerColor = CardSurfacePure,
-                        labelColor = ThemeOnSurfaceVariant
+                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant
                     ),
                     border = FilterChipDefaults.filterChipBorder(
                         enabled = true,
@@ -517,7 +517,7 @@ private fun AuditLogItemCard(log: AuditLog) {
                         fontFamily = FontFamily.Monospace,
                         fontSize = 11.sp
                     ),
-                    color = ThemeOnSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -529,7 +529,7 @@ private fun AuditLogItemCard(log: AuditLog) {
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp
                     ),
-                    color = ThemeOnSurface
+                    color = MaterialTheme.colorScheme.onSurface
                 )
 
                 if (!log.details.isNullOrBlank()) {
@@ -539,7 +539,7 @@ private fun AuditLogItemCard(log: AuditLog) {
                             fontSize = 12.sp,
                             lineHeight = 16.sp
                         ),
-                        color = ThemeOnSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -560,7 +560,7 @@ private fun AuditLogItemCard(log: AuditLog) {
                     Icon(
                         imageVector = Icons.Default.AccountCircle,
                         contentDescription = null,
-                        tint = ThemePrimary,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(14.dp)
                     )
                     Text(
@@ -569,7 +569,7 @@ private fun AuditLogItemCard(log: AuditLog) {
                             fontWeight = FontWeight.Bold,
                             fontSize = 11.sp
                         ),
-                        color = ThemeOnSurface
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
 
@@ -581,7 +581,7 @@ private fun AuditLogItemCard(log: AuditLog) {
                     Icon(
                         imageVector = Icons.Default.Devices,
                         contentDescription = null,
-                        tint = ThemeSecondary,
+                        tint = MaterialTheme.colorScheme.secondary,
                         modifier = Modifier.size(14.dp)
                     )
                     Text(
@@ -590,7 +590,7 @@ private fun AuditLogItemCard(log: AuditLog) {
                             fontWeight = FontWeight.Medium,
                             fontSize = 11.sp
                         ),
-                        color = ThemeOnSurfaceVariant,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -621,25 +621,25 @@ private fun EmptyAuditCard(hasActiveFilters: Boolean) {
                 modifier = Modifier
                     .size(56.dp)
                     .clip(CircleShape)
-                    .background(ThemeSurfaceVariant),
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.History,
                     contentDescription = null,
-                    tint = ThemeOnSurfaceVariant,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(28.dp)
                 )
             }
             Text(
                 text = if (hasActiveFilters) "Nessuna operazione trovata per i filtri selezionati" else "Nessuna operazione ancora registrata",
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = ThemeOnSurface
+                color = MaterialTheme.colorScheme.onSurface
             )
             Text(
                 text = if (hasActiveFilters) "Prova a modificare i termini di ricerca o la categoria." else "Le modifiche ai prodotti, ordini e credenziali eseguite dall'app verranno tracciate qui.",
                 style = MaterialTheme.typography.bodySmall,
-                color = ThemeOnSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
