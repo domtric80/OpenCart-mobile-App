@@ -1,4 +1,4 @@
-# CartAdmin 1.2.6
+# CartAdmin 1.2.7
 
 CartAdmin è un'app Android per consultare e amministrare un negozio OpenCart da smartphone. Il progetto è sviluppato in Kotlin con Jetpack Compose e include il bridge CartAdmin per OpenCart 4.1.x.
 
@@ -8,18 +8,17 @@ La release stabile è disponibile in [GitHub Releases](https://github.com/domtri
 
 | Componente | File | Compatibilità confermata |
 | --- | --- | --- |
-| App Android | `CartAdmin-v1.2.6.apk` | Android 7.0 o successivo, API 24–36 |
+| App Android | `CartAdmin-v1.2.7.apk` | Android 7.0 o successivo, API 24–36 |
 | Bridge OpenCart | `cartadmin.ocmod.zip` | OpenCart 4.1.x |
 
 Il bridge incluso non dichiara compatibilità con OpenCart 3.x. Un eventuale pacchetto per quel ramo dovrà essere pubblicato e verificato separatamente.
 
-### Novità della 1.2.6
+### Novità della 1.2.7
 
-- installazione e configurazione del bridge dal pannello amministrativo OpenCart 4.1.x;
-- token OpenCart salvato soltanto come hash e copia Android protetta da hardware;
-- token mai riproposto nell'interfaccia dopo il salvataggio;
-- creazione guidata del primo negozio direttamente dalla schermata Config;
-- contrasto migliorato in tema scuro nelle schermate Audit e Config e nel selettore Ordini/Abbonamenti/Resi.
+- rimossi dal runtime i tre abbonamenti e i tre resi dimostrativi presenti nelle versioni precedenti;
+- una risposta valida con zero abbonamenti o zero resi ora azzera correttamente schermata e cache locale;
+- la rimozione dei dati locali cancella anche le cache Room di abbonamenti e resi;
+- conservate le protezioni della 1.2.6: token non visibile, Android Keystore hardware-backed e configurazione guidata del primo negozio.
 
 ## Prima configurazione
 
@@ -64,7 +63,7 @@ Non inserire token, password, keystore o chiavi di firma in issue, screenshot, c
 - audit delle operazioni inviate al bridge;
 - blocco dell'app con password locale PBKDF2 e sblocco biometrico forte opzionale.
 
-Le schermate possono mostrare dati memorizzati localmente quando il negozio non è raggiungibile. Verificare sempre l'esito della sincronizzazione prima di considerare aggiornati ordini e catalogo.
+Le schermate possono mostrare dati memorizzati localmente quando il negozio non è raggiungibile. Una sincronizzazione riuscita che restituisce zero abbonamenti o zero resi svuota le rispettive cache: l'app non inserisce dati dimostrativi. Verificare sempre l'esito della sincronizzazione prima di considerare aggiornati i dati.
 
 ## Screenshot
 

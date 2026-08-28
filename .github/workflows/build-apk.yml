@@ -264,6 +264,9 @@ jobs:
 
           ### Novità confermate
 
+          - rimossi dal runtime i dati dimostrativi di abbonamenti e resi;
+          - le risposte valide con zero abbonamenti o zero resi azzerano correttamente stato e cache locale;
+          - la pulizia dei dati locali include le cache Room di abbonamenti e resi;
           - installazione del bridge dal pannello OpenCart tramite pacchetto \`cartadmin.ocmod.zip\` e \`install.json\`;
           - generazione e rotazione del token esclusivamente dal pannello amministrativo;
           - nel database OpenCart viene conservato soltanto l'hash non reversibile del token;

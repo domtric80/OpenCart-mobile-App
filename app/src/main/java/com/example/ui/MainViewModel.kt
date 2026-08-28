@@ -134,114 +134,10 @@ class MainViewModel(
             }
 
             val cachedSubs = db.subscriptionDao().getAllSubscriptions()
-            if (cachedSubs.isNotEmpty()) {
-                repository.setSubscriptions(cachedSubs.map { it.toDomainModel() })
-            } else {
-                // Inizializza con abbonamenti di esempio per visualizzazione immediata
-                val defaultSubs = listOf(
-                    com.example.model.Subscription(
-                        id = "sub_101",
-                        subscriptionId = "#SUB-101",
-                        customerName = "Marco Rossi",
-                        customerEmail = "marco.rossi@email.it",
-                        planName = "Fornitura Caffè Espresso Gold",
-                        cycleFrequency = "Ogni 30 giorni",
-                        amount = 34.90,
-                        status = com.example.model.SubscriptionStatus.ACTIVE,
-                        nextPaymentDate = "28/09/2026",
-                        startDate = "28/05/2026",
-                        paymentMethod = "Carta di Credito (Stripe)"
-                    ),
-                    com.example.model.Subscription(
-                        id = "sub_102",
-                        subscriptionId = "#SUB-102",
-                        customerName = "Laura Bianchi",
-                        customerEmail = "laura.b@gmail.com",
-                        planName = "Box Biologica Stagionale XL",
-                        cycleFrequency = "Ogni 14 giorni",
-                        amount = 49.00,
-                        status = com.example.model.SubscriptionStatus.ACTIVE,
-                        nextPaymentDate = "15/09/2026",
-                        startDate = "01/06/2026",
-                        paymentMethod = "PayPal Ricorrente"
-                    ),
-                    com.example.model.Subscription(
-                        id = "sub_103",
-                        subscriptionId = "#SUB-103",
-                        customerName = "Studio Tecnico Rossi",
-                        customerEmail = "ordini@rossistudio.it",
-                        planName = "Manutenzione & Ricambi Trimestrale",
-                        cycleFrequency = "Ogni 90 giorni",
-                        amount = 180.00,
-                        status = com.example.model.SubscriptionStatus.SUSPENDED,
-                        nextPaymentDate = "10/10/2026",
-                        startDate = "10/01/2026",
-                        paymentMethod = "Addebito Diretto SEPA"
-                    )
-                )
-                repository.setSubscriptions(defaultSubs)
-            }
+            repository.setSubscriptions(cachedSubs.map { it.toDomainModel() })
 
             val cachedReturns = db.orderReturnDao().getAllReturns()
-            if (cachedReturns.isNotEmpty()) {
-                repository.setReturns(cachedReturns.map { it.toDomainModel() })
-            } else {
-                // Inizializza con resi di esempio per visualizzazione immediata
-                val defaultReturns = listOf(
-                    com.example.model.OrderReturn(
-                        id = "ret_501",
-                        returnId = "RMA-501",
-                        orderId = "#10042",
-                        customerName = "Giuseppe Verdi",
-                        customerEmail = "g.verdi@pec.it",
-                        customerPhone = "+39 333 4567890",
-                        productName = "Cuffie Bluetooth Noise Cancelling Pro",
-                        productModel = "AUDIO-PRO-X",
-                        quantity = 1,
-                        reason = "Pacco arrivato danneggiato / non funzionante",
-                        opened = true,
-                        status = com.example.model.ReturnStatus.AWAITING_PRODUCTS,
-                        action = "In attesa di ricezione merce in magazzino",
-                        dateAdded = "22/08/2026",
-                        comment = "Il cliente segnala rottura dell'archetto sinistro."
-                    ),
-                    com.example.model.OrderReturn(
-                        id = "ret_502",
-                        returnId = "RMA-502",
-                        orderId = "#10038",
-                        customerName = "Alessia Ferrari",
-                        customerEmail = "alessia.f@libero.it",
-                        customerPhone = "+39 347 1122334",
-                        productName = "Scarpe Running Ultra Grip - Taglia 39",
-                        productModel = "SH-ULTRA-39",
-                        quantity = 1,
-                        reason = "Taglia errata / richiesta sostituzione",
-                        opened = true,
-                        status = com.example.model.ReturnStatus.PENDING,
-                        action = "Da autorizzare con etichetta reso",
-                        dateAdded = "24/08/2026",
-                        comment = "Richiede sostituzione con taglia 40."
-                    ),
-                    com.example.model.OrderReturn(
-                        id = "ret_503",
-                        returnId = "RMA-503",
-                        orderId = "#10015",
-                        customerName = "Matteo Conti",
-                        customerEmail = "m.conti@yahoo.it",
-                        customerPhone = "+39 320 9876543",
-                        productName = "Smartwatch AMOLED IP68 Steel",
-                        productModel = "SW-AMOL-BK",
-                        quantity = 1,
-                        reason = "Difetto firmware dopo 3 giorni",
-                        opened = true,
-                        status = com.example.model.ReturnStatus.COMPLETE_REFUNDED,
-                        action = "Rimborso emesso su carta di credito",
-                        dateAdded = "12/08/2026",
-                        comment = "Verificato difetto da laboratorio, rimborso effettuato."
-                    )
-                )
-                repository.setReturns(defaultReturns)
-            }
+            repository.setReturns(cachedReturns.map { it.toDomainModel() })
 
             // Se è presente uno store configurato, avvia la sincronizzazione automatica reale
             val primaryStore = repository.stores.value.find {
@@ -511,59 +407,55 @@ class MainViewModel(
 
             if (subsRes.isSuccess) {
                 val liveSubs = subsRes.getOrNull() ?: emptyList()
-                if (liveSubs.isNotEmpty()) {
-                    subsCount = liveSubs.size
-                    repository.setSubscriptions(liveSubs)
-                    db.subscriptionDao().clearAllSubscriptions()
-                    liveSubs.forEach { sub ->
-                        db.subscriptionDao().insertSubscription(
-                            com.example.data.local.entity.SubscriptionEntity(
-                                id = sub.id,
-                                storeId = uiState.value.currentStore?.id ?: "store_1",
-                                subscriptionId = sub.subscriptionId,
-                                customerName = sub.customerName,
-                                customerEmail = sub.customerEmail,
-                                planName = sub.planName,
-                                cycleFrequency = sub.cycleFrequency,
-                                amount = sub.amount,
-                                status = sub.status.name,
-                                nextPaymentDate = sub.nextPaymentDate,
-                                startDate = sub.startDate,
-                                paymentMethod = sub.paymentMethod
-                            )
+                subsCount = liveSubs.size
+                repository.setSubscriptions(liveSubs)
+                db.subscriptionDao().clearAllSubscriptions()
+                liveSubs.forEach { sub ->
+                    db.subscriptionDao().insertSubscription(
+                        com.example.data.local.entity.SubscriptionEntity(
+                            id = sub.id,
+                            storeId = uiState.value.currentStore?.id ?: "store_1",
+                            subscriptionId = sub.subscriptionId,
+                            customerName = sub.customerName,
+                            customerEmail = sub.customerEmail,
+                            planName = sub.planName,
+                            cycleFrequency = sub.cycleFrequency,
+                            amount = sub.amount,
+                            status = sub.status.name,
+                            nextPaymentDate = sub.nextPaymentDate,
+                            startDate = sub.startDate,
+                            paymentMethod = sub.paymentMethod
                         )
-                    }
+                    )
                 }
             }
 
             if (retRes.isSuccess) {
                 val liveReturns = retRes.getOrNull() ?: emptyList()
-                if (liveReturns.isNotEmpty()) {
-                    retCount = liveReturns.size
-                    repository.setReturns(liveReturns)
-                    db.orderReturnDao().clearAllReturns()
-                    liveReturns.forEach { ret ->
-                        db.orderReturnDao().insertReturn(
-                            com.example.data.local.entity.OrderReturnEntity(
-                                id = ret.id,
-                                storeId = uiState.value.currentStore?.id ?: "store_1",
-                                returnId = ret.returnId,
-                                orderId = ret.orderId,
-                                customerName = ret.customerName,
-                                customerEmail = ret.customerEmail,
-                                customerPhone = ret.customerPhone,
-                                productName = ret.productName,
-                                productModel = ret.productModel,
-                                quantity = ret.quantity,
-                                reason = ret.reason,
-                                opened = ret.opened,
-                                status = ret.status.name,
-                                action = ret.action,
-                                dateAdded = ret.dateAdded,
-                                comment = ret.comment
-                            )
+                retCount = liveReturns.size
+                repository.setReturns(liveReturns)
+                db.orderReturnDao().clearAllReturns()
+                liveReturns.forEach { ret ->
+                    db.orderReturnDao().insertReturn(
+                        com.example.data.local.entity.OrderReturnEntity(
+                            id = ret.id,
+                            storeId = uiState.value.currentStore?.id ?: "store_1",
+                            returnId = ret.returnId,
+                            orderId = ret.orderId,
+                            customerName = ret.customerName,
+                            customerEmail = ret.customerEmail,
+                            customerPhone = ret.customerPhone,
+                            productName = ret.productName,
+                            productModel = ret.productModel,
+                            quantity = ret.quantity,
+                            reason = ret.reason,
+                            opened = ret.opened,
+                            status = ret.status.name,
+                            action = ret.action,
+                            dateAdded = ret.dateAdded,
+                            comment = ret.comment
                         )
-                    }
+                    )
                 }
             }
 
@@ -655,58 +547,54 @@ class MainViewModel(
             val subsRes = apiClient.fetchSubscriptions(url, apiKey, username, limit = 50)
             if (subsRes.isSuccess) {
                 val liveSubs = subsRes.getOrNull() ?: emptyList()
-                if (liveSubs.isNotEmpty()) {
-                    repository.setSubscriptions(liveSubs)
-                    db.subscriptionDao().clearAllSubscriptions()
-                    liveSubs.forEach { sub ->
-                        db.subscriptionDao().insertSubscription(
-                            com.example.data.local.entity.SubscriptionEntity(
-                                id = sub.id,
-                                storeId = uiState.value.currentStore?.id ?: "store_1",
-                                subscriptionId = sub.subscriptionId,
-                                customerName = sub.customerName,
-                                customerEmail = sub.customerEmail,
-                                planName = sub.planName,
-                                cycleFrequency = sub.cycleFrequency,
-                                amount = sub.amount,
-                                status = sub.status.name,
-                                nextPaymentDate = sub.nextPaymentDate,
-                                startDate = sub.startDate,
-                                paymentMethod = sub.paymentMethod
-                            )
+                repository.setSubscriptions(liveSubs)
+                db.subscriptionDao().clearAllSubscriptions()
+                liveSubs.forEach { sub ->
+                    db.subscriptionDao().insertSubscription(
+                        com.example.data.local.entity.SubscriptionEntity(
+                            id = sub.id,
+                            storeId = uiState.value.currentStore?.id ?: "store_1",
+                            subscriptionId = sub.subscriptionId,
+                            customerName = sub.customerName,
+                            customerEmail = sub.customerEmail,
+                            planName = sub.planName,
+                            cycleFrequency = sub.cycleFrequency,
+                            amount = sub.amount,
+                            status = sub.status.name,
+                            nextPaymentDate = sub.nextPaymentDate,
+                            startDate = sub.startDate,
+                            paymentMethod = sub.paymentMethod
                         )
-                    }
+                    )
                 }
             }
 
             val retRes = apiClient.fetchReturns(url, apiKey, username, limit = 50)
             if (retRes.isSuccess) {
                 val liveReturns = retRes.getOrNull() ?: emptyList()
-                if (liveReturns.isNotEmpty()) {
-                    repository.setReturns(liveReturns)
-                    db.orderReturnDao().clearAllReturns()
-                    liveReturns.forEach { ret ->
-                        db.orderReturnDao().insertReturn(
-                            com.example.data.local.entity.OrderReturnEntity(
-                                id = ret.id,
-                                storeId = uiState.value.currentStore?.id ?: "store_1",
-                                returnId = ret.returnId,
-                                orderId = ret.orderId,
-                                customerName = ret.customerName,
-                                customerEmail = ret.customerEmail,
-                                customerPhone = ret.customerPhone,
-                                productName = ret.productName,
-                                productModel = ret.productModel,
-                                quantity = ret.quantity,
-                                reason = ret.reason,
-                                opened = ret.opened,
-                                status = ret.status.name,
-                                action = ret.action,
-                                dateAdded = ret.dateAdded,
-                                comment = ret.comment
-                            )
+                repository.setReturns(liveReturns)
+                db.orderReturnDao().clearAllReturns()
+                liveReturns.forEach { ret ->
+                    db.orderReturnDao().insertReturn(
+                        com.example.data.local.entity.OrderReturnEntity(
+                            id = ret.id,
+                            storeId = uiState.value.currentStore?.id ?: "store_1",
+                            returnId = ret.returnId,
+                            orderId = ret.orderId,
+                            customerName = ret.customerName,
+                            customerEmail = ret.customerEmail,
+                            customerPhone = ret.customerPhone,
+                            productName = ret.productName,
+                            productModel = ret.productModel,
+                            quantity = ret.quantity,
+                            reason = ret.reason,
+                            opened = ret.opened,
+                            status = ret.status.name,
+                            action = ret.action,
+                            dateAdded = ret.dateAdded,
+                            comment = ret.comment
                         )
-                    }
+                    )
                 }
             }
 
@@ -890,6 +778,8 @@ class MainViewModel(
             db.orderDao().clearAllOrders()
             db.productDao().clearAllProducts()
             db.categoryDao().clearAllCategories()
+            db.subscriptionDao().clearAllSubscriptions()
+            db.orderReturnDao().clearAllReturns()
             _syncSuccessMessage.value = "Tutti i dati locali sono stati eliminati definitivamente."
             kotlinx.coroutines.delay(2500)
             _syncSuccessMessage.value = null
