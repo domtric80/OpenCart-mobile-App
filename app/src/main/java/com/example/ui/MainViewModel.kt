@@ -30,12 +30,15 @@ import com.example.network.OpenCartConnectionResult
 import com.example.security.AndroidKeystoreCredentialProtector
 import com.example.security.CredentialProtectionException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 enum class Timeframe(val label: String) {
@@ -107,6 +110,7 @@ class MainViewModel(
     private val _syncSuccessMessage = MutableStateFlow<String?>(null)
     private val _isTestingConnection = MutableStateFlow(false)
     private val _connectionResult = MutableStateFlow<OpenCartConnectionResult?>(null)
+    private var visitorTelemetryJob: Job? = null
 
     init {
         viewModelScope.launch(Dispatchers.IO) {
@@ -149,6 +153,7 @@ class MainViewModel(
                     primaryStore.apiKey,
                     primaryStore.apiUsername
                 )
+                startVisitorTelemetry(primaryStore)
             }
         }
     }
@@ -274,6 +279,7 @@ class MainViewModel(
                         revealedStore.apiKey,
                         revealedStore.apiUsername
                     )
+                    startVisitorTelemetry(revealedStore)
                 }
             }
         }
@@ -324,12 +330,15 @@ class MainViewModel(
             val catRes = apiClient.fetchCategories(url, apiKey, username, limit = 100)
             val subsRes = apiClient.fetchSubscriptions(url, apiKey, username, limit = 50)
             val retRes = apiClient.fetchReturns(url, apiKey, username, limit = 50)
+            val telemetryRes = apiClient.fetchVisitorTelemetry(url, apiKey, username)
 
             var orderCount = 0
             var prodCount = 0
             var catCount = 0
             var subsCount = 0
             var retCount = 0
+
+            telemetryRes.onSuccess(repository::setVisitorStats)
 
             if (ordersRes.isSuccess) {
                 val liveOrders = ordersRes.getOrNull() ?: emptyList()
@@ -598,107 +607,171 @@ class MainViewModel(
                 }
             }
 
+            apiClient.fetchVisitorTelemetry(url, apiKey, username)
+                .onSuccess(repository::setVisitorStats)
+
             ordersRes.isSuccess || prodRes.isSuccess || catRes.isSuccess
         } catch (e: Exception) {
             false
         }
     }
 
+    private fun startVisitorTelemetry(store: Store) {
+        visitorTelemetryJob?.cancel()
+        repository.setVisitorStats(VisitorRealtimeStats())
+        if (store.url.isBlank() || store.apiKey.isBlank()) return
+
+        visitorTelemetryJob = viewModelScope.launch(Dispatchers.IO) {
+            while (isActive) {
+                apiClient.fetchVisitorTelemetry(store.url, store.apiKey, store.apiUsername)
+                    .onSuccess(repository::setVisitorStats)
+                delay(30_000)
+            }
+        }
+    }
+
     fun updateSubscriptionStatus(subscriptionId: String, newStatus: SubscriptionStatus) {
-        repository.updateSubscriptionStatus(subscriptionId, newStatus)
         viewModelScope.launch(Dispatchers.IO) {
-            db.subscriptionDao().updateSubscriptionStatus(subscriptionId, newStatus.name)
             val store = uiState.value.currentStore
-            if (store != null && store.url.isNotBlank()) {
-                apiClient.updateSubscriptionStatus(store.url, store.apiKey, subscriptionId, newStatus.name, store.apiUsername)
+            if (store == null || store.url.isBlank()) {
+                showOperationMessage("Abbonamento non aggiornato: nessun negozio configurato.")
+                return@launch
+            }
+            val result = apiClient.updateSubscriptionStatus(store.url, store.apiKey, subscriptionId, newStatus.name, store.apiUsername)
+            if (result.getOrDefault(false)) {
+                repository.updateSubscriptionStatus(subscriptionId, newStatus)
+                db.subscriptionDao().updateSubscriptionStatus(subscriptionId, newStatus.name)
+                showOperationMessage("Stato abbonamento aggiornato sullo store.")
+            } else {
+                showOperationMessage("Abbonamento non aggiornato: ${result.exceptionOrNull()?.message ?: "risposta rifiutata dal bridge"}.")
             }
         }
     }
 
     fun updateReturnStatus(returnId: String, newStatus: ReturnStatus, newAction: String = "In lavorazione") {
-        repository.updateReturnStatus(returnId, newStatus, newAction)
         viewModelScope.launch(Dispatchers.IO) {
-            db.orderReturnDao().updateReturnStatus(returnId, newStatus.name, newAction)
             val store = uiState.value.currentStore
-            if (store != null && store.url.isNotBlank()) {
-                val statusId = when (newStatus) {
-                    ReturnStatus.PENDING -> 1
-                    ReturnStatus.AWAITING_PRODUCTS -> 2
-                    ReturnStatus.IN_INSPECTION -> 3
-                    ReturnStatus.COMPLETE_REFUNDED, ReturnStatus.COMPLETE_REPLACED -> 4
-                    ReturnStatus.DENIED -> 5
-                }
-                apiClient.updateReturnStatus(store.url, store.apiKey, returnId, statusId, newAction, store.apiUsername)
+            if (store == null || store.url.isBlank()) {
+                showOperationMessage("Reso non aggiornato: nessun negozio configurato.")
+                return@launch
+            }
+            val statusId = when (newStatus) {
+                ReturnStatus.PENDING -> 1
+                ReturnStatus.AWAITING_PRODUCTS -> 2
+                ReturnStatus.IN_INSPECTION -> 3
+                ReturnStatus.COMPLETE_REFUNDED, ReturnStatus.COMPLETE_REPLACED -> 4
+                ReturnStatus.DENIED -> 5
+            }
+            val result = apiClient.updateReturnStatus(store.url, store.apiKey, returnId, statusId, newAction, store.apiUsername)
+            if (result.getOrDefault(false)) {
+                repository.updateReturnStatus(returnId, newStatus, newAction)
+                db.orderReturnDao().updateReturnStatus(returnId, newStatus.name, newAction)
+                showOperationMessage("Stato reso aggiornato sullo store.")
+            } else {
+                showOperationMessage("Reso non aggiornato: ${result.exceptionOrNull()?.message ?: "risposta rifiutata dal bridge"}.")
             }
         }
     }
 
     fun updateOrderStatus(orderId: String, newStatus: OrderStatus) {
-        repository.updateOrderStatus(orderId, newStatus)
         viewModelScope.launch(Dispatchers.IO) {
-            offlineOrderRepository.updateOrderStatus(orderId, newStatus)
             val store = uiState.value.currentStore
-            if (store != null && store.url.isNotBlank()) {
-                val statusId = when (newStatus) {
-                    OrderStatus.PENDING -> 1
-                    OrderStatus.PROCESSING -> 2
-                    OrderStatus.SHIPPED -> 3
-                    OrderStatus.DELIVERED, OrderStatus.COMPLETE -> 5
-                    OrderStatus.CANCELLED -> 7
-                    else -> 2
-                }
-                apiClient.updateOrderStatus(store.url, store.apiKey, orderId, statusId, "Stato aggiornato da CartAdmin App")
+            if (store == null || store.url.isBlank()) {
+                showOperationMessage("Ordine non aggiornato: nessun negozio configurato.")
+                return@launch
+            }
+            val result = apiClient.updateOrderStatus(store.url, store.apiKey, orderId, newStatus.toOpenCartStatusId(), "Stato aggiornato da CartAdmin App", store.apiUsername)
+            if (result.getOrDefault(false)) {
+                repository.updateOrderStatus(orderId, newStatus)
+                offlineOrderRepository.updateOrderStatus(orderId, newStatus)
+                showOperationMessage("Stato ordine aggiornato sullo store.")
+            } else {
+                showOperationMessage("Ordine non aggiornato: ${result.exceptionOrNull()?.message ?: "risposta rifiutata dal bridge"}.")
             }
         }
     }
 
     fun updateOrderNotes(orderId: String, notes: String) {
-        repository.updateOrderNotes(orderId, notes)
         viewModelScope.launch(Dispatchers.IO) {
-            offlineOrderRepository.updateOrderNotes(orderId, notes)
+            val order = uiState.value.orders.find { it.id == orderId }
+            val store = uiState.value.currentStore
+            if (order == null || store == null || store.url.isBlank()) {
+                showOperationMessage("Note non aggiornate: ordine o negozio non disponibile.")
+                return@launch
+            }
+            val result = apiClient.updateOrderStatus(store.url, store.apiKey, orderId, order.status.toOpenCartStatusId(), notes, store.apiUsername)
+            if (result.getOrDefault(false)) {
+                repository.updateOrderNotes(orderId, notes)
+                offlineOrderRepository.updateOrderNotes(orderId, notes)
+                showOperationMessage("Note ordine aggiornate sullo store.")
+            } else {
+                showOperationMessage("Note non aggiornate: ${result.exceptionOrNull()?.message ?: "risposta rifiutata dal bridge"}.")
+            }
         }
     }
 
     fun updateOrder(orderId: String, newStatus: OrderStatus, notes: String) {
-        repository.updateOrderStatusAndNotes(orderId, newStatus, notes)
         viewModelScope.launch(Dispatchers.IO) {
-            offlineOrderRepository.updateOrderStatusAndNotes(orderId, newStatus, notes)
             val store = uiState.value.currentStore
-            if (store != null && store.url.isNotBlank()) {
-                val statusId = when (newStatus) {
-                    OrderStatus.PENDING -> 1
-                    OrderStatus.PROCESSING -> 2
-                    OrderStatus.SHIPPED -> 3
-                    OrderStatus.DELIVERED, OrderStatus.COMPLETE -> 5
-                    OrderStatus.CANCELLED -> 7
-                    else -> 2
-                }
-                apiClient.updateOrderStatus(store.url, store.apiKey, orderId, statusId, notes)
+            if (store == null || store.url.isBlank()) {
+                showOperationMessage("Ordine non aggiornato: nessun negozio configurato.")
+                return@launch
+            }
+            val result = apiClient.updateOrderStatus(store.url, store.apiKey, orderId, newStatus.toOpenCartStatusId(), notes, store.apiUsername)
+            if (result.getOrDefault(false)) {
+                repository.updateOrderStatusAndNotes(orderId, newStatus, notes)
+                offlineOrderRepository.updateOrderStatusAndNotes(orderId, newStatus, notes)
+                showOperationMessage("Ordine aggiornato sullo store.")
+            } else {
+                showOperationMessage("Ordine non aggiornato: ${result.exceptionOrNull()?.message ?: "risposta rifiutata dal bridge"}.")
             }
         }
+    }
+
+    private fun OrderStatus.toOpenCartStatusId(): Int = when (this) {
+        OrderStatus.PENDING -> 1
+        OrderStatus.PROCESSING -> 2
+        OrderStatus.SHIPPED -> 3
+        OrderStatus.DELIVERED, OrderStatus.COMPLETE -> 5
+        OrderStatus.CANCELLED -> 7
+        else -> 2
     }
 
     fun updateProductStock(productId: String, delta: Int) {
         val prod = uiState.value.products.find { it.id == productId } ?: return
         val newQty = (prod.quantity + delta).coerceAtLeast(0)
-        repository.updateProductStock(productId, newQty)
         viewModelScope.launch(Dispatchers.IO) {
-            offlineCatalogRepository.updateProductStock(productId, newQty)
             val store = uiState.value.currentStore
-            if (store != null && store.url.isNotBlank()) {
-                apiClient.updateProductStock(store.url, store.apiKey, productId, newQty)
+            if (store == null || store.url.isBlank()) {
+                showOperationMessage("Quantità non aggiornata: nessun negozio configurato.")
+                return@launch
+            }
+            val result = apiClient.updateProductStock(store.url, store.apiKey, productId, newQty, store.apiUsername)
+            if (result.getOrDefault(false)) {
+                repository.updateProductStock(productId, newQty)
+                offlineCatalogRepository.updateProductStock(productId, newQty)
+                showOperationMessage("Quantità aggiornata sullo store: $newQty.")
+            } else {
+                showOperationMessage("Quantità non aggiornata: ${result.exceptionOrNull()?.message ?: "risposta rifiutata dal bridge"}.")
             }
         }
     }
 
     fun setDirectProductStock(productId: String, newQty: Int) {
         val clamped = newQty.coerceAtLeast(0)
-        repository.updateProductStock(productId, clamped)
         viewModelScope.launch(Dispatchers.IO) {
-            offlineCatalogRepository.updateProductStock(productId, clamped)
             val store = uiState.value.currentStore
-            if (store != null && store.url.isNotBlank()) {
-                apiClient.updateProductStock(store.url, store.apiKey, productId, clamped)
+            if (store == null || store.url.isBlank()) {
+                showOperationMessage("Quantità non aggiornata: nessun negozio configurato.")
+                return@launch
+            }
+            val result = apiClient.updateProductStock(store.url, store.apiKey, productId, clamped, store.apiUsername)
+            if (result.getOrDefault(false)) {
+                repository.updateProductStock(productId, clamped)
+                offlineCatalogRepository.updateProductStock(productId, clamped)
+                showOperationMessage("Quantità aggiornata sullo store: $clamped.")
+            } else {
+                showOperationMessage("Quantità non aggiornata: ${result.exceptionOrNull()?.message ?: "risposta rifiutata dal bridge"}.")
             }
         }
     }
@@ -713,60 +786,70 @@ class MainViewModel(
         category: String,
         description: String = ""
     ) {
-        val created = repository.addProduct(name, model, sku, price, specialPrice, quantity, category, description)
         viewModelScope.launch(Dispatchers.IO) {
-            offlineCatalogRepository.saveProduct(created, uiState.value.currentStore?.id ?: "store_1")
+            showOperationMessage("Creazione prodotto non disponibile: il bridge non espone ancora un endpoint sicuro di creazione.")
         }
     }
 
     fun updateProduct(product: Product) {
-        repository.updateProduct(product)
         viewModelScope.launch(Dispatchers.IO) {
-            offlineCatalogRepository.saveProduct(product, uiState.value.currentStore?.id ?: "store_1")
+            val store = uiState.value.currentStore
+            if (store == null || store.url.isBlank()) {
+                showOperationMessage("Prodotto non aggiornato: nessun negozio configurato.")
+                return@launch
+            }
+            val result = apiClient.updateProduct(store.url, store.apiKey, product, store.apiUsername)
+            if (result.getOrDefault(false)) {
+                repository.updateProduct(product)
+                offlineCatalogRepository.saveProduct(product, store.id)
+                showOperationMessage("Prodotto “${product.name}” aggiornato sullo store.")
+            } else {
+                showOperationMessage("Prodotto non aggiornato: ${result.exceptionOrNull()?.message ?: "risposta rifiutata dal bridge"}.")
+            }
         }
     }
 
     fun deleteProduct(productId: String) {
-        repository.deleteProduct(productId)
         viewModelScope.launch(Dispatchers.IO) {
-            offlineCatalogRepository.deleteProduct(productId)
+            showOperationMessage("Eliminazione prodotto non disponibile: nessun dato è stato rimosso dallo store.")
         }
     }
 
     fun toggleProductStatus(productId: String) {
         val prod = uiState.value.products.find { it.id == productId } ?: return
-        repository.toggleProductStatus(productId)
-        viewModelScope.launch(Dispatchers.IO) {
-            offlineCatalogRepository.updateProductStatus(productId, !prod.status)
-        }
+        updateProduct(prod.copy(status = !prod.status))
     }
 
     fun addNewCategory(name: String, description: String = "", sortOrder: Int = 0, status: Boolean = true) {
-        val created = repository.addCategory(name, description, sortOrder, status)
         viewModelScope.launch(Dispatchers.IO) {
-            offlineCatalogRepository.saveCategory(created, uiState.value.currentStore?.id ?: "store_1")
+            showOperationMessage("Creazione categoria non disponibile: nessun dato è stato aggiunto allo store.")
         }
     }
 
     fun updateCategory(categoryId: String, name: String, description: String, sortOrder: Int, status: Boolean) {
-        repository.updateCategory(categoryId, name, description, sortOrder, status)
-        val updated = repository.categories.value.find { it.id == categoryId }
-        if (updated != null) {
-            viewModelScope.launch(Dispatchers.IO) {
-                offlineCatalogRepository.saveCategory(updated, uiState.value.currentStore?.id ?: "store_1")
-            }
+        viewModelScope.launch(Dispatchers.IO) {
+            showOperationMessage("Modifica categoria non disponibile: nessun dato è stato cambiato sullo store.")
         }
     }
 
     fun deleteCategory(categoryId: String) {
-        repository.deleteCategory(categoryId)
         viewModelScope.launch(Dispatchers.IO) {
-            offlineCatalogRepository.deleteCategory(categoryId)
+            showOperationMessage("Eliminazione categoria non disponibile: nessun dato è stato rimosso dallo store.")
         }
     }
 
     fun toggleCategoryStatus(categoryId: String) {
-        repository.toggleCategoryStatus(categoryId)
+        viewModelScope.launch(Dispatchers.IO) {
+            showOperationMessage("Cambio stato categoria non disponibile: nessun dato è stato cambiato sullo store.")
+        }
+    }
+
+    private suspend fun showOperationMessage(message: String) {
+        _syncSuccessMessage.value = message
+        delay(4_000)
+        if (_syncSuccessMessage.value == message) {
+            _syncSuccessMessage.value = null
+        }
     }
 
     fun clearDummyData() {
@@ -819,6 +902,7 @@ class MainViewModel(
                 _syncSuccessMessage.value = "Parametri store cifrati nel chip hardware."
                 if (effectiveKey.isNotBlank()) {
                     syncDataFromOpenCart(url, effectiveKey, username)
+                    repository.stores.value.find { it.id == storeId }?.let(::startVisitorTelemetry)
                 }
             } catch (_: CredentialProtectionException) {
                 _syncSuccessMessage.value =
@@ -832,10 +916,11 @@ class MainViewModel(
     fun addStore(name: String, url: String, version: String, username: String = "", key: String = "") {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                repository.addStore(name, url, version, username, key)
+                val createdStore = repository.addStore(name, url, version, username, key)
                 _isStoreSwitcherOpen.value = false
                 if (key.isNotBlank()) {
                     syncDataFromOpenCart(url, key, username)
+                    startVisitorTelemetry(createdStore)
                 }
             } catch (_: CredentialProtectionException) {
                 _syncSuccessMessage.value =
@@ -846,6 +931,8 @@ class MainViewModel(
 
     fun deleteStore(storeId: String) {
         viewModelScope.launch(Dispatchers.IO) {
+            visitorTelemetryJob?.cancel()
+            repository.setVisitorStats(VisitorRealtimeStats())
             repository.deleteStore(storeId)
         }
     }

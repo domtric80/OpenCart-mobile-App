@@ -243,7 +243,8 @@ fun MainAppContent(
                         },
                         onToggleCategoryStatus = { categoryId ->
                             viewModel.toggleCategoryStatus(categoryId)
-                        }
+                        },
+                        operationMessage = uiState.syncSuccessMessage
                     )
                 }
 

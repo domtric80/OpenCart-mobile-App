@@ -150,7 +150,7 @@ try {
             sendJson([
                 'success' => true,
                 'status' => 'online',
-                'bridge_version' => '1.2.6',
+                'bridge_version' => '1.2.8',
                 'author' => 'SOLO SOLUZIONI (OpenCart ITALIA)',
                 'store_name' => $storeName,
                 'total_orders' => $totalOrders,
@@ -220,7 +220,13 @@ try {
         case 'products':
             $limit = isset($_GET['limit']) ? max(1, min(200, (int)$_GET['limit'])) : 100;
             $stmt = $mysqli->prepare("SELECT p.product_id, p.model, p.sku, p.quantity, p.price, p.status, p.image,
-                                             pd.name, pd.description
+                                             pd.name, pd.description,
+                                             (SELECT cd.name FROM `{$db_prefix}product_to_category` p2c
+                                              LEFT JOIN `{$db_prefix}category_description` cd ON (p2c.category_id = cd.category_id AND cd.language_id = 1)
+                                              WHERE p2c.product_id = p.product_id ORDER BY p2c.category_id ASC LIMIT 1) AS category_name,
+                                             (SELECT ps.price FROM `{$db_prefix}product_special` ps
+                                              WHERE ps.product_id = p.product_id
+                                              ORDER BY ps.priority ASC, ps.product_special_id ASC LIMIT 1) AS special_price
                                       FROM `{$db_prefix}product` p
                                       LEFT JOIN `{$db_prefix}product_description` pd ON (p.product_id = pd.product_id AND pd.language_id = 1)
                                       ORDER BY p.product_id DESC LIMIT ?");
@@ -239,6 +245,9 @@ try {
                             'sku' => $row['sku'],
                             'quantity' => (int)$row['quantity'],
                             'price' => (float)$row['price'],
+                            'special_price' => $row['special_price'] !== null ? (float)$row['special_price'] : null,
+                            'category' => $row['category_name'] ?: '',
+                            'description' => html_entity_decode($row['description'] ?? '', ENT_QUOTES | ENT_HTML5, 'UTF-8'),
                             'status' => (int)$row['status'] === 1,
                             'image' => $row['image']
                         ];
@@ -291,6 +300,169 @@ try {
             ]);
             break;
 
+        case 'visitor_telemetry':
+            $trackingEnabled = false;
+            $resTracking = $mysqli->query("SELECT `value` FROM `{$db_prefix}setting` WHERE `key` = 'config_customer_online' ORDER BY `store_id` ASC LIMIT 1");
+            if ($resTracking && $row = $resTracking->fetch_assoc()) {
+                $trackingEnabled = ((string)$row['value'] === '1');
+            }
+
+            $onlineTableExists = false;
+            $checkOnlineTable = $mysqli->query("SHOW TABLES LIKE '{$db_prefix}customer_online'");
+            if ($checkOnlineTable && $checkOnlineTable->num_rows > 0) {
+                $onlineTableExists = true;
+            }
+
+            $activeVisitors = 0;
+            $pageUpdatesPerMinute = 0;
+            $activeCarts = 0;
+            $activeCheckouts = 0;
+            $history = [];
+            $topPages = [];
+            $trafficSources = [];
+            $liveEvents = [];
+
+            if ($trackingEnabled && $onlineTableExists) {
+                $expiryHours = 1;
+                $resExpiry = $mysqli->query("SELECT `value` FROM `{$db_prefix}setting` WHERE `key` = 'config_customer_online_expire' ORDER BY `store_id` ASC LIMIT 1");
+                if ($resExpiry && $row = $resExpiry->fetch_assoc()) {
+                    $expiryHours = max(1, min(24, (int)$row['value']));
+                }
+
+                $activeSince = date('Y-m-d H:i:s', strtotime('-' . $expiryHours . ' hour'));
+                $minuteSince = date('Y-m-d H:i:s', strtotime('-1 minute'));
+                $historySince = date('Y-m-d H:i:s', strtotime('-30 minutes'));
+
+                $stmtCount = $mysqli->prepare("SELECT COUNT(*) AS total FROM `{$db_prefix}customer_online` WHERE `date_added` >= ?");
+                if ($stmtCount) {
+                    $stmtCount->bind_param('s', $activeSince);
+                    $stmtCount->execute();
+                    $res = $stmtCount->get_result();
+                    $activeVisitors = ($res && $row = $res->fetch_assoc()) ? (int)$row['total'] : 0;
+                    $stmtCount->close();
+                }
+
+                $stmtMinute = $mysqli->prepare("SELECT COUNT(*) AS total FROM `{$db_prefix}customer_online` WHERE `date_added` >= ?");
+                if ($stmtMinute) {
+                    $stmtMinute->bind_param('s', $minuteSince);
+                    $stmtMinute->execute();
+                    $res = $stmtMinute->get_result();
+                    $pageUpdatesPerMinute = ($res && $row = $res->fetch_assoc()) ? (int)$row['total'] : 0;
+                    $stmtMinute->close();
+                }
+
+                $stmtHistory = $mysqli->prepare("SELECT DATE_FORMAT(`date_added`, '%H:%i') AS minute_label, COUNT(*) AS active_users FROM `{$db_prefix}customer_online` WHERE `date_added` >= ? GROUP BY minute_label ORDER BY minute_label ASC");
+                if ($stmtHistory) {
+                    $stmtHistory->bind_param('s', $historySince);
+                    $stmtHistory->execute();
+                    $res = $stmtHistory->get_result();
+                    if ($res) {
+                        while ($row = $res->fetch_assoc()) {
+                            $history[] = [
+                                'time_label' => (string)$row['minute_label'],
+                                'active_users' => (int)$row['active_users'],
+                                'page_views' => (int)$row['active_users']
+                            ];
+                        }
+                    }
+                    $stmtHistory->close();
+                }
+
+                $stmtOnline = $mysqli->prepare("SELECT `url`, `referer`, `date_added` FROM `{$db_prefix}customer_online` WHERE `date_added` >= ? ORDER BY `date_added` DESC LIMIT 200");
+                if ($stmtOnline) {
+                    $stmtOnline->bind_param('s', $activeSince);
+                    $stmtOnline->execute();
+                    $res = $stmtOnline->get_result();
+                    $pageCounts = [];
+                    $sourceCounts = [];
+                    if ($res) {
+                        while ($row = $res->fetch_assoc()) {
+                            $rawUrl = is_string($row['url']) ? $row['url'] : '';
+                            $path = parse_url($rawUrl, PHP_URL_PATH);
+                            $safePath = is_string($path) && $path !== '' ? mb_substr($path, 0, 180) : '/';
+                            $pageCounts[$safePath] = ($pageCounts[$safePath] ?? 0) + 1;
+
+                            if (stripos($rawUrl, 'checkout') !== false) {
+                                $activeCheckouts++;
+                            }
+
+                            $rawReferer = is_string($row['referer']) ? $row['referer'] : '';
+                            $host = parse_url($rawReferer, PHP_URL_HOST);
+                            $source = is_string($host) && $host !== '' ? mb_substr(strtolower($host), 0, 120) : 'Accesso diretto';
+                            $sourceCounts[$source] = ($sourceCounts[$source] ?? 0) + 1;
+
+                            if (count($liveEvents) < 20) {
+                                $liveEvents[] = [
+                                    'id' => hash('sha256', $safePath . '|' . (string)$row['date_added']),
+                                    'timestamp' => (string)$row['date_added'],
+                                    'event_type' => 'PAGE_VIEW',
+                                    'description' => 'Visita su ' . $safePath,
+                                    'location' => '',
+                                    'icon_type' => 'page'
+                                ];
+                            }
+                        }
+                    }
+                    $stmtOnline->close();
+
+                    arsort($pageCounts);
+                    foreach (array_slice($pageCounts, 0, 10, true) as $path => $count) {
+                        $topPages[] = [
+                            'path' => $path,
+                            'title' => $path === '/' ? 'Home page' : trim(str_replace(['-', '_', '/'], ' ', $path)),
+                            'active_users' => (int)$count,
+                            'percentage' => $activeVisitors > 0 ? round(((int)$count / $activeVisitors) * 100, 1) : 0.0,
+                            'category' => 'OpenCart'
+                        ];
+                    }
+
+                    arsort($sourceCounts);
+                    foreach (array_slice($sourceCounts, 0, 10, true) as $source => $count) {
+                        $trafficSources[] = [
+                            'source' => $source,
+                            'type' => $source === 'Accesso diretto' ? 'Direct' : 'Referral',
+                            'visitors_count' => (int)$count,
+                            'percentage' => $activeVisitors > 0 ? round(((int)$count / $activeVisitors) * 100, 1) : 0.0,
+                            'conversion_rate' => 0.0
+                        ];
+                    }
+                }
+
+                $checkCartTable = $mysqli->query("SHOW TABLES LIKE '{$db_prefix}cart'");
+                if ($checkCartTable && $checkCartTable->num_rows > 0) {
+                    $stmtCarts = $mysqli->prepare("SELECT COUNT(DISTINCT `session_id`) AS total FROM `{$db_prefix}cart` WHERE `date_added` >= ?");
+                    if ($stmtCarts) {
+                        $stmtCarts->bind_param('s', $activeSince);
+                        $stmtCarts->execute();
+                        $res = $stmtCarts->get_result();
+                        $activeCarts = ($res && $row = $res->fetch_assoc()) ? (int)$row['total'] : 0;
+                        $stmtCarts->close();
+                    }
+                }
+            }
+
+            sendJson([
+                'success' => true,
+                'tracking_enabled' => $trackingEnabled,
+                'data_available' => $onlineTableExists,
+                'active_visitors_now' => $activeVisitors,
+                'page_updates_per_min' => $pageUpdatesPerMinute,
+                'active_carts_count' => $activeCarts,
+                'active_checkouts_count' => $activeCheckouts,
+                'avg_duration_seconds' => 0,
+                'bounce_rate' => 0.0,
+                'traffic_history' => $history,
+                'top_pages' => $topPages,
+                'top_countries' => [],
+                'traffic_sources' => $trafficSources,
+                'device_stats' => [],
+                'live_events' => $liveEvents,
+                'source' => 'OpenCart customer_online',
+                'last_updated' => date('c'),
+                'limitations' => 'OpenCart non registra user agent, geolocalizzazione, durata sessione o bounce rate nella tabella customer_online.'
+            ]);
+            break;
+
         case 'update_stock':
             $productId = isset($_POST['product_id']) ? (int)$_POST['product_id'] : 0;
             $quantity = isset($_POST['quantity']) ? max(0, (int)$_POST['quantity']) : 0;
@@ -313,6 +485,89 @@ try {
                 'product_id' => $productId,
                 'quantity' => $quantity,
                 'updated' => $affected > 0
+            ]);
+            break;
+
+        case 'update_product':
+            $productId = isset($_POST['product_id']) ? (int)$_POST['product_id'] : 0;
+            $name = isset($_POST['name']) && is_string($_POST['name']) ? trim(strip_tags($_POST['name'])) : '';
+            $model = isset($_POST['model']) && is_string($_POST['model']) ? trim(strip_tags($_POST['model'])) : '';
+            $sku = isset($_POST['sku']) && is_string($_POST['sku']) ? trim(strip_tags($_POST['sku'])) : '';
+            $description = isset($_POST['description']) && is_string($_POST['description']) ? trim(strip_tags($_POST['description'])) : '';
+            $category = isset($_POST['category']) && is_string($_POST['category']) ? trim(strip_tags($_POST['category'])) : '';
+            $price = isset($_POST['price']) && is_numeric($_POST['price']) ? max(0.0, (float)$_POST['price']) : -1.0;
+            $quantity = isset($_POST['quantity']) ? max(0, (int)$_POST['quantity']) : -1;
+            $status = isset($_POST['status']) && (string)$_POST['status'] === '1' ? 1 : 0;
+
+            if ($productId <= 0 || $name === '' || mb_strlen($name) > 255 || $model === '' || mb_strlen($model) > 64 || mb_strlen($sku) > 64 || $price < 0 || $quantity < 0 || mb_strlen($description) > 65535 || mb_strlen($category) > 255) {
+                sendJson(['success' => false, 'error' => 'Dati prodotto non validi.'], 400);
+            }
+
+            $stmtExists = $mysqli->prepare("SELECT `product_id` FROM `{$db_prefix}product` WHERE `product_id` = ? LIMIT 1");
+            if (!$stmtExists) {
+                sendJson(['success' => false, 'error' => 'Impossibile verificare il prodotto.'], 500);
+            }
+            $stmtExists->bind_param('i', $productId);
+            $stmtExists->execute();
+            $existsResult = $stmtExists->get_result();
+            $productExists = $existsResult && $existsResult->num_rows > 0;
+            $stmtExists->close();
+            if (!$productExists) {
+                sendJson(['success' => false, 'error' => 'Prodotto non trovato.'], 404);
+            }
+
+            $mysqli->begin_transaction();
+            try {
+                $stmtProduct = $mysqli->prepare("UPDATE `{$db_prefix}product` SET `model` = ?, `sku` = ?, `quantity` = ?, `price` = ?, `status` = ?, `date_modified` = NOW() WHERE `product_id` = ?");
+                if (!$stmtProduct) {
+                    throw new RuntimeException('Preparazione aggiornamento prodotto fallita.');
+                }
+                $stmtProduct->bind_param('ssidii', $model, $sku, $quantity, $price, $status, $productId);
+                $stmtProduct->execute();
+                $stmtProduct->close();
+
+                $stmtDescription = $mysqli->prepare("UPDATE `{$db_prefix}product_description` SET `name` = ?, `description` = ? WHERE `product_id` = ? AND `language_id` = 1");
+                if (!$stmtDescription) {
+                    throw new RuntimeException('Preparazione descrizione prodotto fallita.');
+                }
+                $stmtDescription->bind_param('ssi', $name, $description, $productId);
+                $stmtDescription->execute();
+                $stmtDescription->close();
+
+                if ($category !== '') {
+                    $stmtCategory = $mysqli->prepare("SELECT `category_id` FROM `{$db_prefix}category_description` WHERE `name` = ? AND `language_id` = 1 LIMIT 1");
+                    if (!$stmtCategory) {
+                        throw new RuntimeException('Preparazione categoria fallita.');
+                    }
+                    $stmtCategory->bind_param('s', $category);
+                    $stmtCategory->execute();
+                    $categoryResult = $stmtCategory->get_result();
+                    $categoryRow = $categoryResult ? $categoryResult->fetch_assoc() : null;
+                    $stmtCategory->close();
+                    if (!$categoryRow) {
+                        throw new RuntimeException('La categoria selezionata non esiste nello store.');
+                    }
+                    $categoryId = (int)$categoryRow['category_id'];
+                    $stmtInsertLink = $mysqli->prepare("INSERT IGNORE INTO `{$db_prefix}product_to_category` (`product_id`, `category_id`) VALUES (?, ?)");
+                    if (!$stmtInsertLink) {
+                        throw new RuntimeException('Aggiornamento associazione categoria fallito.');
+                    }
+                    $stmtInsertLink->bind_param('ii', $productId, $categoryId);
+                    $stmtInsertLink->execute();
+                    $stmtInsertLink->close();
+                }
+
+                $mysqli->commit();
+            } catch (Throwable $error) {
+                $mysqli->rollback();
+                sendJson(['success' => false, 'error' => $error->getMessage()], 500);
+            }
+
+            sendJson([
+                'success' => true,
+                'product_id' => $productId,
+                'quantity' => $quantity,
+                'status' => (bool)$status
             ]);
             break;
 
@@ -524,7 +779,7 @@ try {
                     $tsIso = mb_substr(strip_tags((string)($input['timestamp_iso'] ?? date('c'))), 0, 64);
                     $devModel = mb_substr(strip_tags((string)($input['device_model'] ?? 'Android')), 0, 128);
                     $androidVer = mb_substr(strip_tags((string)($input['android_version'] ?? '')), 0, 64);
-                    $appVer = mb_substr(strip_tags((string)($input['app_version'] ?? '1.2.4')), 0, 32);
+                    $appVer = mb_substr(strip_tags((string)($input['app_version'] ?? 'unknown')), 0, 32);
 
                     $stmtAudit->bind_param('ssssssss', $logId, $actType, $desc, $operator, $tsIso, $devModel, $androidVer, $appVer);
                     $stmtAudit->execute();

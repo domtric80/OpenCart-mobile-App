@@ -85,4 +85,35 @@ class BridgeRequestFactoryTest {
             )
         }
     }
+
+    @Test
+    fun telemetryRequestUsesAuthenticatedHttpsEndpoint() {
+        val request = BridgeRequestFactory.authenticatedGet(
+            baseUrl = "https://shop.example",
+            action = "visitor_telemetry",
+            apiKey = "telemetry-secret"
+        )
+
+        assertEquals("visitor_telemetry", request.url.queryParameter("action"))
+        assertEquals("telemetry-secret", request.header("X-CartAdmin-Key"))
+        assertFalse(request.url.toString().contains("telemetry-secret"))
+        assertTrue(request.url.isHttps)
+    }
+
+    @Test
+    fun productUpdateKeepsCredentialsOutOfFormData() {
+        val request = BridgeRequestFactory.authenticatedFormPost(
+            baseUrl = "https://shop.example",
+            action = "update_product",
+            apiKey = "product-secret",
+            fields = mapOf("product_id" to "42", "name" to "Prodotto", "quantity" to "8")
+        )
+        val body = request.body as FormBody
+        val names = (0 until body.size).map(body::name)
+
+        assertEquals(listOf("action", "product_id", "name", "quantity"), names)
+        assertFalse(names.contains("api_key"))
+        assertFalse(names.contains("username"))
+        assertEquals("product-secret", request.header("X-CartAdmin-Key"))
+    }
 }

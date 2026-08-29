@@ -61,7 +61,7 @@ $bridgeSource = file_get_contents(__DIR__ . '/../upload/cartadmin_api.php');
 $adminModelSource = file_get_contents(__DIR__ . '/../admin/model/module/cartadmin.php');
 $manifest = json_decode(file_get_contents(__DIR__ . '/../install.json'), true);
 
-assertSameValue('1.2.6', $manifest['version'] ?? '', 'The OpenCart manifest version must match the stable release.');
+assertSameValue('1.2.8', $manifest['version'] ?? '', 'The OpenCart manifest version must match the stable release.');
 assertSourceOmits($bridgeSource, 'get_key_setup', 'The bridge must not expose public token setup.');
 assertSourceOmits($bridgeSource, "\$_REQUEST['api_key']", 'The bridge must ignore URL/form credentials.');
 assertSourceOmits($bridgeSource, '`username` = ? AND `key` = ?', 'The bridge must not authenticate against plaintext native API keys.');
@@ -69,5 +69,8 @@ assertSourceContains($bridgeSource, "`key` = 'token_hash'", 'The bridge must loa
 assertSourceContains($bridgeSource, 'cartadminTokenMatches($configuredHash, $receivedKey)', 'Authentication must use password_verify via the token helper.');
 assertSourceContains($adminModelSource, "DELETE FROM `\" . DB_PREFIX . \"cartadmin_setting` WHERE `key` = 'api_key'", 'Legacy plaintext tokens must be removed after migration.');
 assertSourceContains($adminModelSource, "'ca_' . bin2hex(random_bytes(32))", 'Tokens must use a cryptographically secure generator.');
+assertSourceContains($bridgeSource, "case 'visitor_telemetry':", 'The bridge must expose authenticated OpenCart visitor telemetry.');
+assertSourceContains($bridgeSource, "case 'update_product':", 'The bridge must expose verified product updates.');
+assertSourceContains($bridgeSource, 'INSERT IGNORE INTO `{$db_prefix}product_to_category`', 'Product updates must preserve existing category associations.');
 
 fwrite(STDOUT, "CartAdmin bridge authentication tests passed.\n");

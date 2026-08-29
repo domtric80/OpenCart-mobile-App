@@ -1,4 +1,4 @@
-# CartAdmin 1.2.7
+# CartAdmin 1.2.8
 
 CartAdmin è un'app Android per consultare e amministrare un negozio OpenCart da smartphone. Il progetto è sviluppato in Kotlin con Jetpack Compose e include il bridge CartAdmin per OpenCart 4.1.x.
 
@@ -8,17 +8,22 @@ La release stabile è disponibile in [GitHub Releases](https://github.com/domtri
 
 | Componente | File | Compatibilità confermata |
 | --- | --- | --- |
-| App Android | `CartAdmin-v1.2.7.apk` | Android 7.0 o successivo, API 24–36 |
+| App Android | `CartAdmin-v1.2.8.apk` | Android 7.0 o successivo, API 24–36 |
 | Bridge OpenCart | `cartadmin.ocmod.zip` | OpenCart 4.1.x |
 
 Il bridge incluso non dichiara compatibilità con OpenCart 3.x. Un eventuale pacchetto per quel ramo dovrà essere pubblicato e verificato separatamente.
 
-### Novità della 1.2.7
+### Novità della 1.2.8
 
-- rimossi dal runtime i tre abbonamenti e i tre resi dimostrativi presenti nelle versioni precedenti;
-- una risposta valida con zero abbonamenti o zero resi ora azzera correttamente schermata e cache locale;
-- la rimozione dei dati locali cancella anche le cache Room di abbonamenti e resi;
-- conservate le protezioni della 1.2.6: token non visibile, Android Keystore hardware-backed e configurazione guidata del primo negozio.
+- telemetria visitatori reale letta dalla tabella nativa OpenCart `customer_online`, con aggiornamento automatico ogni 30 secondi;
+- diagnostica esplicita quando il tracciamento **Clienti online** è disabilitato o il bridge non è aggiornato;
+- modifica remota verificata di nome, descrizione, modello, SKU, prezzo, quantità, stato e categoria esistente dei prodotti;
+- aggiornamenti locali applicati soltanto dopo la conferma positiva del bridge;
+- eliminati i messaggi di successo per operazioni che non hanno ancora un endpoint remoto sicuro;
+- versione e build installate visibili nella schermata Config;
+- mantenute le correzioni 1.2.7 per abbonamenti e resi senza dati dimostrativi.
+
+La creazione e l'eliminazione dei prodotti e il CRUD delle categorie restano temporaneamente non disponibili dall'app: CartAdmin non modifica più soltanto la cache fingendo un aggiornamento dello store. Le offerte e le promozioni programmate continuano a essere gestite dal pannello OpenCart.
 
 ## Prima configurazione
 
@@ -39,6 +44,14 @@ Il bridge incluso non dichiara compatibilità con OpenCart 3.x. Un eventuale pac
 5. Premi **Test API**, quindi **Sincronizza dati adesso**.
 
 Dopo il salvataggio il campo token torna vuoto e il valore non viene più mostrato. Per aggiornare gli altri dati lascia il campo vuoto: CartAdmin mantiene il token protetto. Inserisci un nuovo valore solo dopo aver ruotato il token dal pannello OpenCart.
+
+### 3. Abilita la telemetria visitatori
+
+1. Nel pannello OpenCart apri **Sistema > Impostazioni** e modifica il negozio.
+2. Nella scheda **Opzioni** abilita **Clienti online** e imposta il tempo di inattività desiderato.
+3. Installa il bridge della stessa release dell'app e riapri **Traffic**.
+
+OpenCart registra soltanto visitatori attivi, URL, provenienza e ultimo aggiornamento. Non registra nella tabella `customer_online` user agent, geolocalizzazione, durata completa della sessione o bounce rate; CartAdmin lascia queste metriche non disponibili invece di generare valori dimostrativi.
 
 ## Come viene protetto il token
 

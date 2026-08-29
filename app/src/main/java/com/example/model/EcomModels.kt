@@ -188,18 +188,23 @@ data class LiveVisitorEvent(
 )
 
 data class VisitorRealtimeStats(
-    val activeVisitorsNow: Int = 42,
-    val pageViewsPerMin: Int = 138,
-    val activeCartsCount: Int = 8,
-    val activeCheckoutsCount: Int = 3,
-    val avgDurationSeconds: Int = 245,
-    val bounceRate: Double = 28.4,
+    val trackingEnabled: Boolean = false,
+    val dataAvailable: Boolean = false,
+    val activeVisitorsNow: Int = 0,
+    val pageViewsPerMin: Int = 0,
+    val activeCartsCount: Int = 0,
+    val activeCheckoutsCount: Int = 0,
+    val avgDurationSeconds: Int = 0,
+    val bounceRate: Double = 0.0,
     val trafficHistory: List<LiveVisitorPoint> = emptyList(),
     val topPages: List<ActivePageVisit> = emptyList(),
     val topCountries: List<GeoVisitor> = emptyList(),
     val trafficSources: List<TrafficSource> = emptyList(),
     val deviceStats: List<DeviceBreakdown> = emptyList(),
-    val liveEvents: List<LiveVisitorEvent> = emptyList()
+    val liveEvents: List<LiveVisitorEvent> = emptyList(),
+    val source: String = "",
+    val lastUpdated: String = "",
+    val limitations: String = ""
 )
 
 enum class OrdersSubSection(val label: String, val shortDesc: String) {

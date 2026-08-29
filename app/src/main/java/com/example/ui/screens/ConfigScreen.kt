@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import com.example.BuildConfig
+
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -1321,6 +1323,12 @@ fun ConfigScreen(
                                         color = ThemePrimary,
                                         fontSize = 12.sp
                                     )
+                                )
+                                Text(
+                                    text = "Versione installata ${BuildConfig.VERSION_NAME} • build ${BuildConfig.VERSION_CODE}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.testTag("installed_release_version")
                                 )
                             }
                         }

@@ -70,6 +70,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -140,6 +141,7 @@ fun CatalogScreen(
     onUpdateCategory: (categoryId: String, name: String, description: String, sortOrder: Int, status: Boolean) -> Unit,
     onDeleteCategory: (categoryId: String) -> Unit,
     onToggleCategoryStatus: (categoryId: String) -> Unit,
+    operationMessage: String? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -158,6 +160,10 @@ fun CatalogScreen(
     var showAddCategoryDialog by remember { mutableStateOf(false) }
     var editingCategory by remember { mutableStateOf<Category?>(null) }
     var categoryToDelete by remember { mutableStateOf<Category?>(null) }
+
+    LaunchedEffect(operationMessage) {
+        operationMessage?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+    }
 
     val filteredProducts = products.filter { prod ->
         val matchesSearch = searchQuery.isBlank() ||
@@ -472,7 +478,6 @@ fun CatalogScreen(
             onConfirm = { name, model, sku, price, specialPrice, qty, minAlert, category, desc, status ->
                 onAddNewProduct(name, model, sku, price, specialPrice, qty, minAlert, category, desc, status)
                 showAddProductDialog = false
-                Toast.makeText(context, "Prodotto $name aggiunto con successo!", Toast.LENGTH_SHORT).show()
             }
         )
     }
@@ -490,7 +495,7 @@ fun CatalogScreen(
                     model = model,
                     sku = sku,
                     price = price,
-                    specialPrice = specialPrice,
+                    specialPrice = prod.specialPrice,
                     quantity = qty,
                     minQuantityAlert = minAlert,
                     category = category,
@@ -499,7 +504,6 @@ fun CatalogScreen(
                 )
                 onUpdateProduct(updated)
                 editingProduct = null
-                Toast.makeText(context, "Prodotto aggiornato!", Toast.LENGTH_SHORT).show()
             }
         )
     }
@@ -516,7 +520,6 @@ fun CatalogScreen(
                     onClick = {
                         onDeleteProduct(prod.id)
                         productToDelete = null
-                        Toast.makeText(context, "Prodotto eliminato", Toast.LENGTH_SHORT).show()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = AlertRed)
                 ) {
@@ -540,7 +543,6 @@ fun CatalogScreen(
             onConfirm = { name, desc, sortOrder, status ->
                 onAddNewCategory(name, desc, sortOrder, status)
                 showAddCategoryDialog = false
-                Toast.makeText(context, "Categoria '$name' creata!", Toast.LENGTH_SHORT).show()
             }
         )
     }
@@ -554,7 +556,6 @@ fun CatalogScreen(
             onConfirm = { name, desc, sortOrder, status ->
                 onUpdateCategory(cat.id, name, desc, sortOrder, status)
                 editingCategory = null
-                Toast.makeText(context, "Categoria aggiornata!", Toast.LENGTH_SHORT).show()
             }
         )
     }
@@ -571,7 +572,6 @@ fun CatalogScreen(
                     onClick = {
                         onDeleteCategory(cat.id)
                         categoryToDelete = null
-                        Toast.makeText(context, "Categoria eliminata", Toast.LENGTH_SHORT).show()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = AlertRed)
                 ) {
@@ -1076,10 +1076,12 @@ private fun ProductFormDialog(
                     )
                     OutlinedTextField(
                         value = specialPriceText,
-                        onValueChange = { specialPriceText = it },
-                        label = { Text("Prezzo Offerta (€)") },
+                        onValueChange = {},
+                        label = { Text("Prezzo offerta (pannello OpenCart)") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
+                        readOnly = true,
+                        enabled = false,
                         modifier = Modifier.weight(1f)
                     )
                 }

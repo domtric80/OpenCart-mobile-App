@@ -264,6 +264,11 @@ jobs:
 
           ### Novità confermate
 
+          - telemetria reale basata sulla tabella nativa OpenCart `customer_online`, senza valori dimostrativi;
+          - diagnostica del tracciamento **Clienti online** e aggiornamento automatico dei dati Traffic;
+          - modifica prodotto completa inviata al bridge e applicata localmente solo dopo conferma remota;
+          - rimosse conferme di successo per operazioni Catalogo prive di endpoint remoto sicuro;
+          - versione installata visibile nella schermata Config;
           - rimossi dal runtime i dati dimostrativi di abbonamenti e resi;
           - le risposte valide con zero abbonamenti o zero resi azzerano correttamente stato e cache locale;
           - la pulizia dei dati locali include le cache Room di abbonamenti e resi;

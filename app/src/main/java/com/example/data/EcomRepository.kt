@@ -52,6 +52,8 @@ class EcomRepository(
 
     private val _visitorStats = MutableStateFlow(
         VisitorRealtimeStats(
+            trackingEnabled = false,
+            dataAvailable = false,
             activeVisitorsNow = 0,
             pageViewsPerMin = 0,
             activeCartsCount = 0,
@@ -67,6 +69,10 @@ class EcomRepository(
         )
     )
     val visitorStats: StateFlow<VisitorRealtimeStats> = _visitorStats.asStateFlow()
+
+    fun setVisitorStats(stats: VisitorRealtimeStats) {
+        _visitorStats.value = stats
+    }
 
     suspend fun loadPersistedStores(): Boolean {
         val dao = storeProfileDao ?: return false
