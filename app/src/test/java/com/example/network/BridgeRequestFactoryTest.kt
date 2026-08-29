@@ -116,4 +116,51 @@ class BridgeRequestFactoryTest {
         assertFalse(names.contains("username"))
         assertEquals("product-secret", request.header("X-CartAdmin-Key"))
     }
+
+    @Test
+    fun managementListUsesAllowlistedModuleQueryAndHeaderOnlyCredentials() {
+        val request = BridgeRequestFactory.authenticatedGet(
+            baseUrl = "https://shop.example",
+            action = "management_list",
+            apiKey = "management-secret",
+            queryParameters = mapOf("module" to "customers", "limit" to "100")
+        )
+
+        assertEquals("management_list", request.url.queryParameter("action"))
+        assertEquals("customers", request.url.queryParameter("module"))
+        assertEquals("management-secret", request.header("X-CartAdmin-Key"))
+        assertFalse(request.url.toString().contains("management-secret"))
+    }
+
+    @Test
+    fun managementStatusKeepsCredentialsOutOfMutationBody() {
+        val request = BridgeRequestFactory.authenticatedFormPost(
+            baseUrl = "https://shop.example",
+            action = "management_status",
+            apiKey = "management-secret",
+            fields = mapOf("module" to "reviews", "id" to "12", "active" to "1")
+        )
+        val body = request.body as FormBody
+        val names = (0 until body.size).map(body::name)
+
+        assertEquals(listOf("action", "module", "id", "active"), names)
+        assertFalse(names.contains("api_key"))
+        assertEquals("management-secret", request.header("X-CartAdmin-Key"))
+    }
+
+    @Test
+    fun antispamMutationUsesAuthenticatedFormWithoutCredentials() {
+        val request = BridgeRequestFactory.authenticatedFormPost(
+            baseUrl = "https://shop.example",
+            action = "management_antispam",
+            apiKey = "antispam-secret",
+            fields = mapOf("operation" to "add", "keyword" to "spamword")
+        )
+        val body = request.body as FormBody
+        val names = (0 until body.size).map(body::name)
+
+        assertEquals(listOf("action", "operation", "keyword"), names)
+        assertFalse(names.contains("api_key"))
+        assertEquals("antispam-secret", request.header("X-CartAdmin-Key"))
+    }
 }

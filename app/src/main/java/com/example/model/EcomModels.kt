@@ -263,3 +263,36 @@ data class OrderReturn(
     val comment: String = ""
 )
 
+/** Moduli amministrativi OpenCart esposti dal bridge 2.0. */
+enum class AdminModule(val apiKey: String, val label: String, val description: String) {
+    SUBSCRIPTION_PLANS("subscription_plans", "Piani di abbonamento", "Piani e cicli ricorrenti"),
+    PAGES("pages", "Pagine", "Pagine informative dello store"),
+    REVIEWS("reviews", "Recensioni", "Recensioni dei prodotti"),
+    ARTICLES("articles", "Articoli", "Contenuti editoriali"),
+    TOPICS("topics", "Argomenti", "Categorie editoriali"),
+    COMMENTS("comments", "Commenti", "Commenti agli articoli"),
+    ANTISPAM("antispam", "Antispam", "Parole bloccate nei commenti"),
+    CUSTOMERS("customers", "Clienti", "Account registrati nello store"),
+    CUSTOMER_APPROVALS("customer_approvals", "Approvazione clienti", "Richieste in attesa"),
+    GDPR("gdpr", "GDPR", "Richieste privacy OpenCart")
+}
+
+data class AdminRecord(
+    val id: String,
+    val title: String,
+    val subtitle: String = "",
+    val statusLabel: String = "",
+    val active: Boolean? = null,
+    val date: String = "",
+    val detail: String = ""
+)
+
+data class AdminModuleSnapshot(
+    val module: AdminModule,
+    val supported: Boolean = true,
+    val isLoading: Boolean = false,
+    val records: List<AdminRecord> = emptyList(),
+    val message: String = "",
+    val lastUpdated: String = ""
+)
+

@@ -41,6 +41,38 @@ function sendJson(array $data, int $statusCode = 200): void {
     exit;
 }
 
+/**
+ * Invalida soltanto le chiavi della cache file nativa interessate da una
+ * modifica CartAdmin. Le chiavi sono definite dal bridge e il percorso deve
+ * restare all'interno di DIR_CACHE; installazioni con cache non-file non
+ * vengono toccate.
+ */
+function cartadminInvalidateFileCache(array $keys): void {
+    if (!defined('DIR_CACHE') || !is_dir(DIR_CACHE)) {
+        return;
+    }
+
+    $cacheRoot = realpath(DIR_CACHE);
+    if ($cacheRoot === false) {
+        return;
+    }
+
+    foreach ($keys as $key) {
+        $safeKey = preg_replace('/[^A-Z0-9._-]/i', '', (string)$key);
+        if ($safeKey === '') {
+            continue;
+        }
+
+        $files = glob($cacheRoot . DIRECTORY_SEPARATOR . 'cache.' . $safeKey . '.*') ?: [];
+        foreach ($files as $file) {
+            $resolvedFile = realpath($file);
+            if ($resolvedFile !== false && dirname($resolvedFile) === $cacheRoot && is_file($resolvedFile)) {
+                @unlink($resolvedFile);
+            }
+        }
+    }
+}
+
 // 2. Localizzazione del file config.php di OpenCart
 if (file_exists(__DIR__ . '/config.php')) {
     require_once(__DIR__ . '/config.php');
@@ -150,7 +182,7 @@ try {
             sendJson([
                 'success' => true,
                 'status' => 'online',
-                'bridge_version' => '1.2.8',
+                'bridge_version' => '2.0.0-dev.1',
                 'author' => 'SOLO SOLUZIONI (OpenCart ITALIA)',
                 'store_name' => $storeName,
                 'total_orders' => $totalOrders,
@@ -297,6 +329,276 @@ try {
                 'success' => true,
                 'count' => count($categories),
                 'categories' => $categories
+            ]);
+            break;
+
+        case 'management_list':
+            $rawModule = isset($_GET['module']) && is_string($_GET['module'])
+                ? strtolower(trim($_GET['module']))
+                : '';
+            $limit = isset($_GET['limit']) ? max(1, min(200, (int)$_GET['limit'])) : 100;
+
+            $languageId = 1;
+            $resLanguage = $mysqli->query("SELECT `language_id` FROM `{$db_prefix}language` WHERE `status` = 1 ORDER BY `sort_order` ASC, `language_id` ASC LIMIT 1");
+            if ($resLanguage && $languageRow = $resLanguage->fetch_assoc()) {
+                $languageId = max(1, (int)$languageRow['language_id']);
+            }
+
+            // Ogni modulo usa esclusivamente nomi di tabella e query definiti
+            // nell'allowlist. Nessun identificatore SQL arriva dalla richiesta.
+            $moduleQueries = [
+                'subscription_plans' => [
+                    'tables' => ['subscription_plan', 'subscription_plan_description'],
+                    'sql' => "SELECT sp.subscription_plan_id AS id, spd.name AS title, CONCAT(sp.frequency, ' • ', sp.cycle, ' ciclo/i') AS subtitle, sp.status AS active, '' AS date_value, CONCAT('Durata: ', sp.duration) AS detail, sp.status AS status_code FROM `{$db_prefix}subscription_plan` sp LEFT JOIN `{$db_prefix}subscription_plan_description` spd ON (sp.subscription_plan_id = spd.subscription_plan_id AND spd.language_id = {$languageId}) ORDER BY sp.sort_order ASC, sp.subscription_plan_id DESC LIMIT {$limit}"
+                ],
+                'pages' => [
+                    'tables' => ['information', 'information_description'],
+                    'sql' => "SELECT i.information_id AS id, id.title AS title, CONCAT('Ordinamento: ', i.sort_order) AS subtitle, i.status AS active, '' AS date_value, '' AS detail, i.status AS status_code FROM `{$db_prefix}information` i LEFT JOIN `{$db_prefix}information_description` id ON (i.information_id = id.information_id AND id.language_id = {$languageId}) ORDER BY i.sort_order ASC, i.information_id DESC LIMIT {$limit}"
+                ],
+                'reviews' => [
+                    'tables' => ['review', 'product_description'],
+                    'sql' => "SELECT r.review_id AS id, pd.name AS title, r.author AS subtitle, r.status AS active, r.date_added AS date_value, CONCAT(r.rating, '/5 • ', LEFT(r.text, 180)) AS detail, r.status AS status_code FROM `{$db_prefix}review` r LEFT JOIN `{$db_prefix}product_description` pd ON (r.product_id = pd.product_id AND pd.language_id = {$languageId}) ORDER BY r.date_added DESC, r.review_id DESC LIMIT {$limit}"
+                ],
+                'articles' => [
+                    'tables' => ['article', 'article_description'],
+                    'sql' => "SELECT a.article_id AS id, ad.name AS title, a.author AS subtitle, a.status AS active, a.date_added AS date_value, CONCAT('Argomento #', a.topic_id) AS detail, a.status AS status_code FROM `{$db_prefix}article` a LEFT JOIN `{$db_prefix}article_description` ad ON (a.article_id = ad.article_id AND ad.language_id = {$languageId}) ORDER BY a.date_added DESC, a.article_id DESC LIMIT {$limit}"
+                ],
+                'topics' => [
+                    'tables' => ['topic', 'topic_description'],
+                    'sql' => "SELECT t.topic_id AS id, td.name AS title, CONCAT('Ordinamento: ', t.sort_order) AS subtitle, t.status AS active, '' AS date_value, '' AS detail, t.status AS status_code FROM `{$db_prefix}topic` t LEFT JOIN `{$db_prefix}topic_description` td ON (t.topic_id = td.topic_id AND td.language_id = {$languageId}) ORDER BY t.sort_order ASC, t.topic_id DESC LIMIT {$limit}"
+                ],
+                'comments' => [
+                    'tables' => ['article_comment', 'article_description'],
+                    'sql' => "SELECT ac.article_comment_id AS id, ad.name AS title, ac.author AS subtitle, ac.status AS active, ac.date_added AS date_value, CONCAT(ac.rating, '/5 • ', LEFT(ac.comment, 180)) AS detail, ac.status AS status_code FROM `{$db_prefix}article_comment` ac LEFT JOIN `{$db_prefix}article_description` ad ON (ac.article_id = ad.article_id AND ad.language_id = {$languageId}) ORDER BY ac.date_added DESC, ac.article_comment_id DESC LIMIT {$limit}"
+                ],
+                'antispam' => [
+                    'tables' => ['antispam'],
+                    'sql' => "SELECT antispam_id AS id, keyword AS title, 'Parola bloccata' AS subtitle, NULL AS active, '' AS date_value, '' AS detail, NULL AS status_code FROM `{$db_prefix}antispam` ORDER BY keyword ASC LIMIT {$limit}"
+                ],
+                'customers' => [
+                    'tables' => ['customer'],
+                    'sql' => "SELECT customer_id AS id, CONCAT(firstname, ' ', lastname) AS title, email AS subtitle, status AS active, date_added AS date_value, telephone AS detail, status AS status_code FROM `{$db_prefix}customer` ORDER BY date_added DESC, customer_id DESC LIMIT {$limit}"
+                ],
+                'customer_approvals' => [
+                    'tables' => ['customer_approval', 'customer'],
+                    'sql' => "SELECT ca.customer_approval_id AS id, CONCAT(c.firstname, ' ', c.lastname) AS title, c.email AS subtitle, NULL AS active, ca.date_added AS date_value, ca.type AS detail, ca.type AS status_code FROM `{$db_prefix}customer_approval` ca LEFT JOIN `{$db_prefix}customer` c ON (ca.customer_id = c.customer_id) ORDER BY ca.date_added DESC, ca.customer_approval_id DESC LIMIT {$limit}"
+                ],
+                'gdpr' => [
+                    'tables' => ['gdpr'],
+                    'sql' => "SELECT gdpr_id AS id, email AS title, action AS subtitle, NULL AS active, date_added AS date_value, '' AS detail, status AS status_code FROM `{$db_prefix}gdpr` ORDER BY date_added DESC, gdpr_id DESC LIMIT {$limit}"
+                ]
+            ];
+
+            if (!array_key_exists($rawModule, $moduleQueries)) {
+                sendJson(['success' => false, 'error' => 'Modulo amministrativo non valido.'], 400);
+            }
+
+            $definition = $moduleQueries[$rawModule];
+            foreach ($definition['tables'] as $tableSuffix) {
+                $tableName = $db_prefix . $tableSuffix;
+                $escapedTableName = $mysqli->real_escape_string($tableName);
+                $tableCheck = $mysqli->query("SHOW TABLES LIKE '{$escapedTableName}'");
+                if (!$tableCheck || $tableCheck->num_rows === 0) {
+                    sendJson([
+                        'success' => true,
+                        'module' => $rawModule,
+                        'supported' => false,
+                        'count' => 0,
+                        'items' => [],
+                        'message' => 'Funzione non disponibile in questa installazione/versione di OpenCart.',
+                        'generated_at' => date('c')
+                    ]);
+                }
+            }
+
+            $result = $mysqli->query($definition['sql']);
+            if (!$result) {
+                sendJson(['success' => false, 'error' => 'Impossibile leggere il modulo amministrativo richiesto.'], 500);
+            }
+
+            $items = [];
+            while ($row = $result->fetch_assoc()) {
+                $statusLabel = '';
+                if ($rawModule === 'gdpr') {
+                    $gdprLabels = [-1 => 'Rifiutato', 0 => 'Non verificato', 1 => 'In attesa', 2 => 'In elaborazione', 3 => 'Completato'];
+                    $statusLabel = $gdprLabels[(int)$row['status_code']] ?? ('Stato ' . (int)$row['status_code']);
+                } elseif ($rawModule === 'customer_approvals') {
+                    $statusLabel = ((string)$row['status_code'] === 'affiliate') ? 'Affiliato' : 'Cliente';
+                } elseif ($row['active'] !== null) {
+                    $statusLabel = ((int)$row['active'] === 1) ? 'Attivo' : 'Disattivato';
+                }
+
+                $title = html_entity_decode(strip_tags((string)($row['title'] ?? '')), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                $subtitle = html_entity_decode(strip_tags((string)($row['subtitle'] ?? '')), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                $detail = html_entity_decode(strip_tags((string)($row['detail'] ?? '')), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                $items[] = [
+                    'id' => (string)$row['id'],
+                    'title' => mb_substr($title !== '' ? $title : ('#' . $row['id']), 0, 180),
+                    'subtitle' => mb_substr($subtitle, 0, 180),
+                    'active' => $row['active'] === null ? null : ((int)$row['active'] === 1),
+                    'status_label' => $statusLabel,
+                    'date' => mb_substr((string)($row['date_value'] ?? ''), 0, 32),
+                    'detail' => mb_substr($detail, 0, 240)
+                ];
+            }
+
+            sendJson([
+                'success' => true,
+                'module' => $rawModule,
+                'supported' => true,
+                'count' => count($items),
+                'items' => $items,
+                'message' => '',
+                'generated_at' => date('c')
+            ]);
+            break;
+
+        case 'management_antispam':
+            $operation = isset($_POST['operation']) && is_string($_POST['operation'])
+                ? strtolower(trim($_POST['operation']))
+                : '';
+
+            if ($operation === 'add') {
+                $keyword = isset($_POST['keyword']) && is_string($_POST['keyword'])
+                    ? trim(strip_tags($_POST['keyword']))
+                    : '';
+                $keyword = mb_substr($keyword, 0, 64);
+                if ($keyword === '') {
+                    sendJson(['success' => false, 'error' => 'Inserisci una parola antispam valida.'], 400);
+                }
+
+                $duplicateStmt = $mysqli->prepare("SELECT `antispam_id` FROM `{$db_prefix}antispam` WHERE LCASE(`keyword`) = LCASE(?) LIMIT 1");
+                if (!$duplicateStmt) {
+                    sendJson(['success' => false, 'error' => 'Modulo Antispam non disponibile.'], 409);
+                }
+                $duplicateStmt->bind_param('s', $keyword);
+                $duplicateStmt->execute();
+                $duplicateResult = $duplicateStmt->get_result();
+                $duplicate = $duplicateResult && $duplicateResult->num_rows > 0;
+                $duplicateStmt->close();
+                if ($duplicate) {
+                    sendJson(['success' => false, 'error' => 'La parola è già presente nell’elenco Antispam.'], 409);
+                }
+
+                $insertStmt = $mysqli->prepare("INSERT INTO `{$db_prefix}antispam` (`keyword`) VALUES (?)");
+                if (!$insertStmt) {
+                    sendJson(['success' => false, 'error' => 'Impossibile aggiungere la parola Antispam.'], 500);
+                }
+                $insertStmt->bind_param('s', $keyword);
+                $insertStmt->execute();
+                $createdId = (int)$mysqli->insert_id;
+                $insertStmt->close();
+                sendJson(['success' => true, 'id' => (string)$createdId, 'keyword' => $keyword]);
+            }
+
+            if ($operation === 'delete') {
+                $recordId = isset($_POST['id']) ? (int)$_POST['id'] : 0;
+                if ($recordId < 1) {
+                    sendJson(['success' => false, 'error' => 'Identificativo Antispam non valido.'], 400);
+                }
+                $deleteStmt = $mysqli->prepare("DELETE FROM `{$db_prefix}antispam` WHERE `antispam_id` = ?");
+                if (!$deleteStmt) {
+                    sendJson(['success' => false, 'error' => 'Modulo Antispam non disponibile.'], 409);
+                }
+                $deleteStmt->bind_param('i', $recordId);
+                $deleteStmt->execute();
+                $deleted = $deleteStmt->affected_rows === 1;
+                $deleteStmt->close();
+                if (!$deleted) {
+                    sendJson(['success' => false, 'error' => 'Parola Antispam non trovata.'], 404);
+                }
+                sendJson(['success' => true, 'id' => (string)$recordId]);
+            }
+
+            sendJson(['success' => false, 'error' => 'Operazione Antispam non valida.'], 400);
+            break;
+
+        case 'management_status':
+            $rawModule = isset($_POST['module']) && is_string($_POST['module'])
+                ? strtolower(trim($_POST['module']))
+                : '';
+            $recordId = isset($_POST['id']) ? (int)$_POST['id'] : 0;
+            $newStatus = isset($_POST['active']) && (string)$_POST['active'] === '1' ? 1 : 0;
+
+            $statusTargets = [
+                'subscription_plans' => ['table' => 'subscription_plan', 'id' => 'subscription_plan_id'],
+                'pages' => ['table' => 'information', 'id' => 'information_id'],
+                'reviews' => ['table' => 'review', 'id' => 'review_id'],
+                'articles' => ['table' => 'article', 'id' => 'article_id'],
+                'topics' => ['table' => 'topic', 'id' => 'topic_id'],
+                'comments' => ['table' => 'article_comment', 'id' => 'article_comment_id'],
+                'customers' => ['table' => 'customer', 'id' => 'customer_id']
+            ];
+
+            if ($recordId < 1 || !array_key_exists($rawModule, $statusTargets)) {
+                sendJson(['success' => false, 'error' => 'Modulo o identificativo non valido.'], 400);
+            }
+
+            $target = $statusTargets[$rawModule];
+            $tableName = $db_prefix . $target['table'];
+            $idColumn = $target['id'];
+            $mysqli->begin_transaction();
+            try {
+                $checkStmt = $mysqli->prepare("SELECT `{$idColumn}` FROM `{$tableName}` WHERE `{$idColumn}` = ? LIMIT 1 FOR UPDATE");
+                if (!$checkStmt) {
+                    throw new RuntimeException('Target non disponibile');
+                }
+                $checkStmt->bind_param('i', $recordId);
+                $checkStmt->execute();
+                $checkResult = $checkStmt->get_result();
+                $exists = $checkResult && $checkResult->num_rows === 1;
+                $checkStmt->close();
+                if (!$exists) {
+                    throw new OutOfBoundsException('Elemento non trovato');
+                }
+
+                $updateStmt = $mysqli->prepare("UPDATE `{$tableName}` SET `status` = ? WHERE `{$idColumn}` = ?");
+                if (!$updateStmt) {
+                    throw new RuntimeException('Aggiornamento non disponibile');
+                }
+                $updateStmt->bind_param('ii', $newStatus, $recordId);
+                $updateStmt->execute();
+                $updateStmt->close();
+
+                if ($rawModule === 'reviews') {
+                    $productStmt = $mysqli->prepare("SELECT `product_id` FROM `{$db_prefix}review` WHERE `review_id` = ? LIMIT 1");
+                    if ($productStmt) {
+                        $productStmt->bind_param('i', $recordId);
+                        $productStmt->execute();
+                        $productResult = $productStmt->get_result();
+                        $productId = ($productResult && $productRow = $productResult->fetch_assoc()) ? (int)$productRow['product_id'] : 0;
+                        $productStmt->close();
+                        if ($productId > 0) {
+                            $ratingStmt = $mysqli->prepare("UPDATE `{$db_prefix}product` SET `rating` = (SELECT COALESCE(AVG(`rating`), 0) FROM `{$db_prefix}review` WHERE `product_id` = ? AND `status` = 1) WHERE `product_id` = ?");
+                            if ($ratingStmt) {
+                                $ratingStmt->bind_param('ii', $productId, $productId);
+                                $ratingStmt->execute();
+                                $ratingStmt->close();
+                            }
+                        }
+                    }
+                }
+
+                $mysqli->commit();
+            } catch (Throwable $statusError) {
+                $mysqli->rollback();
+                sendJson(['success' => false, 'error' => 'Aggiornamento dello stato non riuscito.'], 409);
+            }
+
+            $cacheKeysByModule = [
+                'pages' => ['information'],
+                'reviews' => ['product'],
+                'articles' => ['article'],
+                'topics' => ['topic'],
+                'comments' => ['topic']
+            ];
+            cartadminInvalidateFileCache($cacheKeysByModule[$rawModule] ?? []);
+
+            sendJson([
+                'success' => true,
+                'module' => $rawModule,
+                'id' => (string)$recordId,
+                'active' => $newStatus === 1
             ]);
             break;
 

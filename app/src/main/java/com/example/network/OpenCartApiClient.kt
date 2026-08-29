@@ -5,6 +5,9 @@ import android.util.Log
 import com.example.BuildConfig
 import com.example.model.Category
 import com.example.model.ActivePageVisit
+import com.example.model.AdminModule
+import com.example.model.AdminModuleSnapshot
+import com.example.model.AdminRecord
 import com.example.model.DeviceBreakdown
 import com.example.model.GeoVisitor
 import com.example.model.LiveVisitorEvent
@@ -47,6 +50,155 @@ class OpenCartApiClient(context: Context) {
     private val tlsClient = TlsPinnedClient(context)
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+
+    /** Recupera un elenco amministrativo reale dal bridge senza persistenza locale. */
+    suspend fun fetchAdminModule(
+        baseUrl: String,
+        apiKey: String,
+        username: String,
+        module: AdminModule,
+        limit: Int = 100
+    ): Result<AdminModuleSnapshot> = withContext(Dispatchers.IO) {
+        try {
+            var cleanUrl = baseUrl.trim().removeSuffix("/")
+            if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
+                cleanUrl = "https://$cleanUrl"
+            }
+            val request = BridgeRequestFactory.authenticatedGet(
+                baseUrl = cleanUrl,
+                action = "management_list",
+                apiKey = apiKey,
+                username = username,
+                queryParameters = mapOf(
+                    "module" to module.apiKey,
+                    "limit" to limit.coerceIn(1, 200).toString()
+                )
+            )
+
+            tlsClient.execute(request).use { response ->
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP ${response.code}: $body"))
+                }
+
+                val json = JSONObject(body)
+                if (!json.optBoolean("success", false)) {
+                    return@withContext Result.failure(
+                        Exception(json.optString("error", "Elenco ${module.label} non disponibile"))
+                    )
+                }
+                val items = json.optJSONArray("items") ?: JSONArray()
+                val records = buildList {
+                    for (index in 0 until items.length()) {
+                        val item = items.getJSONObject(index)
+                        add(
+                            AdminRecord(
+                                id = item.optString("id", index.toString()),
+                                title = item.optString("title", "#${item.optString("id", index.toString())}"),
+                                subtitle = item.optString("subtitle", ""),
+                                statusLabel = item.optString("status_label", ""),
+                                active = if (item.has("active") && !item.isNull("active")) {
+                                    item.optBoolean("active")
+                                } else null,
+                                date = item.optString("date", ""),
+                                detail = item.optString("detail", "")
+                            )
+                        )
+                    }
+                }
+                Result.success(
+                    AdminModuleSnapshot(
+                        module = module,
+                        supported = json.optBoolean("supported", true),
+                        records = records,
+                        message = json.optString("message", ""),
+                        lastUpdated = json.optString("generated_at", "")
+                    )
+                )
+            }
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
+    suspend fun updateAdminRecordStatus(
+        baseUrl: String,
+        apiKey: String,
+        username: String,
+        module: AdminModule,
+        recordId: String,
+        active: Boolean
+    ): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            var cleanUrl = baseUrl.trim().removeSuffix("/")
+            if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
+                cleanUrl = "https://$cleanUrl"
+            }
+            val request = BridgeRequestFactory.authenticatedFormPost(
+                baseUrl = cleanUrl,
+                action = "management_status",
+                apiKey = apiKey,
+                username = username,
+                fields = mapOf(
+                    "module" to module.apiKey,
+                    "id" to recordId,
+                    "active" to if (active) "1" else "0"
+                )
+            )
+            tlsClient.execute(request).use { response ->
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    Result.failure(Exception("HTTP ${response.code}: $body"))
+                } else {
+                    val json = JSONObject(body)
+                    if (json.optBoolean("success", false)) Result.success(true)
+                    else Result.failure(Exception(json.optString("error", "Aggiornamento rifiutato")))
+                }
+            }
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
+    suspend fun mutateAntispamKeyword(
+        baseUrl: String,
+        apiKey: String,
+        username: String,
+        operation: String,
+        keyword: String = "",
+        recordId: String = ""
+    ): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            var cleanUrl = baseUrl.trim().removeSuffix("/")
+            if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
+                cleanUrl = "https://$cleanUrl"
+            }
+            val fields = if (operation == "add") {
+                mapOf("operation" to "add", "keyword" to keyword.trim())
+            } else {
+                mapOf("operation" to "delete", "id" to recordId)
+            }
+            val request = BridgeRequestFactory.authenticatedFormPost(
+                baseUrl = cleanUrl,
+                action = "management_antispam",
+                apiKey = apiKey,
+                username = username,
+                fields = fields
+            )
+            tlsClient.execute(request).use { response ->
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    Result.failure(Exception("HTTP ${response.code}: $body"))
+                } else {
+                    val json = JSONObject(body)
+                    if (json.optBoolean("success", false)) Result.success(true)
+                    else Result.failure(Exception(json.optString("error", "Operazione Antispam rifiutata")))
+                }
+            }
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
 
     /**
      * Test connection to OpenCart store:

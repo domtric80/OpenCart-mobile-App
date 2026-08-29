@@ -1,6 +1,6 @@
-# CartAdmin 1.2.8
+# CartAdmin 2.0.0-dev.1
 
-CartAdmin è un'app Android per consultare e amministrare un negozio OpenCart da smartphone. Il progetto è sviluppato in Kotlin con Jetpack Compose e include il bridge CartAdmin per OpenCart 4.1.x.
+CartAdmin è un'app Android per consultare e amministrare un negozio OpenCart da smartphone. Il progetto è sviluppato in Kotlin con Jetpack Compose e include il bridge CartAdmin per OpenCart 4.1.x. Il ramo corrente contiene lo sviluppo della nuova navigazione 2.0; la release stabile pubblicata resta la v1.2.8.
 
 ## Download
 
@@ -12,6 +12,20 @@ La release stabile è disponibile in [GitHub Releases](https://github.com/domtri
 | Bridge OpenCart | `cartadmin.ocmod.zip` | OpenCart 4.1.x |
 
 Il bridge incluso non dichiara compatibilità con OpenCart 3.x. Un eventuale pacchetto per quel ramo dovrà essere pubblicato e verificato separatamente.
+
+### Sviluppo 2.0.0-dev.1
+
+- barra inferiore ridotta a cinque voci: Home, Vendite, Catalogo, Clienti e Altro;
+- sottomenu Catalogo con Prodotti, Categorie, Piani di abbonamento, Pagine e Recensioni;
+- nuovo menu CMS con Articoli, Argomenti, Commenti e Antispam;
+- nuovo menu Clienti con Clienti, Approvazione clienti e GDPR;
+- Traffic, CMS e Configurazione raggruppati sotto Altro;
+- Audit e Licenza spostati nella schermata Configurazione;
+- elenchi amministrativi letti in tempo reale dalle tabelle native OpenCart, senza record dimostrativi;
+- attivazione e disattivazione remota verificata per i moduli che espongono uno stato semplice;
+- compatibilità esplicita: se una tabella non esiste nella versione installata, l'app mostra “funzione non disponibile” invece di dati fittizi.
+
+Approvazioni clienti e richieste GDPR sono inizialmente in sola lettura: approvazione, rifiuto, esportazione o cancellazione richiedono il flusso completo OpenCart con notifiche ed eventi e non vengono simulati con una semplice modifica al database.
 
 ### Novità della 1.2.8
 

@@ -9,6 +9,8 @@ import com.example.data.local.OfflineAuditRepository
 import com.example.data.local.OfflineCatalogRepository
 import com.example.data.local.OfflineOrderRepository
 import com.example.model.ActivityItem
+import com.example.model.AdminModule
+import com.example.model.AdminModuleSnapshot
 import com.example.model.AuditActionType
 import com.example.model.AuditLog
 import com.example.model.Category
@@ -110,6 +112,8 @@ class MainViewModel(
     private val _syncSuccessMessage = MutableStateFlow<String?>(null)
     private val _isTestingConnection = MutableStateFlow(false)
     private val _connectionResult = MutableStateFlow<OpenCartConnectionResult?>(null)
+    private val _adminModules = MutableStateFlow<Map<AdminModule, AdminModuleSnapshot>>(emptyMap())
+    val adminModules: StateFlow<Map<AdminModule, AdminModuleSnapshot>> = _adminModules.asStateFlow()
     private var visitorTelemetryJob: Job? = null
 
     init {
@@ -268,6 +272,7 @@ class MainViewModel(
 
     fun selectStore(storeId: String) {
         repository.selectStore(storeId)
+        _adminModules.value = emptyMap()
         viewModelScope.launch(Dispatchers.IO) {
             val store = db.storeProfileDao().getStoreById(storeId)
             if (store != null) {
@@ -289,6 +294,134 @@ class MainViewModel(
     fun closeStoreSwitcher() { _isStoreSwitcherOpen.value = false }
     fun selectTimeframe(tf: Timeframe) { _selectedTimeframe.value = tf }
     fun setOrderFilter(st: OrderStatus?) { _selectedOrderFilter.value = st }
+
+    /** Carica sempre dati reali dal bridge; nessun elenco amministrativo demo viene mantenuto. */
+    fun loadAdminModule(module: AdminModule, forceRefresh: Boolean = false) {
+        val existing = _adminModules.value[module]
+        if (existing?.isLoading == true) return
+        if (!forceRefresh && existing != null && (existing.records.isNotEmpty() || !existing.supported)) return
+
+        val store = uiState.value.currentStore
+        if (store == null || store.url.isBlank() || store.apiKey.isBlank()) {
+            _adminModules.value = _adminModules.value + (
+                module to AdminModuleSnapshot(
+                    module = module,
+                    supported = true,
+                    message = "Configura e seleziona uno store OpenCart prima di aprire ${module.label}."
+                )
+            )
+            return
+        }
+
+        _adminModules.value = _adminModules.value + (
+            module to (existing ?: AdminModuleSnapshot(module = module)).copy(
+                isLoading = true,
+                message = ""
+            )
+        )
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = apiClient.fetchAdminModule(
+                baseUrl = store.url,
+                apiKey = store.apiKey,
+                username = store.apiUsername,
+                module = module
+            )
+            _adminModules.value = _adminModules.value + (
+                module to result.fold(
+                    onSuccess = { it.copy(isLoading = false) },
+                    onFailure = { error ->
+                        AdminModuleSnapshot(
+                            module = module,
+                            supported = true,
+                            isLoading = false,
+                            message = error.localizedMessage ?: "Errore durante il caricamento di ${module.label}."
+                        )
+                    }
+                )
+            )
+        }
+    }
+
+    fun updateAdminRecordStatus(module: AdminModule, recordId: String, active: Boolean) {
+        val store = uiState.value.currentStore ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            apiClient.updateAdminRecordStatus(
+                baseUrl = store.url,
+                apiKey = store.apiKey,
+                username = store.apiUsername,
+                module = module,
+                recordId = recordId,
+                active = active
+            ).onSuccess {
+                val current = _adminModules.value[module] ?: return@onSuccess
+                _adminModules.value = _adminModules.value + (
+                    module to current.copy(
+                        records = current.records.map { record ->
+                            if (record.id == recordId) {
+                                record.copy(
+                                    active = active,
+                                    statusLabel = if (active) "Attivo" else "Disattivato"
+                                )
+                            } else record
+                        },
+                        message = "Stato aggiornato sullo store."
+                    )
+                )
+            }.onFailure { error ->
+                val current = _adminModules.value[module] ?: AdminModuleSnapshot(module = module)
+                _adminModules.value = _adminModules.value + (
+                    module to current.copy(
+                        message = error.localizedMessage ?: "Aggiornamento dello stato non riuscito."
+                    )
+                )
+            }
+        }
+    }
+
+    fun addAntispamKeyword(keyword: String) {
+        val cleanKeyword = keyword.trim()
+        val store = uiState.value.currentStore ?: return
+        if (cleanKeyword.isBlank()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            apiClient.mutateAntispamKeyword(
+                baseUrl = store.url,
+                apiKey = store.apiKey,
+                username = store.apiUsername,
+                operation = "add",
+                keyword = cleanKeyword
+            ).onSuccess {
+                loadAdminModule(AdminModule.ANTISPAM, forceRefresh = true)
+            }.onFailure { error ->
+                val current = _adminModules.value[AdminModule.ANTISPAM]
+                    ?: AdminModuleSnapshot(module = AdminModule.ANTISPAM)
+                _adminModules.value = _adminModules.value + (
+                    AdminModule.ANTISPAM to current.copy(message = error.localizedMessage ?: "Inserimento non riuscito.")
+                )
+            }
+        }
+    }
+
+    fun deleteAntispamKeyword(recordId: String) {
+        val store = uiState.value.currentStore ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            apiClient.mutateAntispamKeyword(
+                baseUrl = store.url,
+                apiKey = store.apiKey,
+                username = store.apiUsername,
+                operation = "delete",
+                recordId = recordId
+            ).onSuccess {
+                loadAdminModule(AdminModule.ANTISPAM, forceRefresh = true)
+            }.onFailure { error ->
+                val current = _adminModules.value[AdminModule.ANTISPAM]
+                    ?: AdminModuleSnapshot(module = AdminModule.ANTISPAM)
+                _adminModules.value = _adminModules.value + (
+                    AdminModule.ANTISPAM to current.copy(message = error.localizedMessage ?: "Eliminazione non riuscita.")
+                )
+            }
+        }
+    }
     fun selectOrdersSubSection(subSection: com.example.model.OrdersSubSection) { _selectedOrdersSubSection.value = subSection }
     fun setSubscriptionFilter(status: com.example.model.SubscriptionStatus?) { _selectedSubscriptionFilter.value = status }
     fun setReturnFilter(status: com.example.model.ReturnStatus?) { _selectedReturnFilter.value = status }

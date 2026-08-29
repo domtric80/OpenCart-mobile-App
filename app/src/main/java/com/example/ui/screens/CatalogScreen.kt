@@ -141,11 +141,12 @@ fun CatalogScreen(
     onUpdateCategory: (categoryId: String, name: String, description: String, sortOrder: Int, status: Boolean) -> Unit,
     onDeleteCategory: (categoryId: String) -> Unit,
     onToggleCategoryStatus: (categoryId: String) -> Unit,
+    requestedTab: CatalogTab = CatalogTab.PRODUCTS,
     operationMessage: String? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var selectedTab by remember { mutableStateOf(CatalogTab.PRODUCTS) }
+    var selectedTab by remember { mutableStateOf(requestedTab) }
 
     // Search and filter state
     var searchQuery by remember { mutableStateOf("") }
@@ -163,6 +164,10 @@ fun CatalogScreen(
 
     LaunchedEffect(operationMessage) {
         operationMessage?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+    }
+
+    LaunchedEffect(requestedTab) {
+        selectedTab = requestedTab
     }
 
     val filteredProducts = products.filter { prod ->

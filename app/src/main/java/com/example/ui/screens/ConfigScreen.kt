@@ -36,7 +36,9 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.HelpOutline
+import androidx.compose.material.icons.filled.HistoryEdu
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Link
@@ -110,6 +112,8 @@ fun ConfigScreen(
     onAddStore: (name: String, url: String, username: String, key: String, version: String) -> Unit,
     onTriggerSync: (url: String, key: String, username: String) -> Unit,
     onClearDummyData: () -> Unit = {},
+    onOpenAudit: () -> Unit = {},
+    onOpenLicense: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -1341,6 +1345,30 @@ fun ConfigScreen(
                             ),
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = onOpenAudit,
+                                modifier = Modifier.weight(1f).height(46.dp).testTag("open_audit_from_config"),
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                Icon(Icons.Default.HistoryEdu, contentDescription = null, modifier = Modifier.size(17.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Audit", fontWeight = FontWeight.Bold)
+                            }
+                            OutlinedButton(
+                                onClick = onOpenLicense,
+                                modifier = Modifier.weight(1f).height(46.dp).testTag("open_license_from_credits"),
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                Icon(Icons.Default.Gavel, contentDescription = null, modifier = Modifier.size(17.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Licenza", fontWeight = FontWeight.Bold)
+                            }
+                        }
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),

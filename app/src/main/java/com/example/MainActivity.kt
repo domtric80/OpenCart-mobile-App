@@ -16,6 +16,21 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Article
+import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Comment
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Forum
+import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.Policy
+import androidx.compose.material.icons.filled.RateReview
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Sensors
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -27,15 +42,20 @@ import androidx.fragment.app.FragmentActivity
 import com.example.auth.AuthLockScreen
 import com.example.auth.SecurityManager
 import com.example.model.Order
+import com.example.model.AdminModule
 import com.example.ui.MainViewModel
 import com.example.ui.components.BottomNavBar
 import com.example.ui.components.HeaderSection
 import com.example.ui.components.NavigationTab
+import com.example.ui.components.NavigationMenuItem
+import com.example.ui.components.NavigationMenuSheet
 import com.example.ui.components.OrderDetailSheet
 import com.example.ui.components.OrdersSubSectionSheet
 import com.example.ui.components.StoreSwitcherSheet
 import com.example.ui.screens.AuditScreen
+import com.example.ui.screens.AdminModuleScreen
 import com.example.ui.screens.CatalogScreen
+import com.example.ui.screens.CatalogTab
 import com.example.ui.screens.ConfigScreen
 import com.example.ui.screens.DashboardHomeScreen
 import com.example.ui.screens.LicenseScreen
@@ -86,8 +106,21 @@ fun MainAppContent(
     viewModel: MainViewModel
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val adminModules by viewModel.adminModules.collectAsState()
     var currentTab by remember { mutableStateOf(NavigationTab.HOME) }
     var isOrdersMenuOpen by remember { mutableStateOf(false) }
+    var openNavigationMenu by remember { mutableStateOf<NavigationTab?>(null) }
+    var catalogTab by remember { mutableStateOf(CatalogTab.PRODUCTS) }
+    var selectedCatalogModule by remember { mutableStateOf<AdminModule?>(null) }
+    var selectedAdminModule by remember { mutableStateOf(AdminModule.CUSTOMERS) }
+
+    val selectedBottomTab = when (currentTab) {
+        NavigationTab.HOME -> NavigationTab.HOME
+        NavigationTab.ORDERS -> NavigationTab.ORDERS
+        NavigationTab.CATALOG -> NavigationTab.CATALOG
+        NavigationTab.CUSTOMERS -> NavigationTab.CUSTOMERS
+        else -> NavigationTab.MORE
+    }
 
     Scaffold(
         modifier = Modifier
@@ -115,12 +148,27 @@ fun MainAppContent(
         },
         bottomBar = {
             BottomNavBar(
-                selectedTab = currentTab,
+                selectedTab = selectedBottomTab,
                 onTabSelected = { selected ->
-                    currentTab = selected
+                    if (selected == NavigationTab.HOME) currentTab = selected
                 },
-                onOrdersTabMenuClick = {
-                    isOrdersMenuOpen = true
+                onMenuTabClick = { selected ->
+                    when (selected) {
+                        NavigationTab.ORDERS -> {
+                            currentTab = NavigationTab.ORDERS
+                            isOrdersMenuOpen = true
+                        }
+                        NavigationTab.CATALOG -> {
+                            currentTab = NavigationTab.CATALOG
+                            openNavigationMenu = NavigationTab.CATALOG
+                        }
+                        NavigationTab.CUSTOMERS -> {
+                            currentTab = NavigationTab.CUSTOMERS
+                            openNavigationMenu = NavigationTab.CUSTOMERS
+                        }
+                        NavigationTab.MORE -> openNavigationMenu = NavigationTab.MORE
+                        else -> Unit
+                    }
                 }
             )
         }
@@ -150,6 +198,8 @@ fun MainAppContent(
                             currentTab = NavigationTab.ORDERS
                         },
                         onStockAlertsClick = {
+                            selectedCatalogModule = null
+                            catalogTab = CatalogTab.PRODUCTS
                             currentTab = NavigationTab.CATALOG
                         },
                         onAovClick = {
@@ -211,7 +261,17 @@ fun MainAppContent(
                 }
 
                 NavigationTab.CATALOG -> {
-                    CatalogScreen(
+                    val managementModule = selectedCatalogModule
+                    if (managementModule != null) {
+                        AdminModuleScreen(
+                            module = managementModule,
+                            snapshot = adminModules[managementModule],
+                            onRefresh = { viewModel.loadAdminModule(managementModule, forceRefresh = true) },
+                            onStatusChange = { id, active -> viewModel.updateAdminRecordStatus(managementModule, id, active) },
+                            onAddAntispam = viewModel::addAntispamKeyword,
+                            onDeleteAntispam = viewModel::deleteAntispamKeyword
+                        )
+                    } else CatalogScreen(
                         products = uiState.products,
                         categories = uiState.categories,
                         onUpdateStock = { productId, delta ->
@@ -244,7 +304,20 @@ fun MainAppContent(
                         onToggleCategoryStatus = { categoryId ->
                             viewModel.toggleCategoryStatus(categoryId)
                         },
+                        requestedTab = catalogTab,
                         operationMessage = uiState.syncSuccessMessage
+                    )
+                }
+
+                NavigationTab.CUSTOMERS,
+                NavigationTab.CMS -> {
+                    AdminModuleScreen(
+                        module = selectedAdminModule,
+                        snapshot = adminModules[selectedAdminModule],
+                        onRefresh = { viewModel.loadAdminModule(selectedAdminModule, forceRefresh = true) },
+                        onStatusChange = { id, active -> viewModel.updateAdminRecordStatus(selectedAdminModule, id, active) },
+                        onAddAntispam = viewModel::addAntispamKeyword,
+                        onDeleteAntispam = viewModel::deleteAntispamKeyword
                     )
                 }
 
@@ -283,13 +356,17 @@ fun MainAppContent(
                         },
                         onClearDummyData = {
                             viewModel.clearDummyData()
-                        }
+                        },
+                        onOpenAudit = { currentTab = NavigationTab.AUDIT },
+                        onOpenLicense = { currentTab = NavigationTab.LICENSE }
                     )
                 }
 
                 NavigationTab.LICENSE -> {
                     LicenseScreen()
                 }
+
+                NavigationTab.MORE -> Unit
             }
 
             // Store Switcher Modal Sheet
@@ -358,6 +435,109 @@ fun MainAppContent(
                     subscriptionsCount = uiState.subscriptions.count { it.status == com.example.model.SubscriptionStatus.ACTIVE },
                     returnsCount = uiState.returns.count { it.status == com.example.model.ReturnStatus.PENDING || it.status == com.example.model.ReturnStatus.AWAITING_PRODUCTS }
                 )
+            }
+
+            when (openNavigationMenu) {
+                NavigationTab.CATALOG -> NavigationMenuSheet(
+                    title = "Catalogo",
+                    description = "Scegli la sezione del catalogo OpenCart",
+                    items = listOf(
+                        NavigationMenuItem("products", "Prodotti", "Prezzi, quantità e schede prodotto", Icons.Default.Inventory2),
+                        NavigationMenuItem("categories", "Categorie", "Organizzazione del catalogo", Icons.Default.Category),
+                        NavigationMenuItem(AdminModule.SUBSCRIPTION_PLANS.apiKey, AdminModule.SUBSCRIPTION_PLANS.label, AdminModule.SUBSCRIPTION_PLANS.description, Icons.Default.Payments),
+                        NavigationMenuItem(AdminModule.PAGES.apiKey, AdminModule.PAGES.label, AdminModule.PAGES.description, Icons.Default.Description),
+                        NavigationMenuItem(AdminModule.REVIEWS.apiKey, AdminModule.REVIEWS.label, AdminModule.REVIEWS.description, Icons.Default.RateReview)
+                    ),
+                    onSelect = { item ->
+                        when (item.key) {
+                            "products" -> {
+                                selectedCatalogModule = null
+                                catalogTab = CatalogTab.PRODUCTS
+                            }
+                            "categories" -> {
+                                selectedCatalogModule = null
+                                catalogTab = CatalogTab.CATEGORIES
+                            }
+                            else -> AdminModule.entries.find { it.apiKey == item.key }?.let { module ->
+                                selectedCatalogModule = module
+                                viewModel.loadAdminModule(module)
+                            }
+                        }
+                        currentTab = NavigationTab.CATALOG
+                        openNavigationMenu = null
+                    },
+                    onDismiss = { openNavigationMenu = null }
+                )
+
+                NavigationTab.CUSTOMERS -> NavigationMenuSheet(
+                    title = "Clienti",
+                    description = "Account, approvazioni e richieste privacy reali",
+                    items = listOf(
+                        NavigationMenuItem(AdminModule.CUSTOMERS.apiKey, AdminModule.CUSTOMERS.label, AdminModule.CUSTOMERS.description, Icons.Default.People),
+                        NavigationMenuItem(AdminModule.CUSTOMER_APPROVALS.apiKey, AdminModule.CUSTOMER_APPROVALS.label, AdminModule.CUSTOMER_APPROVALS.description, Icons.Default.PersonAdd),
+                        NavigationMenuItem(AdminModule.GDPR.apiKey, AdminModule.GDPR.label, AdminModule.GDPR.description, Icons.Default.Policy)
+                    ),
+                    onSelect = { item ->
+                        AdminModule.entries.find { it.apiKey == item.key }?.let { module ->
+                            selectedAdminModule = module
+                            viewModel.loadAdminModule(module)
+                        }
+                        currentTab = NavigationTab.CUSTOMERS
+                        openNavigationMenu = null
+                    },
+                    onDismiss = { openNavigationMenu = null }
+                )
+
+                NavigationTab.MORE -> NavigationMenuSheet(
+                    title = "Altre funzioni",
+                    description = "Telemetria, contenuti e configurazione",
+                    items = listOf(
+                        NavigationMenuItem("traffic", "Traffic", "Visitatori online e sorgenti disponibili", Icons.Default.Sensors),
+                        NavigationMenuItem("cms", "CMS", "Articoli, argomenti, commenti e antispam", Icons.Default.Article),
+                        NavigationMenuItem(
+                            "config",
+                            "Configurazione",
+                            "Store, sicurezza, Audit e Licenza",
+                            Icons.Default.Settings,
+                            badge = "v${BuildConfig.VERSION_NAME}"
+                        )
+                    ),
+                    onSelect = { item ->
+                        when (item.key) {
+                            "traffic" -> currentTab = NavigationTab.VISITORS
+                            "cms" -> {
+                                currentTab = NavigationTab.CMS
+                                openNavigationMenu = NavigationTab.CMS
+                                return@NavigationMenuSheet
+                            }
+                            "config" -> currentTab = NavigationTab.CONFIG
+                        }
+                        openNavigationMenu = null
+                    },
+                    onDismiss = { openNavigationMenu = null }
+                )
+
+                NavigationTab.CMS -> NavigationMenuSheet(
+                    title = "CMS",
+                    description = "Gestione editoriale nativa di OpenCart 4",
+                    items = listOf(
+                        NavigationMenuItem(AdminModule.ARTICLES.apiKey, AdminModule.ARTICLES.label, AdminModule.ARTICLES.description, Icons.Default.Article),
+                        NavigationMenuItem(AdminModule.TOPICS.apiKey, AdminModule.TOPICS.label, AdminModule.TOPICS.description, Icons.Default.Forum),
+                        NavigationMenuItem(AdminModule.COMMENTS.apiKey, AdminModule.COMMENTS.label, AdminModule.COMMENTS.description, Icons.Default.Comment),
+                        NavigationMenuItem(AdminModule.ANTISPAM.apiKey, AdminModule.ANTISPAM.label, AdminModule.ANTISPAM.description, Icons.Default.Security)
+                    ),
+                    onSelect = { item ->
+                        AdminModule.entries.find { it.apiKey == item.key }?.let { module ->
+                            selectedAdminModule = module
+                            viewModel.loadAdminModule(module)
+                        }
+                        currentTab = NavigationTab.CMS
+                        openNavigationMenu = null
+                    },
+                    onDismiss = { openNavigationMenu = null }
+                )
+
+                else -> Unit
             }
         }
     }
