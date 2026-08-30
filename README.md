@@ -98,6 +98,8 @@ Le schermate possono mostrare dati memorizzati localmente quando il negozio non 
 
 Gli screenshot reali della v2.0.0 verranno aggiunti dopo una sessione di acquisizione su uno store di test con dati anonimizzati. Non vengono pubblicati mockup o schermate che contengano token, password, dati cliente reali o altri segreti. La schermata Config nasconde sempre il token digitato e non lo ripropone dopo il salvataggio.
 
+L'icona launcher usa l'[asset quadrato pubblicato dal sito ufficiale OpenCart Italia](https://opencartitalia.it/wp-content/uploads/2024/05/opencart-300x300.png), conservato senza modifiche nel progetto e ridimensionato per le densità Android.
+
 ## Architettura
 
 - UI: Jetpack Compose e Material 3;
