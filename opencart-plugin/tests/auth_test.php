@@ -61,7 +61,7 @@ $bridgeSource = file_get_contents(__DIR__ . '/../upload/cartadmin_api.php');
 $adminModelSource = file_get_contents(__DIR__ . '/../admin/model/module/cartadmin.php');
 $manifest = json_decode(file_get_contents(__DIR__ . '/../install.json'), true);
 
-assertSameValue('2.0.0-dev.1', $manifest['version'] ?? '', 'The OpenCart manifest version must match the development release.');
+assertSameValue('2.0.0', $manifest['version'] ?? '', 'The OpenCart manifest version must match the stable release.');
 assertSourceOmits($bridgeSource, 'get_key_setup', 'The bridge must not expose public token setup.');
 assertSourceOmits($bridgeSource, "\$_REQUEST['api_key']", 'The bridge must ignore URL/form credentials.');
 assertSourceOmits($bridgeSource, '`username` = ? AND `key` = ?', 'The bridge must not authenticate against plaintext native API keys.');
@@ -82,5 +82,6 @@ assertSourceContains($bridgeSource, 'function cartadminInvalidateFileCache', 'Na
 assertSourceContains($bridgeSource, "'reviews' => ['product']", 'Review mutations must invalidate the product cache.');
 assertSourceContains($bridgeSource, "preg_match('/^[a-zA-Z0-9_]{1,32}$/', \$rawPrefix)", 'Database prefixes used in identifiers must be allowlisted.');
 assertSameValue(12, substr_count($bridgeSource, 'nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string'), 'SQL suppressions must remain limited to reviewed allowlisted identifiers.');
+assertSameValue(2, substr_count($bridgeSource, 'php.lang.security.injection.tainted-callable.tainted-callable'), 'Callable suppressions must remain limited to the two reviewed status queries.');
 
 fwrite(STDOUT, "CartAdmin bridge authentication tests passed.\n");

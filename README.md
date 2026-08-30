@@ -1,6 +1,6 @@
-# CartAdmin 2.0.0-dev.1
+# CartAdmin 2.0.0
 
-CartAdmin è un'app Android per consultare e amministrare un negozio OpenCart da smartphone. Il progetto è sviluppato in Kotlin con Jetpack Compose e include il bridge CartAdmin per OpenCart 4.1.x. Il ramo corrente contiene lo sviluppo della nuova navigazione 2.0; la release stabile pubblicata resta la v1.2.8.
+CartAdmin è un'app Android per consultare e amministrare un negozio OpenCart da smartphone. Il progetto è sviluppato in Kotlin con Jetpack Compose e include il bridge CartAdmin per OpenCart 4.1.x. La release stabile corrente è la v2.0.0.
 
 ## Download
 
@@ -8,12 +8,12 @@ La release stabile è disponibile in [GitHub Releases](https://github.com/domtri
 
 | Componente | File | Compatibilità confermata |
 | --- | --- | --- |
-| App Android | `CartAdmin-v1.2.8.apk` | Android 7.0 o successivo, API 24–36 |
+| App Android | `CartAdmin-v2.0.0.apk` | Android 7.0 o successivo, API 24–36 |
 | Bridge OpenCart | `cartadmin.ocmod.zip` | OpenCart 4.1.x |
 
 Il bridge incluso non dichiara compatibilità con OpenCart 3.x. Un eventuale pacchetto per quel ramo dovrà essere pubblicato e verificato separatamente.
 
-### Sviluppo 2.0.0-dev.1
+### Novità della 2.0.0
 
 - barra inferiore ridotta a cinque voci: Home, Vendite, Catalogo, Clienti e Altro;
 - sottomenu Catalogo con Prodotti, Categorie, Piani di abbonamento, Pagine e Recensioni;
@@ -26,6 +26,8 @@ Il bridge incluso non dichiara compatibilità con OpenCart 3.x. Un eventuale pac
 - compatibilità esplicita: se una tabella non esiste nella versione installata, l'app mostra “funzione non disponibile” invece di dati fittizi.
 
 Approvazioni clienti e richieste GDPR sono inizialmente in sola lettura: approvazione, rifiuto, esportazione o cancellazione richiedono il flusso completo OpenCart con notifiche ed eventi e non vengono simulati con una semplice modifica al database.
+
+Per usare i nuovi moduli, app Android e bridge OpenCart devono essere aggiornati entrambi alla v2.0.0.
 
 ### Novità della 1.2.8
 
@@ -94,13 +96,7 @@ Le schermate possono mostrare dati memorizzati localmente quando il negozio non 
 
 ## Screenshot
 
-<p align="center">
-  <img src="app/src/main/res/drawable/img_cartadmin_screen_dash_1786997549527.jpg" width="45%" alt="Dashboard CartAdmin" />
-  &nbsp;
-  <img src="app/src/main/res/drawable/img_cartadmin_screen_orders_1786997562634.jpg" width="45%" alt="Elenco ordini CartAdmin" />
-</p>
-
-Gli screenshot non devono contenere token, password, dati cliente reali o altri segreti. La schermata Config nasconde sempre il token digitato e non lo ripropone dopo il salvataggio.
+Gli screenshot reali della v2.0.0 verranno aggiunti dopo una sessione di acquisizione su uno store di test con dati anonimizzati. Non vengono pubblicati mockup o schermate che contengano token, password, dati cliente reali o altri segreti. La schermata Config nasconde sempre il token digitato e non lo ripropone dopo il salvataggio.
 
 ## Architettura
 

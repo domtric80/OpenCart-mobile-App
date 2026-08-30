@@ -182,7 +182,7 @@ try {
             sendJson([
                 'success' => true,
                 'status' => 'online',
-                'bridge_version' => '2.0.0-dev.1',
+                'bridge_version' => '2.0.0',
                 'author' => 'SOLO SOLUZIONI (OpenCart ITALIA)',
                 'store_name' => $storeName,
                 'total_orders' => $totalOrders,
@@ -539,7 +539,7 @@ try {
             $idColumn = $target['id'];
             $mysqli->begin_transaction();
             try {
-                $checkStmt = $mysqli->prepare("SELECT `{$idColumn}` FROM `{$tableName}` WHERE `{$idColumn}` = ? LIMIT 1 FOR UPDATE"); // nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string
+                $checkStmt = $mysqli->prepare("SELECT `{$idColumn}` FROM `{$tableName}` WHERE `{$idColumn}` = ? LIMIT 1 FOR UPDATE"); // nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string, php.lang.security.injection.tainted-callable.tainted-callable
                 if (!$checkStmt) {
                     throw new RuntimeException('Target non disponibile');
                 }
@@ -552,7 +552,7 @@ try {
                     throw new OutOfBoundsException('Elemento non trovato');
                 }
 
-                $updateStmt = $mysqli->prepare("UPDATE `{$tableName}` SET `status` = ? WHERE `{$idColumn}` = ?"); // nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string
+                $updateStmt = $mysqli->prepare("UPDATE `{$tableName}` SET `status` = ? WHERE `{$idColumn}` = ?"); // nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string, php.lang.security.injection.tainted-callable.tainted-callable
                 if (!$updateStmt) {
                     throw new RuntimeException('Aggiornamento non disponibile');
                 }
