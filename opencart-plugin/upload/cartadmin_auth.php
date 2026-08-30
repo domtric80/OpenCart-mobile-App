@@ -10,6 +10,7 @@
 function cartadminExtractCredentials(array $server): array {
     $key = '';
     $username = '';
+    $deviceId = '';
 
     if (isset($server['HTTP_X_CARTADMIN_KEY']) && is_string($server['HTTP_X_CARTADMIN_KEY'])) {
         $key = trim($server['HTTP_X_CARTADMIN_KEY']);
@@ -24,11 +25,18 @@ function cartadminExtractCredentials(array $server): array {
         $username = trim($server['HTTP_X_CARTADMIN_USER']);
     }
 
-    if (strlen($key) > 512 || strlen($username) > 128) {
-        return ['', ''];
+    if (isset($server['HTTP_X_CARTADMIN_DEVICE']) && is_string($server['HTTP_X_CARTADMIN_DEVICE'])) {
+        $candidate = strtolower(trim($server['HTTP_X_CARTADMIN_DEVICE']));
+        if (preg_match('/^[a-f0-9]{32}$/', $candidate) === 1) {
+            $deviceId = $candidate;
+        }
     }
 
-    return [$key, $username];
+    if (strlen($key) > 512 || strlen($username) > 128) {
+        return ['', '', ''];
+    }
+
+    return [$key, $username, $deviceId];
 }
 
 function cartadminHashToken(string $token): string {
@@ -46,4 +54,22 @@ function cartadminTokenMatches(string $configuredHash, string $receivedToken): b
     return $configuredHash !== ''
         && $receivedToken !== ''
         && password_verify($receivedToken, $configuredHash);
+}
+
+function cartadminParseScopes(string $scopes): array {
+    $allowed = [
+        'read',
+        'orders.write',
+        'catalog.write',
+        'content.write',
+        'customers.write',
+        'audit.write'
+    ];
+    $parsed = array_filter(array_map('trim', explode(',', strtolower($scopes))));
+
+    return array_values(array_intersect($allowed, array_unique($parsed)));
+}
+
+function cartadminHasScope(array $scopes, string $required): bool {
+    return in_array($required, $scopes, true);
 }

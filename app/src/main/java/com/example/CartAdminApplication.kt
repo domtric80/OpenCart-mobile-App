@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Log
 import com.example.data.local.AppDatabase
 import com.example.notification.NotificationHelper
+import com.example.network.BridgeDeviceIdentity
 import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 
@@ -11,6 +12,8 @@ class CartAdminApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+
+        BridgeDeviceIdentity.initialize(this)
         
         // 1. Initialize notification channels safely
         try {

@@ -101,6 +101,82 @@ function cartadminActiveLanguageIds(mysqli $mysqli, string $dbPrefix): array {
     return array_values(array_filter(array_unique($languageIds), static fn(int $id): bool => $id > 0));
 }
 
+function cartadminRequiredScope(string $action, string $module = ''): string {
+    $reads = ['status', 'ping', 'orders', 'products', 'categories', 'management_list', 'visitor_telemetry', 'subscriptions', 'returns'];
+    $ordersWrites = ['update_order_status', 'update_subscription_status', 'update_return_status'];
+    $catalogWrites = ['update_stock', 'update_product', 'create_product', 'delete_product', 'create_category', 'update_category', 'delete_category'];
+
+    if (in_array($action, $ordersWrites, true)) {
+        return 'orders.write';
+    }
+    if (in_array($action, $catalogWrites, true)) {
+        return 'catalog.write';
+    }
+    if (in_array($action, ['management_content', 'management_antispam'], true)) {
+        return 'content.write';
+    }
+    if ($action === 'management_command') {
+        return 'customers.write';
+    }
+    if ($action === 'management_status') {
+        return $module === 'customers' ? 'customers.write' : 'content.write';
+    }
+    if ($action === 'audit_log') {
+        return 'audit.write';
+    }
+
+    return in_array($action, $reads, true) ? 'read' : 'forbidden';
+}
+
+function cartadminInsertSecurityAudit(
+    mysqli $mysqli,
+    string $dbPrefix,
+    array $authContext,
+    string $action,
+    string $module,
+    int $targetId,
+    string $result,
+    string $beforeDigest = '',
+    string $afterDigest = '',
+    string $summary = ''
+): bool {
+    $stmt = $mysqli->prepare("INSERT INTO `{$dbPrefix}cartadmin_security_audit` (`event_id`, `token_id`, `operator_user_id`, `operator_name`, `claimed_operator_digest`, `identity_claim_mismatch`, `device_hash`, `ip_hash`, `action_name`, `module_name`, `target_id`, `result`, `before_digest`, `after_digest`, `summary`, `created_at`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())");
+    if (!$stmt) {
+        return false;
+    }
+
+    $eventId = bin2hex(random_bytes(16));
+    $tokenId = max(0, (int)($authContext['token_id'] ?? 0));
+    $operatorUserId = max(0, (int)($authContext['operator_user_id'] ?? 0));
+    $operator = mb_substr(strip_tags((string)($authContext['operator_name'] ?? '')), 0, 64);
+    $claimedDigest = preg_match('/^[a-f0-9]{64}$/', (string)($authContext['claimed_operator_digest'] ?? '')) === 1 ? (string)$authContext['claimed_operator_digest'] : '';
+    $claimMismatch = !empty($authContext['identity_claim_mismatch']) ? 1 : 0;
+    $deviceHash = preg_match('/^[a-f0-9]{64}$/', (string)($authContext['device_hash'] ?? '')) === 1 ? (string)$authContext['device_hash'] : '';
+    $ipHash = preg_match('/^[a-f0-9]{64}$/', (string)($authContext['ip_hash'] ?? '')) === 1 ? (string)$authContext['ip_hash'] : '';
+    $cleanAction = mb_substr(preg_replace('/[^a-z0-9_.-]/i', '', $action), 0, 64);
+    $cleanModule = mb_substr(preg_replace('/[^a-z0-9_.-]/i', '', $module), 0, 32);
+    $cleanResult = in_array($result, ['success', 'failed', 'denied'], true) ? $result : 'failed';
+    $before = preg_match('/^[a-f0-9]{64}$/', $beforeDigest) === 1 ? $beforeDigest : '';
+    $after = preg_match('/^[a-f0-9]{64}$/', $afterDigest) === 1 ? $afterDigest : '';
+    $cleanSummary = mb_substr(strip_tags($summary), 0, 255);
+
+    $stmt->bind_param('siississssissss', $eventId, $tokenId, $operatorUserId, $operator, $claimedDigest, $claimMismatch, $deviceHash, $ipHash, $cleanAction, $cleanModule, $targetId, $cleanResult, $before, $after, $cleanSummary);
+    $executed = $stmt->execute();
+    $stmt->close();
+
+    return $executed;
+}
+
+function cartadminStateDigest(array $state, string $auditSalt): string {
+    ksort($state);
+    $encoded = json_encode($state, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if (!is_string($encoded)) {
+        throw new RuntimeException('Impossibile serializzare lo stato per l’audit.');
+    }
+
+    return hash_hmac('sha256', $encoded, $auditSalt);
+}
+
 // 2. Localizzazione del file config.php di OpenCart
 if (file_exists(__DIR__ . '/config.php')) {
     require_once(__DIR__ . '/config.php');
@@ -149,6 +225,47 @@ $mysqli->query("CREATE TABLE IF NOT EXISTS `{$db_prefix}cartadmin_audit` (
     INDEX `idx_timestamp` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+$mysqli->query("CREATE TABLE IF NOT EXISTS `{$db_prefix}cartadmin_token` (
+    `token_id` INT AUTO_INCREMENT PRIMARY KEY,
+    `token_lookup` CHAR(16) NULL,
+    `token_hash` VARCHAR(255) NOT NULL,
+    `last_four` CHAR(4) NOT NULL,
+    `label` VARCHAR(64) NOT NULL,
+    `operator_user_id` INT NULL,
+    `operator_name` VARCHAR(64) NOT NULL,
+    `scopes` VARCHAR(255) NOT NULL,
+    `device_hash` CHAR(64) NULL,
+    `active` TINYINT(1) NOT NULL DEFAULT 1,
+    `created_at` DATETIME NOT NULL,
+    `last_used_at` DATETIME NULL,
+    `revoked_at` DATETIME NULL,
+    UNIQUE KEY `uq_token_lookup` (`token_lookup`),
+    INDEX `idx_active` (`active`, `token_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+$mysqli->query("CREATE TABLE IF NOT EXISTS `{$db_prefix}cartadmin_security_audit` (
+    `audit_id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+    `event_id` VARCHAR(64) NOT NULL,
+    `token_id` INT NULL,
+    `operator_user_id` INT NULL,
+    `operator_name` VARCHAR(64) NOT NULL,
+    `claimed_operator_digest` CHAR(64) NOT NULL DEFAULT '',
+    `identity_claim_mismatch` TINYINT(1) NOT NULL DEFAULT 0,
+    `device_hash` CHAR(64) NOT NULL DEFAULT '',
+    `ip_hash` CHAR(64) NOT NULL DEFAULT '',
+    `action_name` VARCHAR(64) NOT NULL,
+    `module_name` VARCHAR(32) NOT NULL DEFAULT '',
+    `target_id` INT NOT NULL DEFAULT 0,
+    `result` VARCHAR(16) NOT NULL,
+    `before_digest` CHAR(64) NOT NULL DEFAULT '',
+    `after_digest` CHAR(64) NOT NULL DEFAULT '',
+    `summary` VARCHAR(255) NOT NULL DEFAULT '',
+    `created_at` DATETIME NOT NULL,
+    UNIQUE KEY `uq_event_id` (`event_id`),
+    INDEX `idx_security_created` (`created_at`),
+    INDEX `idx_security_token` (`token_id`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
 $mysqli->query("CREATE TABLE IF NOT EXISTS `{$db_prefix}cartadmin_command` (
     `command_id` INT AUTO_INCREMENT PRIMARY KEY,
     `module` VARCHAR(32) NOT NULL,
@@ -165,49 +282,168 @@ $mysqli->query("CREATE TABLE IF NOT EXISTS `{$db_prefix}cartadmin_command` (
     INDEX `idx_command_status` (`status`, `created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-// 5. Recupero dell'hash del token configurato dal pannello amministrativo.
-$resKey = $mysqli->query("SELECT `value` FROM `{$db_prefix}cartadmin_setting` WHERE `key` = 'token_hash' LIMIT 1");
-$configuredHash = '';
-if ($resKey && $row = $resKey->fetch_assoc()) {
-    $configuredHash = trim($row['value']);
+// 5. Migrazione una tantum del token singolo verso credenziali revocabili.
+$legacyMarkerResult = $mysqli->query("SELECT `value` FROM `{$db_prefix}cartadmin_setting` WHERE `key` = 'legacy_token_migrated' LIMIT 1");
+$legacyMigrated = ($legacyMarkerResult && $row = $legacyMarkerResult->fetch_assoc()) ? (string)$row['value'] === '1' : false;
+if (!$legacyMigrated) {
+    $legacyValues = [];
+    $legacyResult = $mysqli->query("SELECT `key`, `value` FROM `{$db_prefix}cartadmin_setting` WHERE `key` IN ('api_key', 'token_hash', 'token_last_four', 'token_created_at')");
+    if ($legacyResult) {
+        while ($row = $legacyResult->fetch_assoc()) {
+            $legacyValues[(string)$row['key']] = (string)$row['value'];
+        }
+    }
+    $legacyHash = trim($legacyValues['token_hash'] ?? '');
+    $legacyPlaintext = trim($legacyValues['api_key'] ?? '');
+    if ($legacyHash === '' && $legacyPlaintext !== '') {
+        $legacyHash = cartadminHashToken($legacyPlaintext);
+    }
+    $legacyLastFour = substr($legacyValues['token_last_four'] ?? $legacyPlaintext, -4);
+    $legacyCreatedAt = trim($legacyValues['token_created_at'] ?? '');
+
+    $mysqli->begin_transaction();
+    try {
+        if ($legacyHash !== '') {
+            $legacyInsert = $mysqli->prepare("INSERT INTO `{$db_prefix}cartadmin_token` (`token_lookup`, `token_hash`, `last_four`, `label`, `operator_name`, `scopes`, `active`, `created_at`) VALUES (NULL, ?, ?, 'Token legacy da sostituire', 'Operatore legacy', 'read,orders.write,catalog.write,content.write,customers.write,audit.write', 1, ?)");
+            if (!$legacyInsert) {
+                throw new RuntimeException('Migrazione token non disponibile');
+            }
+            $legacyDate = $legacyCreatedAt !== '' ? $legacyCreatedAt : date('Y-m-d H:i:s');
+            $legacyInsert->bind_param('sss', $legacyHash, $legacyLastFour, $legacyDate);
+            if (!$legacyInsert->execute()) {
+                throw new RuntimeException('Migrazione token non riuscita');
+            }
+            $legacyInsert->close();
+        }
+        $markerStmt = $mysqli->prepare("INSERT INTO `{$db_prefix}cartadmin_setting` (`key`, `value`, `date_updated`) VALUES ('legacy_token_migrated', '1', NOW()) ON DUPLICATE KEY UPDATE `value` = '1', `date_updated` = NOW()");
+        if (!$markerStmt || !$markerStmt->execute()) {
+            throw new RuntimeException('Stato migrazione non salvato');
+        }
+        $markerStmt->close();
+        $mysqli->query("DELETE FROM `{$db_prefix}cartadmin_setting` WHERE `key` IN ('api_key', 'token_hash', 'token_last_four', 'token_created_at')");
+        $mysqli->commit();
+    } catch (Throwable $migrationError) {
+        $mysqli->rollback();
+        sendJson(['success' => false, 'error' => 'Migrazione sicura del token CartAdmin non riuscita.'], 500);
+    }
 }
 
-// Migrazione una tantum: trasforma l'eventuale vecchio token in chiaro in un hash
-// non reversibile e rimuove immediatamente il valore precedente dal database.
-if ($configuredHash === '') {
-    $resLegacy = $mysqli->query("SELECT `value` FROM `{$db_prefix}cartadmin_setting` WHERE `key` = 'api_key' LIMIT 1");
-    $legacyToken = ($resLegacy && $row = $resLegacy->fetch_assoc()) ? trim($row['value']) : '';
+$auditSaltResult = $mysqli->query("SELECT `value` FROM `{$db_prefix}cartadmin_setting` WHERE `key` = 'audit_ip_salt' LIMIT 1");
+$auditSalt = ($auditSaltResult && $row = $auditSaltResult->fetch_assoc()) ? trim((string)$row['value']) : '';
+if (preg_match('/^[a-f0-9]{64}$/', $auditSalt) !== 1) {
+    $auditSalt = bin2hex(random_bytes(32));
+    $auditSaltStmt = $mysqli->prepare("INSERT INTO `{$db_prefix}cartadmin_setting` (`key`, `value`, `date_updated`) VALUES ('audit_ip_salt', ?, NOW()) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`), `date_updated` = NOW()");
+    if (!$auditSaltStmt) {
+        sendJson(['success' => false, 'error' => 'Configurazione audit non disponibile.'], 500);
+    }
+    $auditSaltStmt->bind_param('s', $auditSalt);
+    $auditSaltStmt->execute();
+    $auditSaltStmt->close();
+}
 
-    if ($legacyToken !== '') {
-        $configuredHash = cartadminHashToken($legacyToken);
-        $stmtMigrate = $mysqli->prepare("INSERT INTO `{$db_prefix}cartadmin_setting` (`key`, `value`, `date_updated`) VALUES ('token_hash', ?, NOW()) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`), `date_updated` = NOW()");
+// 6. Verifica token, dispositivo e identità server-side.
+[$receivedKey, $claimedUsername, $receivedDeviceId] = cartadminExtractCredentials($_SERVER);
+if ($receivedKey === '' || $receivedDeviceId === '') {
+    usleep(200000);
+    sendJson(['success' => false, 'error' => 'Non autorizzato. Credenziale o identità dispositivo mancante.', 'code' => 401], 401);
+}
 
-        if ($stmtMigrate) {
-            $stmtMigrate->bind_param('s', $configuredHash);
-            $stmtMigrate->execute();
-            $stmtMigrate->close();
-            $mysqli->query("DELETE FROM `{$db_prefix}cartadmin_setting` WHERE `key` = 'api_key'");
+$tokenRows = [];
+if (preg_match('/^ca_([a-f0-9]{16})_[a-f0-9]{64}$/', $receivedKey, $tokenParts) === 1) {
+    $lookupStmt = $mysqli->prepare("SELECT t.`token_id`, t.`token_hash`, t.`operator_user_id`, COALESCE(u.`username`, t.`operator_name`) AS `operator_name`, t.`scopes`, t.`device_hash` FROM `{$db_prefix}cartadmin_token` t LEFT JOIN `{$db_prefix}user` u ON (t.`operator_user_id` = u.`user_id`) WHERE t.`token_lookup` = ? AND t.`active` = 1 AND (t.`operator_user_id` IS NULL OR u.`status` = 1) LIMIT 1");
+    if ($lookupStmt) {
+        $lookupStmt->bind_param('s', $tokenParts[1]);
+        $lookupStmt->execute();
+        $lookupResult = $lookupStmt->get_result();
+        if ($lookupResult && $row = $lookupResult->fetch_assoc()) {
+            $tokenRows[] = $row;
+        }
+        $lookupStmt->close();
+    }
+} elseif (preg_match('/^ca_[a-f0-9]{64}$/', $receivedKey) === 1) {
+    $legacyTokens = $mysqli->query("SELECT t.`token_id`, t.`token_hash`, t.`operator_user_id`, COALESCE(u.`username`, t.`operator_name`) AS `operator_name`, t.`scopes`, t.`device_hash` FROM `{$db_prefix}cartadmin_token` t LEFT JOIN `{$db_prefix}user` u ON (t.`operator_user_id` = u.`user_id`) WHERE t.`token_lookup` IS NULL AND t.`active` = 1 AND (t.`operator_user_id` IS NULL OR u.`status` = 1) ORDER BY t.`token_id` DESC LIMIT 5");
+    if ($legacyTokens) {
+        while ($row = $legacyTokens->fetch_assoc()) {
+            $tokenRows[] = $row;
         }
     }
 }
 
-// 6. Verifica autenticazione. Le credenziali in URL o nel form body non sono accettate.
-[$receivedKey, $receivedUsername] = cartadminExtractCredentials($_SERVER);
-
-$isAuthenticated = cartadminTokenMatches($configuredHash, $receivedKey);
-
-if (!$isAuthenticated) {
-    usleep(200000); // 200ms anti-bruteforce delay
-    sendJson([
-        'success' => false,
-        'error' => 'Non autorizzato. Token CartAdmin non valido, mancante o non ancora configurato dal pannello OpenCart.',
-        'code' => 401
-    ], 401);
+$authenticatedToken = null;
+foreach ($tokenRows as $tokenRow) {
+    if (cartadminTokenMatches((string)$tokenRow['token_hash'], $receivedKey)) {
+        $authenticatedToken = $tokenRow;
+        break;
+    }
+}
+if ($authenticatedToken === null) {
+    usleep(200000);
+    sendJson(['success' => false, 'error' => 'Non autorizzato. Token CartAdmin non valido o revocato.', 'code' => 401], 401);
 }
 
-// 7. Router delle API CartAdmin
+$tokenId = (int)$authenticatedToken['token_id'];
+$deviceHash = hash('sha256', $receivedDeviceId);
+$storedDeviceHash = trim((string)($authenticatedToken['device_hash'] ?? ''));
+if ($storedDeviceHash === '') {
+    $bindStmt = $mysqli->prepare("UPDATE `{$db_prefix}cartadmin_token` SET `device_hash` = ? WHERE `token_id` = ? AND `active` = 1 AND (`device_hash` IS NULL OR `device_hash` = '')");
+    if (!$bindStmt) {
+        sendJson(['success' => false, 'error' => 'Associazione dispositivo non disponibile.'], 500);
+    }
+    $bindStmt->bind_param('si', $deviceHash, $tokenId);
+    $bindStmt->execute();
+    $bound = $bindStmt->affected_rows === 1;
+    $bindStmt->close();
+    if (!$bound) {
+        $verifyBindStmt = $mysqli->prepare("SELECT `device_hash` FROM `{$db_prefix}cartadmin_token` WHERE `token_id` = ? AND `active` = 1 LIMIT 1");
+        if (!$verifyBindStmt) {
+            sendJson(['success' => false, 'error' => 'Verifica associazione dispositivo non disponibile.'], 500);
+        }
+        $verifyBindStmt->bind_param('i', $tokenId);
+        $verifyBindStmt->execute();
+        $verifyBindResult = $verifyBindStmt->get_result();
+        $storedDeviceHash = ($verifyBindResult && $row = $verifyBindResult->fetch_assoc()) ? (string)$row['device_hash'] : '';
+        $verifyBindStmt->close();
+        if ($storedDeviceHash === '' || !hash_equals($storedDeviceHash, $deviceHash)) {
+            sendJson(['success' => false, 'error' => 'Non autorizzato. Token associato a un altro dispositivo.', 'code' => 401], 401);
+        }
+    }
+} elseif (!hash_equals($storedDeviceHash, $deviceHash)) {
+    usleep(200000);
+    sendJson(['success' => false, 'error' => 'Non autorizzato. Token associato a un altro dispositivo.', 'code' => 401], 401);
+}
+
+$remoteAddress = isset($_SERVER['REMOTE_ADDR']) && is_string($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '';
+$ipHash = $remoteAddress !== '' ? hash_hmac('sha256', $remoteAddress, $auditSalt) : '';
+$authenticatedOperator = mb_substr(strip_tags((string)$authenticatedToken['operator_name']), 0, 64);
+$authenticatedScopes = cartadminParseScopes((string)$authenticatedToken['scopes']);
+$normalizedClaim = mb_substr(strip_tags($claimedUsername), 0, 64);
+$claimedOperatorDigest = $normalizedClaim !== '' ? hash_hmac('sha256', $normalizedClaim, $auditSalt) : '';
+$authContext = [
+    'token_id' => $tokenId,
+    'operator_user_id' => max(0, (int)($authenticatedToken['operator_user_id'] ?? 0)),
+    'operator_name' => $authenticatedOperator,
+    'claimed_operator_digest' => $claimedOperatorDigest,
+    'identity_claim_mismatch' => $normalizedClaim !== '' && !hash_equals($authenticatedOperator, $normalizedClaim),
+    'device_hash' => $deviceHash,
+    'ip_hash' => $ipHash
+];
+$lastUsedStmt = $mysqli->prepare("UPDATE `{$db_prefix}cartadmin_token` SET `last_used_at` = NOW() WHERE `token_id` = ? AND `active` = 1");
+if ($lastUsedStmt) {
+    $lastUsedStmt->bind_param('i', $tokenId);
+    $lastUsedStmt->execute();
+    $lastUsedStmt->close();
+}
+
+// 7. Autorizzazione per azione e router delle API CartAdmin.
 $rawAction = isset($_GET['action']) ? $_GET['action'] : (isset($_POST['action']) ? $_POST['action'] : 'status');
 $action = is_string($rawAction) ? strtolower(trim($rawAction)) : 'status';
+$rawScopeModule = isset($_GET['module']) ? $_GET['module'] : (isset($_POST['module']) ? $_POST['module'] : '');
+$scopeModule = is_string($rawScopeModule) ? strtolower(trim($rawScopeModule)) : '';
+$requiredScope = cartadminRequiredScope($action, $scopeModule);
+if (!cartadminHasScope($authenticatedScopes, $requiredScope)) {
+    cartadminInsertSecurityAudit($mysqli, $db_prefix, $authContext, $action, $scopeModule, 0, 'denied', '', '', 'Permesso richiesto: ' . $requiredScope);
+    sendJson(['success' => false, 'error' => 'Operazione non autorizzata per questo token.', 'code' => 403], 403);
+}
 
 try {
     switch ($action) {
@@ -226,9 +462,11 @@ try {
             sendJson([
                 'success' => true,
                 'status' => 'online',
-                'bridge_version' => '2.1.0-dev.2',
+                'bridge_version' => '2.1.0-dev.4',
                 'author' => 'SOLO SOLUZIONI (OpenCart ITALIA)',
                 'store_name' => $storeName,
+                'authenticated_operator' => $authenticatedOperator,
+                'granted_scopes' => $authenticatedScopes,
                 'total_orders' => $totalOrders,
                 'total_products' => $totalProducts,
                 'database_prefix' => $db_prefix,
@@ -402,19 +640,19 @@ try {
                 ],
                 'pages' => [
                     'tables' => ['information', 'information_description'],
-                    'sql' => "SELECT i.information_id AS id, id.title AS title, CONCAT('Ordinamento: ', i.sort_order) AS subtitle, i.status AS active, '' AS date_value, '' AS detail, i.status AS status_code FROM `{$db_prefix}information` i LEFT JOIN `{$db_prefix}information_description` id ON (i.information_id = id.information_id AND id.language_id = {$languageId}) ORDER BY i.sort_order ASC, i.information_id DESC LIMIT {$limit}" // nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string
+                    'sql' => "SELECT i.information_id AS id, id.title AS title, CONCAT('Ordinamento: ', i.sort_order) AS subtitle, i.status AS active, '' AS date_value, '' AS detail, i.status AS status_code, '' AS content_value, NULL AS rating_value, i.sort_order AS sort_order_value FROM `{$db_prefix}information` i LEFT JOIN `{$db_prefix}information_description` id ON (i.information_id = id.information_id AND id.language_id = {$languageId}) ORDER BY i.sort_order ASC, i.information_id DESC LIMIT {$limit}" // nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string
                 ],
                 'reviews' => [
                     'tables' => ['review', 'product_description'],
-                    'sql' => "SELECT r.review_id AS id, pd.name AS title, r.author AS subtitle, r.status AS active, r.date_added AS date_value, CONCAT(r.rating, '/5 • ', LEFT(r.text, 180)) AS detail, r.status AS status_code FROM `{$db_prefix}review` r LEFT JOIN `{$db_prefix}product_description` pd ON (r.product_id = pd.product_id AND pd.language_id = {$languageId}) ORDER BY r.date_added DESC, r.review_id DESC LIMIT {$limit}" // nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string
+                    'sql' => "SELECT r.review_id AS id, pd.name AS title, r.author AS subtitle, r.status AS active, r.date_added AS date_value, CONCAT(r.rating, '/5 • ', LEFT(r.text, 180)) AS detail, r.status AS status_code, r.text AS content_value, r.rating AS rating_value, NULL AS sort_order_value FROM `{$db_prefix}review` r LEFT JOIN `{$db_prefix}product_description` pd ON (r.product_id = pd.product_id AND pd.language_id = {$languageId}) ORDER BY r.date_added DESC, r.review_id DESC LIMIT {$limit}" // nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string
                 ],
                 'articles' => [
                     'tables' => ['article', 'article_description'],
-                    'sql' => "SELECT a.article_id AS id, ad.name AS title, a.author AS subtitle, a.status AS active, a.date_added AS date_value, CONCAT('Argomento #', a.topic_id) AS detail, a.status AS status_code FROM `{$db_prefix}article` a LEFT JOIN `{$db_prefix}article_description` ad ON (a.article_id = ad.article_id AND ad.language_id = {$languageId}) ORDER BY a.date_added DESC, a.article_id DESC LIMIT {$limit}" // nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string
+                    'sql' => "SELECT a.article_id AS id, ad.name AS title, a.author AS subtitle, a.status AS active, a.date_added AS date_value, CONCAT('Argomento #', a.topic_id) AS detail, a.status AS status_code, '' AS content_value, NULL AS rating_value, NULL AS sort_order_value FROM `{$db_prefix}article` a LEFT JOIN `{$db_prefix}article_description` ad ON (a.article_id = ad.article_id AND ad.language_id = {$languageId}) ORDER BY a.date_added DESC, a.article_id DESC LIMIT {$limit}" // nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string
                 ],
                 'topics' => [
                     'tables' => ['topic', 'topic_description'],
-                    'sql' => "SELECT t.topic_id AS id, td.name AS title, CONCAT('Ordinamento: ', t.sort_order) AS subtitle, t.status AS active, '' AS date_value, '' AS detail, t.status AS status_code FROM `{$db_prefix}topic` t LEFT JOIN `{$db_prefix}topic_description` td ON (t.topic_id = td.topic_id AND td.language_id = {$languageId}) ORDER BY t.sort_order ASC, t.topic_id DESC LIMIT {$limit}" // nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string
+                    'sql' => "SELECT t.topic_id AS id, td.name AS title, CONCAT('Ordinamento: ', t.sort_order) AS subtitle, t.status AS active, '' AS date_value, '' AS detail, t.status AS status_code, '' AS content_value, NULL AS rating_value, t.sort_order AS sort_order_value FROM `{$db_prefix}topic` t LEFT JOIN `{$db_prefix}topic_description` td ON (t.topic_id = td.topic_id AND td.language_id = {$languageId}) ORDER BY t.sort_order ASC, t.topic_id DESC LIMIT {$limit}" // nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string
                 ],
                 'comments' => [
                     'tables' => ['article_comment', 'article_description'],
@@ -499,6 +737,7 @@ try {
                 $title = html_entity_decode(strip_tags((string)($row['title'] ?? '')), ENT_QUOTES | ENT_HTML5, 'UTF-8');
                 $subtitle = html_entity_decode(strip_tags((string)($row['subtitle'] ?? '')), ENT_QUOTES | ENT_HTML5, 'UTF-8');
                 $detail = html_entity_decode(strip_tags((string)($row['detail'] ?? '')), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                $content = html_entity_decode(strip_tags((string)($row['content_value'] ?? '')), ENT_QUOTES | ENT_HTML5, 'UTF-8');
                 $pending = $pendingCommands[(int)$row['id']] ?? null;
                 $items[] = [
                     'id' => (string)$row['id'],
@@ -510,7 +749,11 @@ try {
                     'detail' => mb_substr($detail, 0, 240),
                     'actionable' => $rawModule === 'customer_approvals' || ($rawModule === 'gdpr' && (int)$row['status_code'] === 1),
                     'pending_command_id' => $pending['id'] ?? null,
-                    'pending_operation' => $pending['operation'] ?? ''
+                    'pending_operation' => $pending['operation'] ?? '',
+                    'content' => mb_substr($content, 0, 2000),
+                    'rating' => isset($row['rating_value']) ? (int)$row['rating_value'] : null,
+                    'sort_order' => isset($row['sort_order_value']) ? (int)$row['sort_order_value'] : null,
+                    'editable' => in_array($rawModule, ['pages', 'reviews', 'articles', 'topics'], true)
                 ];
             }
 
@@ -551,7 +794,7 @@ try {
                 sendJson(['success' => false, 'error' => 'Elemento non trovato o non più in attesa.'], 409);
             }
 
-            $requestedBy = mb_substr($receivedUsername !== '' ? $receivedUsername : 'CartAdmin Android', 0, 64);
+            $requestedBy = $authenticatedOperator;
             $dedupeKey = $rawModule . ':' . $recordId;
             $commandStmt = $mysqli->prepare("INSERT INTO `{$db_prefix}cartadmin_command` (`module`, `target_id`, `operation`, `requested_by`, `status`, `dedupe_key`, `created_at`) VALUES (?, ?, ?, ?, 'pending', ?, NOW())");
             if (!$commandStmt) {
@@ -638,6 +881,203 @@ try {
             sendJson(['success' => false, 'error' => 'Operazione Antispam non valida.'], 400);
             break;
 
+        case 'management_content':
+            $rawModule = isset($_POST['module']) && is_string($_POST['module']) ? strtolower(trim($_POST['module'])) : '';
+            $recordId = isset($_POST['id']) ? (int)$_POST['id'] : 0;
+            $title = isset($_POST['title']) && is_string($_POST['title']) ? trim(strip_tags($_POST['title'])) : '';
+            $secondary = isset($_POST['secondary']) && is_string($_POST['secondary']) ? trim(strip_tags($_POST['secondary'])) : '';
+            $content = isset($_POST['content']) && is_string($_POST['content']) ? trim(strip_tags($_POST['content'])) : '';
+            $rating = isset($_POST['rating']) ? (int)$_POST['rating'] : 0;
+            $sortOrder = isset($_POST['sort_order']) ? (int)$_POST['sort_order'] : 0;
+            $editableModules = ['pages', 'reviews', 'articles', 'topics'];
+
+            if ($recordId < 1 || !in_array($rawModule, $editableModules, true)) {
+                cartadminInsertSecurityAudit($mysqli, $db_prefix, $authContext, 'management_content', $rawModule, $recordId, 'failed', '', '', 'Modulo o identificativo non valido');
+                sendJson(['success' => false, 'error' => 'Modulo editoriale o identificativo non valido.'], 400);
+            }
+            if (($rawModule !== 'reviews' && ($title === '' || mb_strlen($title) > 255))
+                || (in_array($rawModule, ['articles', 'reviews'], true) && ($secondary === '' || mb_strlen($secondary) > 64))
+                || ($rawModule === 'reviews' && ($content === '' || mb_strlen($content) > 2000 || $rating < 1 || $rating > 5))
+                || (in_array($rawModule, ['pages', 'topics'], true) && ($sortOrder < 0 || $sortOrder > 999999))) {
+                cartadminInsertSecurityAudit($mysqli, $db_prefix, $authContext, 'management_content', $rawModule, $recordId, 'failed', '', '', 'Validazione campi non superata');
+                sendJson(['success' => false, 'error' => 'I dati editoriali non rispettano i limiti previsti.'], 400);
+            }
+
+            $languageId = 1;
+            $languageResult = $mysqli->query("SELECT `language_id` FROM `{$db_prefix}language` WHERE `status` = 1 ORDER BY `sort_order`, `language_id` LIMIT 1");
+            if ($languageResult && $languageRow = $languageResult->fetch_assoc()) {
+                $languageId = max(1, (int)$languageRow['language_id']);
+            }
+
+            $mysqli->begin_transaction();
+            try {
+                $beforeState = [];
+                $afterState = [];
+                $changedFields = [];
+                if ($rawModule === 'pages') {
+                    $checkStmt = $mysqli->prepare("SELECT i.`information_id`, i.`sort_order`, id.`title` FROM `{$db_prefix}information` i INNER JOIN `{$db_prefix}information_description` id ON (i.`information_id` = id.`information_id` AND id.`language_id` = ?) WHERE i.`information_id` = ? LIMIT 1 FOR UPDATE");
+                    if (!$checkStmt) {
+                        throw new RuntimeException('Pagina non disponibile');
+                    }
+                    $checkStmt->bind_param('ii', $languageId, $recordId);
+                    $checkStmt->execute();
+                    $checkResult = $checkStmt->get_result();
+                    $currentRow = $checkResult ? $checkResult->fetch_assoc() : null;
+                    $exists = is_array($currentRow);
+                    $checkStmt->close();
+                    if (!$exists) {
+                        throw new OutOfBoundsException('Pagina non trovata');
+                    }
+                    $beforeState = ['title' => (string)$currentRow['title'], 'sort_order' => (int)$currentRow['sort_order']];
+                    $afterState = ['title' => $title, 'sort_order' => $sortOrder];
+                    $changedFields = ['title', 'sort_order'];
+                    $baseStmt = $mysqli->prepare("UPDATE `{$db_prefix}information` SET `sort_order` = ? WHERE `information_id` = ?");
+                    if (!$baseStmt) {
+                        throw new RuntimeException('Pagina non aggiornabile');
+                    }
+                    $baseStmt->bind_param('ii', $sortOrder, $recordId);
+                    if (!$baseStmt->execute()) {
+                        throw new RuntimeException('Pagina non aggiornabile');
+                    }
+                    $baseStmt->close();
+                    $descriptionStmt = $mysqli->prepare("UPDATE `{$db_prefix}information_description` SET `title` = ? WHERE `information_id` = ? AND `language_id` = ?");
+                    if (!$descriptionStmt) {
+                        throw new RuntimeException('Descrizione pagina non disponibile');
+                    }
+                    $descriptionStmt->bind_param('sii', $title, $recordId, $languageId);
+                } elseif ($rawModule === 'articles') {
+                    $checkStmt = $mysqli->prepare("SELECT a.`article_id`, a.`author`, ad.`name` FROM `{$db_prefix}article` a INNER JOIN `{$db_prefix}article_description` ad ON (a.`article_id` = ad.`article_id` AND ad.`language_id` = ?) WHERE a.`article_id` = ? LIMIT 1 FOR UPDATE");
+                    if (!$checkStmt) {
+                        throw new RuntimeException('Articolo non disponibile');
+                    }
+                    $checkStmt->bind_param('ii', $languageId, $recordId);
+                    $checkStmt->execute();
+                    $checkResult = $checkStmt->get_result();
+                    $currentRow = $checkResult ? $checkResult->fetch_assoc() : null;
+                    $exists = is_array($currentRow);
+                    $checkStmt->close();
+                    if (!$exists) {
+                        throw new OutOfBoundsException('Articolo non trovato');
+                    }
+                    $beforeState = ['title' => (string)$currentRow['name'], 'author' => (string)$currentRow['author']];
+                    $afterState = ['title' => $title, 'author' => $secondary];
+                    $changedFields = ['title', 'author'];
+                    $baseStmt = $mysqli->prepare("UPDATE `{$db_prefix}article` SET `author` = ? WHERE `article_id` = ?");
+                    if (!$baseStmt) {
+                        throw new RuntimeException('Articolo non aggiornabile');
+                    }
+                    $baseStmt->bind_param('si', $secondary, $recordId);
+                    if (!$baseStmt->execute()) {
+                        throw new RuntimeException('Articolo non aggiornabile');
+                    }
+                    $baseStmt->close();
+                    $descriptionStmt = $mysqli->prepare("UPDATE `{$db_prefix}article_description` SET `name` = ? WHERE `article_id` = ? AND `language_id` = ?");
+                    if (!$descriptionStmt) {
+                        throw new RuntimeException('Descrizione articolo non disponibile');
+                    }
+                    $descriptionStmt->bind_param('sii', $title, $recordId, $languageId);
+                } elseif ($rawModule === 'topics') {
+                    $checkStmt = $mysqli->prepare("SELECT t.`topic_id`, t.`sort_order`, td.`name` FROM `{$db_prefix}topic` t INNER JOIN `{$db_prefix}topic_description` td ON (t.`topic_id` = td.`topic_id` AND td.`language_id` = ?) WHERE t.`topic_id` = ? LIMIT 1 FOR UPDATE");
+                    if (!$checkStmt) {
+                        throw new RuntimeException('Argomento non disponibile');
+                    }
+                    $checkStmt->bind_param('ii', $languageId, $recordId);
+                    $checkStmt->execute();
+                    $checkResult = $checkStmt->get_result();
+                    $currentRow = $checkResult ? $checkResult->fetch_assoc() : null;
+                    $exists = is_array($currentRow);
+                    $checkStmt->close();
+                    if (!$exists) {
+                        throw new OutOfBoundsException('Argomento non trovato');
+                    }
+                    $beforeState = ['title' => (string)$currentRow['name'], 'sort_order' => (int)$currentRow['sort_order']];
+                    $afterState = ['title' => $title, 'sort_order' => $sortOrder];
+                    $changedFields = ['title', 'sort_order'];
+                    $baseStmt = $mysqli->prepare("UPDATE `{$db_prefix}topic` SET `sort_order` = ? WHERE `topic_id` = ?");
+                    if (!$baseStmt) {
+                        throw new RuntimeException('Argomento non aggiornabile');
+                    }
+                    $baseStmt->bind_param('ii', $sortOrder, $recordId);
+                    if (!$baseStmt->execute()) {
+                        throw new RuntimeException('Argomento non aggiornabile');
+                    }
+                    $baseStmt->close();
+                    $descriptionStmt = $mysqli->prepare("UPDATE `{$db_prefix}topic_description` SET `name` = ? WHERE `topic_id` = ? AND `language_id` = ?");
+                    if (!$descriptionStmt) {
+                        throw new RuntimeException('Descrizione argomento non disponibile');
+                    }
+                    $descriptionStmt->bind_param('sii', $title, $recordId, $languageId);
+                } else {
+                    $checkStmt = $mysqli->prepare("SELECT `product_id`, `author`, `text`, `rating` FROM `{$db_prefix}review` WHERE `review_id` = ? LIMIT 1 FOR UPDATE");
+                    if (!$checkStmt) {
+                        throw new RuntimeException('Recensione non disponibile');
+                    }
+                    $checkStmt->bind_param('i', $recordId);
+                    $checkStmt->execute();
+                    $checkResult = $checkStmt->get_result();
+                    $reviewRow = $checkResult ? $checkResult->fetch_assoc() : null;
+                    $productId = $reviewRow ? (int)$reviewRow['product_id'] : 0;
+                    $checkStmt->close();
+                    if ($productId < 1) {
+                        throw new OutOfBoundsException('Recensione non trovata');
+                    }
+                    $beforeState = ['author' => (string)$reviewRow['author'], 'text' => (string)$reviewRow['text'], 'rating' => (int)$reviewRow['rating']];
+                    $afterState = ['author' => $secondary, 'text' => $content, 'rating' => $rating];
+                    $changedFields = ['author', 'text', 'rating'];
+                    $reviewStmt = $mysqli->prepare("UPDATE `{$db_prefix}review` SET `author` = ?, `text` = ?, `rating` = ?, `date_modified` = NOW() WHERE `review_id` = ?");
+                    if (!$reviewStmt) {
+                        throw new RuntimeException('Recensione non aggiornabile');
+                    }
+                    $reviewStmt->bind_param('ssii', $secondary, $content, $rating, $recordId);
+                    if (!$reviewStmt->execute()) {
+                        throw new RuntimeException('Recensione non aggiornabile');
+                    }
+                    $reviewStmt->close();
+                    $ratingStmt = $mysqli->prepare("UPDATE `{$db_prefix}product` SET `rating` = (SELECT COALESCE(AVG(`rating`), 0) FROM `{$db_prefix}review` WHERE `product_id` = ? AND `status` = 1) WHERE `product_id` = ?");
+                    if (!$ratingStmt) {
+                        throw new RuntimeException('Valutazione prodotto non aggiornabile');
+                    }
+                    $ratingStmt->bind_param('ii', $productId, $productId);
+                    if (!$ratingStmt->execute()) {
+                        throw new RuntimeException('Valutazione prodotto non aggiornabile');
+                    }
+                    $ratingStmt->close();
+                    $descriptionStmt = null;
+                }
+
+                if (isset($descriptionStmt) && (!$descriptionStmt || !$descriptionStmt->execute())) {
+                    throw new RuntimeException('Descrizione nella lingua principale non aggiornabile');
+                }
+                if (isset($descriptionStmt) && $descriptionStmt) {
+                    $descriptionStmt->close();
+                }
+                $beforeDigest = cartadminStateDigest($beforeState, $auditSalt);
+                $afterDigest = cartadminStateDigest($afterState, $auditSalt);
+                if (!cartadminInsertSecurityAudit($mysqli, $db_prefix, $authContext, 'management_content', $rawModule, $recordId, 'success', $beforeDigest, $afterDigest, 'Campi: ' . implode(',', $changedFields))) {
+                    throw new RuntimeException('Audit atomico non disponibile');
+                }
+                $mysqli->commit();
+            } catch (Throwable $contentError) {
+                $mysqli->rollback();
+                cartadminInsertSecurityAudit($mysqli, $db_prefix, $authContext, 'management_content', $rawModule, $recordId, 'failed', '', '', 'Rollback della modifica editoriale');
+                sendJson(['success' => false, 'error' => 'Modifica editoriale non riuscita. Verifica che il record e la lingua principale esistano.'], 409);
+            }
+
+            $contentCacheKeys = [
+                'pages' => ['information'],
+                'reviews' => ['product'],
+                'articles' => ['article'],
+                'topics' => ['topic']
+            ];
+            cartadminInvalidateFileCache($contentCacheKeys[$rawModule]);
+            sendJson([
+                'success' => true,
+                'module' => $rawModule,
+                'id' => (string)$recordId,
+                'language_id' => $rawModule === 'reviews' ? null : $languageId
+            ]);
+            break;
+
         case 'management_status':
             $rawModule = isset($_POST['module']) && is_string($_POST['module'])
                 ? strtolower(trim($_POST['module']))
@@ -656,6 +1096,7 @@ try {
             ];
 
             if ($recordId < 1 || !array_key_exists($rawModule, $statusTargets)) {
+                cartadminInsertSecurityAudit($mysqli, $db_prefix, $authContext, 'management_status', $rawModule, $recordId, 'failed', '', '', 'Modulo o identificativo non valido');
                 sendJson(['success' => false, 'error' => 'Modulo o identificativo non valido.'], 400);
             }
 
@@ -664,14 +1105,15 @@ try {
             $idColumn = $target['id'];
             $mysqli->begin_transaction();
             try {
-                $checkStmt = $mysqli->prepare("SELECT `{$idColumn}` FROM `{$tableName}` WHERE `{$idColumn}` = ? LIMIT 1 FOR UPDATE"); // nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string, php.lang.security.injection.tainted-callable.tainted-callable
+                $checkStmt = $mysqli->prepare("SELECT `{$idColumn}`, `status` FROM `{$tableName}` WHERE `{$idColumn}` = ? LIMIT 1 FOR UPDATE"); // nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string, php.lang.security.injection.tainted-callable.tainted-callable
                 if (!$checkStmt) {
                     throw new RuntimeException('Target non disponibile');
                 }
                 $checkStmt->bind_param('i', $recordId);
                 $checkStmt->execute();
                 $checkResult = $checkStmt->get_result();
-                $exists = $checkResult && $checkResult->num_rows === 1;
+                $statusRow = $checkResult ? $checkResult->fetch_assoc() : null;
+                $exists = is_array($statusRow);
                 $checkStmt->close();
                 if (!$exists) {
                     throw new OutOfBoundsException('Elemento non trovato');
@@ -704,9 +1146,16 @@ try {
                     }
                 }
 
+                $beforeDigest = cartadminStateDigest(['status' => (int)$statusRow['status']], $auditSalt);
+                $afterDigest = cartadminStateDigest(['status' => $newStatus], $auditSalt);
+                if (!cartadminInsertSecurityAudit($mysqli, $db_prefix, $authContext, 'management_status', $rawModule, $recordId, 'success', $beforeDigest, $afterDigest, 'Campo: status')) {
+                    throw new RuntimeException('Audit atomico non disponibile');
+                }
+
                 $mysqli->commit();
             } catch (Throwable $statusError) {
                 $mysqli->rollback();
+                cartadminInsertSecurityAudit($mysqli, $db_prefix, $authContext, 'management_status', $rawModule, $recordId, 'failed', '', '', 'Rollback aggiornamento stato');
                 sendJson(['success' => false, 'error' => 'Aggiornamento dello stato non riuscito.'], 409);
             }
 
@@ -1587,7 +2036,7 @@ try {
                     $logId = mb_substr(strip_tags((string)($input['log_id'] ?? ('log_' . time()))), 0, 64);
                     $actType = mb_substr(strip_tags((string)($input['action_type'] ?? 'UNKNOWN')), 0, 64);
                     $desc = mb_substr(strip_tags((string)($input['description'] ?? '')), 0, 255);
-                    $operator = mb_substr(strip_tags((string)($input['operator_username'] ?? 'admin')), 0, 64);
+                    $operator = $authenticatedOperator;
                     $tsIso = mb_substr(strip_tags((string)($input['timestamp_iso'] ?? date('c'))), 0, 64);
                     $devModel = mb_substr(strip_tags((string)($input['device_model'] ?? 'Android')), 0, 128);
                     $androidVer = mb_substr(strip_tags((string)($input['android_version'] ?? '')), 0, 64);

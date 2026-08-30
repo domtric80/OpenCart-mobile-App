@@ -401,6 +401,27 @@ class MainViewModel(
         }
     }
 
+    fun updateAdminContent(module: AdminModule, record: com.example.model.AdminRecord) {
+        val store = uiState.value.currentStore ?: return
+        if (!record.editable) return
+        viewModelScope.launch(Dispatchers.IO) {
+            apiClient.updateAdminContent(
+                baseUrl = store.url,
+                apiKey = store.apiKey,
+                username = store.apiUsername,
+                module = module,
+                record = record
+            ).onSuccess {
+                loadAdminModule(module, forceRefresh = true)
+            }.onFailure { error ->
+                val current = _adminModules.value[module] ?: AdminModuleSnapshot(module = module)
+                _adminModules.value = _adminModules.value + (
+                    module to current.copy(message = error.localizedMessage ?: "Modifica editoriale non riuscita.")
+                )
+            }
+        }
+    }
+
     fun addAntispamKeyword(keyword: String) {
         val cleanKeyword = keyword.trim()
         val store = uiState.value.currentStore ?: return

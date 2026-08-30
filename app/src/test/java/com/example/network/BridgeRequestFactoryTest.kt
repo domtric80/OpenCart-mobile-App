@@ -6,9 +6,15 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
 class BridgeRequestFactoryTest {
+
+    @Before
+    fun initializeDeviceIdentity() {
+        BridgeDeviceIdentity.setForTests("0123456789abcdef0123456789abcdef")
+    }
 
     @Test
     fun credentialsAreHeadersOnly() {
@@ -21,7 +27,8 @@ class BridgeRequestFactoryTest {
         )
 
         assertEquals("secret-key-value", request.header("X-CartAdmin-Key"))
-        assertEquals("api-user", request.header("X-CartAdmin-User"))
+        assertNull(request.header("X-CartAdmin-User"))
+        assertEquals("0123456789abcdef0123456789abcdef", request.header("X-CartAdmin-Device"))
         assertNull(request.header("Authorization"))
         assertEquals("orders", request.url.queryParameter("action"))
         assertEquals("50", request.url.queryParameter("limit"))
@@ -71,7 +78,7 @@ class BridgeRequestFactoryTest {
         assertFalse(names.contains("api_key"))
         assertFalse(names.contains("username"))
         assertEquals("secret-key-value", request.header("X-CartAdmin-Key"))
-        assertEquals("api-user", request.header("X-CartAdmin-User"))
+        assertNull(request.header("X-CartAdmin-User"))
     }
 
     @Test
@@ -136,7 +143,7 @@ class BridgeRequestFactoryTest {
             assertFalse(names.contains("api_key"))
             assertFalse(names.contains("username"))
             assertEquals("catalog-secret", request.header("X-CartAdmin-Key"))
-            assertEquals("operator", request.header("X-CartAdmin-User"))
+            assertNull(request.header("X-CartAdmin-User"))
         }
     }
 
@@ -187,7 +194,7 @@ class BridgeRequestFactoryTest {
         assertFalse(names.contains("api_key"))
         assertFalse(names.contains("username"))
         assertEquals("queue-secret", request.header("X-CartAdmin-Key"))
-        assertEquals("mobile-admin", request.header("X-CartAdmin-User"))
+        assertNull(request.header("X-CartAdmin-User"))
     }
 
     @Test
@@ -204,5 +211,32 @@ class BridgeRequestFactoryTest {
         assertEquals(listOf("action", "operation", "keyword"), names)
         assertFalse(names.contains("api_key"))
         assertEquals("antispam-secret", request.header("X-CartAdmin-Key"))
+    }
+
+    @Test
+    fun editorialMutationUsesHeaderAuthenticationAndAllowlistedFields() {
+        val request = BridgeRequestFactory.authenticatedFormPost(
+            baseUrl = "https://shop.example",
+            action = "management_content",
+            apiKey = "editorial-secret",
+            username = "content-editor",
+            fields = mapOf(
+                "module" to "reviews",
+                "id" to "18",
+                "title" to "Prodotto",
+                "secondary" to "Autore",
+                "content" to "Recensione verificata",
+                "rating" to "5",
+                "sort_order" to ""
+            )
+        )
+        val body = request.body as FormBody
+        val names = (0 until body.size).map(body::name)
+
+        assertEquals(listOf("action", "module", "id", "title", "secondary", "content", "rating", "sort_order"), names)
+        assertFalse(names.contains("api_key"))
+        assertFalse(names.contains("username"))
+        assertEquals("editorial-secret", request.header("X-CartAdmin-Key"))
+        assertNull(request.header("X-CartAdmin-User"))
     }
 }

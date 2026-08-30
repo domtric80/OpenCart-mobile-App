@@ -35,7 +35,23 @@ App Android e bridge devono essere aggiornati entrambi alla v2.0.1.
 - attivazione e disattivazione remota verificata per i moduli che espongono uno stato semplice;
 - compatibilità esplicita: se una tabella non esiste nella versione installata, l'app mostra “funzione non disponibile” invece di dati fittizi.
 
-Approvazioni clienti e richieste GDPR sono inizialmente in sola lettura: approvazione, rifiuto, esportazione o cancellazione richiedono il flusso completo OpenCart con notifiche ed eventi e non vengono simulati con una semplice modifica al database.
+Nel ramo di sviluppo 2.1, approvazioni clienti e richieste GDPR possono essere inviate dall'app a una coda protetta. Un amministratore deve confermarle nel pannello CartAdmin Bridge prima che vengano eseguite dai modelli nativi OpenCart con i relativi eventi ed email.
+
+### Sviluppo 2.1 (non ancora release stabile)
+
+- CRUD remoto verificato per prodotti e categorie;
+- approvazioni clienti e richieste GDPR tramite coda amministrativa deduplicata;
+- modifica controllata di titolo/ordinamento delle pagine, titolo/autore degli articoli e titolo/ordinamento degli argomenti;
+- modifica di autore, testo e valutazione delle recensioni con ricalcolo della media prodotto;
+- contenuti HTML, SEO e traduzioni secondarie deliberatamente preservati e non sovrascritti dall'editor mobile.
+- token distinti e revocabili, ciascuno associato a operatore, dispositivo e permessi minimi;
+- audit server-side delle modifiche editoriali con identità verificata e digest HMAC, senza copiare i contenuti nel registro.
+
+Queste funzioni richiedono app e bridge `2.1.0-dev.4` e non fanno ancora parte della release stabile v2.0.1.
+
+Nel pannello 2.1, prima di generare un token occorre indicare un'etichetta, selezionare un utente amministrativo OpenCart attivo e scegliere gli scope necessari. Il token conserva `user_id` e username verificati lato server e si associa alla prima installazione Android che lo usa; per un secondo dispositivo va creato un token separato. La revoca è individuale e non interrompe gli altri dispositivi. Il nome operatore eventualmente conservato nell'app non può sostituire quello assegnato dal pannello.
+
+Durante l'aggiornamento, il bridge migra una sola volta l'hash del token 2.0 esistente senza recuperarne il valore in chiaro. Quel token legacy mantiene temporaneamente tutti gli scope ed è marcato nel pannello come da sostituire: dopo aver installato app e bridge 2.1, creare un token nominativo con privilegi minimi, provarlo sul dispositivo e revocare quello legacy. App e bridge 2.1 devono essere aggiornati insieme perché il nuovo bridge richiede anche l'identità casuale dell'installazione Android.
 
 Per usare i nuovi moduli, app Android e bridge OpenCart devono essere aggiornati entrambi alla v2.0.0.
 
@@ -101,7 +117,7 @@ Nell'immagine il token completo non è visibile: è il comportamento previsto do
 1. Tocca **Altro > Configurazione**. Se non esistono profili compare l'avviso viola **Nessun negozio configurato**.
 2. Inserisci un nome riconoscibile, per esempio `Negozio principale`.
 3. Inserisci soltanto l'URL base HTTPS, per esempio `https://negozio.example`. Non aggiungere `/admin`, `/extension/cartadmin/` o `cartadmin_api.php`.
-4. Inserisci il nome dell'operatore usato nel registro di audit. Con il bridge CartAdmin non è necessario creare manualmente una chiave nell'area API nativa di OpenCart.
+4. Inserisci un'etichetta locale. Nel ramo 2.1 il registro usa come identità autorevole l'operatore assegnato al token dal pannello OpenCart; il valore dell'app non può sostituirlo. Con il bridge CartAdmin non è necessario creare manualmente una chiave nell'area API nativa di OpenCart.
 5. Incolla nel campo protetto il token `ca_...` generato dal modulo e seleziona **OpenCart 4.1.x**.
 6. Premi **Aggiungi**. Questo pulsante crea e salva il primo profilo; finché i campi obbligatori non sono completi rimane disattivato.
 7. Dopo il salvataggio premi **Test API**. Se il test riesce, premi **Sincronizza dati adesso**.
@@ -129,7 +145,9 @@ OpenCart registra soltanto visitatori attivi, URL, provenienza e ultimo aggiorna
 - StrongBox viene preferito quando presente; in alternativa è obbligatoria una chiave hardware-backed nel TEE. Se il dispositivo offre soltanto protezione software, il salvataggio fallisce in modo sicuro.
 - Il token salvato non viene associato al campo dell'interfaccia. Dopo lo sblocco dell'app la credenziale può essere decifrata in memoria soltanto per effettuare richieste HTTPS autenticate.
 - Il bridge accetta il token negli header HTTP e ignora credenziali inviate in URL o form body.
-- La rotazione dal pannello OpenCart invalida immediatamente il token precedente.
+- Nel ramo 2.1 ogni token è associato al primo dispositivo che lo usa, ha scope espliciti ed è revocabile singolarmente dal pannello OpenCart.
+- Il registro di sicurezza attribuisce l'operazione all'utente OpenCart assegnato al token lato server. L'app 2.1 non invia un nome operatore; eventuali dichiarazioni provenienti da client precedenti vengono conservate soltanto come digest HMAC e indicatore di incongruenza.
+- Le modifiche editoriali riuscite e il relativo evento di audit vengono confermati nella stessa transazione. In caso di rollback viene registrato un fallimento separato, senza contenuti o dati personali in chiaro.
 
 Non inserire token, password, keystore o chiavi di firma in issue, screenshot, commit o file di configurazione versionati.
 
@@ -137,7 +155,8 @@ Non inserire token, password, keystore o chiavi di firma in issue, screenshot, c
 
 - dashboard con indicatori di vendita e attività;
 - consultazione e aggiornamento dello stato degli ordini;
-- catalogo, categorie, quantità e prezzi;
+- catalogo, categorie, quantità e prezzi, con CRUD remoto nel ramo 2.1;
+- elenchi amministrativi per Pagine, Recensioni, CMS e Clienti; nel ramo 2.1 sono disponibili anche editor controllati e coda Clienti/GDPR;
 - abbonamenti e resi esposti dal bridge;
 - cache locale Room e sincronizzazione manuale;
 - selezione di più profili negozio;

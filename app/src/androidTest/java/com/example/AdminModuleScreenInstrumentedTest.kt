@@ -75,4 +75,36 @@ class AdminModuleScreenInstrumentedTest {
         composeRule.onNodeWithTag("approve_gdpr_9").assertDoesNotExist()
         composeRule.onNodeWithTag("deny_gdpr_9").assertDoesNotExist()
     }
+
+    @Test
+    fun editablePageRequiresExplicitSave() {
+        var submitted: AdminRecord? = null
+        val module = AdminModule.PAGES
+        val record = AdminRecord(
+            id = "4",
+            title = "Termini e condizioni",
+            statusLabel = "Attivo",
+            active = true,
+            sortOrder = 2,
+            editable = true
+        )
+
+        composeRule.setContent {
+            MaterialTheme {
+                AdminModuleScreen(
+                    module = module,
+                    snapshot = AdminModuleSnapshot(module = module, records = listOf(record)),
+                    onRefresh = {},
+                    onContentUpdate = { submitted = it }
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("edit_pages_4").assertExists().performClick()
+        composeRule.onNodeWithTag("content_title").assertExists()
+        composeRule.onNodeWithTag("content_sort_order").assertExists()
+        composeRule.onNodeWithTag("save_content_edit").assertExists().performClick()
+
+        composeRule.runOnIdle { assertEquals(record, submitted) }
+    }
 }

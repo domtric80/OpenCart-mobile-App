@@ -23,6 +23,47 @@ class Cartadmin extends \Opencart\System\Engine\Model {
 			INDEX `idx_timestamp` (`created_at`)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+		$this->db->query("CREATE TABLE IF NOT EXISTS `" . DB_PREFIX . "cartadmin_token` (
+			`token_id` INT AUTO_INCREMENT PRIMARY KEY,
+			`token_lookup` CHAR(16) NULL,
+			`token_hash` VARCHAR(255) NOT NULL,
+			`last_four` CHAR(4) NOT NULL,
+			`label` VARCHAR(64) NOT NULL,
+			`operator_user_id` INT NULL,
+			`operator_name` VARCHAR(64) NOT NULL,
+			`scopes` VARCHAR(255) NOT NULL,
+			`device_hash` CHAR(64) NULL,
+			`active` TINYINT(1) NOT NULL DEFAULT 1,
+			`created_at` DATETIME NOT NULL,
+			`last_used_at` DATETIME NULL,
+			`revoked_at` DATETIME NULL,
+			UNIQUE KEY `uq_token_lookup` (`token_lookup`),
+			INDEX `idx_active` (`active`, `token_id`)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+		$this->db->query("CREATE TABLE IF NOT EXISTS `" . DB_PREFIX . "cartadmin_security_audit` (
+			`audit_id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+			`event_id` VARCHAR(64) NOT NULL,
+			`token_id` INT NULL,
+			`operator_user_id` INT NULL,
+			`operator_name` VARCHAR(64) NOT NULL,
+			`claimed_operator_digest` CHAR(64) NOT NULL DEFAULT '',
+			`identity_claim_mismatch` TINYINT(1) NOT NULL DEFAULT 0,
+			`device_hash` CHAR(64) NOT NULL DEFAULT '',
+			`ip_hash` CHAR(64) NOT NULL DEFAULT '',
+			`action_name` VARCHAR(64) NOT NULL,
+			`module_name` VARCHAR(32) NOT NULL DEFAULT '',
+			`target_id` INT NOT NULL DEFAULT 0,
+			`result` VARCHAR(16) NOT NULL,
+			`before_digest` CHAR(64) NOT NULL DEFAULT '',
+			`after_digest` CHAR(64) NOT NULL DEFAULT '',
+			`summary` VARCHAR(255) NOT NULL DEFAULT '',
+			`created_at` DATETIME NOT NULL,
+			UNIQUE KEY `uq_event_id` (`event_id`),
+			INDEX `idx_security_created` (`created_at`),
+			INDEX `idx_security_token` (`token_id`, `created_at`)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
 		$this->db->query("CREATE TABLE IF NOT EXISTS `" . DB_PREFIX . "cartadmin_command` (
 			`command_id` INT AUTO_INCREMENT PRIMARY KEY,
 			`module` VARCHAR(32) NOT NULL,
@@ -42,17 +83,37 @@ class Cartadmin extends \Opencart\System\Engine\Model {
 		$this->migrateLegacyToken();
 	}
 
-	public function rotateToken(): string {
-		$token = 'ca_' . bin2hex(random_bytes(32));
+	public function createToken(string $label, int $operator_user_id, array $scopes): string {
+		$allowedScopes = ['read', 'orders.write', 'catalog.write', 'content.write', 'customers.write', 'audit.write'];
+		$cleanScopes = array_values(array_intersect($allowedScopes, array_unique(array_map('strval', $scopes))));
+		$label = trim(strip_tags($label));
+
+		if ($label === '' || mb_strlen($label) > 64 || $operator_user_id < 1 || !in_array('read', $cleanScopes, true)) {
+			throw new \InvalidArgumentException('Dati del token CartAdmin non validi.');
+		}
+		$operatorQuery = $this->db->query("SELECT `user_id`, `username` FROM `" . DB_PREFIX . "user` WHERE `user_id` = '" . (int)$operator_user_id . "' AND `status` = '1' LIMIT 1");
+		if (!$operatorQuery->num_rows) {
+			throw new \InvalidArgumentException('Operatore OpenCart non valido o disabilitato.');
+		}
+		$operator_name = mb_substr(trim(strip_tags((string)$operatorQuery->row['username'])), 0, 64);
+		if ($operator_name === '') {
+			throw new \InvalidArgumentException('Nome operatore OpenCart non valido.');
+		}
+
+		$count = $this->db->query("SELECT COUNT(*) AS `total` FROM `" . DB_PREFIX . "cartadmin_token` WHERE `active` = '1'");
+		if ((int)($count->row['total'] ?? 0) >= 50) {
+			throw new \RuntimeException('Limite massimo di token attivi raggiunto.');
+		}
+
+		$lookup = bin2hex(random_bytes(8));
+		$token = 'ca_' . $lookup . '_' . bin2hex(random_bytes(32));
 		$hash = $this->hashToken($token);
+		$scopeCsv = implode(',', $cleanScopes);
 
 		$this->db->query("START TRANSACTION");
 
 		try {
-			$this->upsert('token_hash', $hash);
-			$this->upsert('token_last_four', substr($token, -4));
-			$this->upsert('token_created_at', date('Y-m-d H:i:s'));
-			$this->db->query("DELETE FROM `" . DB_PREFIX . "cartadmin_setting` WHERE `key` = 'api_key'");
+			$this->db->query("INSERT INTO `" . DB_PREFIX . "cartadmin_token` SET `token_lookup` = '" . $this->db->escape($lookup) . "', `token_hash` = '" . $this->db->escape($hash) . "', `last_four` = '" . $this->db->escape(substr($token, -4)) . "', `label` = '" . $this->db->escape($label) . "', `operator_user_id` = '" . (int)$operator_user_id . "', `operator_name` = '" . $this->db->escape($operator_name) . "', `scopes` = '" . $this->db->escape($scopeCsv) . "', `active` = '1', `created_at` = NOW()");
 			$this->db->query("COMMIT");
 		} catch (\Throwable $exception) {
 			$this->db->query("ROLLBACK");
@@ -63,18 +124,36 @@ class Cartadmin extends \Opencart\System\Engine\Model {
 	}
 
 	public function getTokenState(): array {
-		$values = [];
-		$query = $this->db->query("SELECT `key`, `value` FROM `" . DB_PREFIX . "cartadmin_setting` WHERE `key` IN ('token_hash', 'token_last_four', 'token_created_at')");
-
-		foreach ($query->rows as $row) {
-			$values[$row['key']] = $row['value'];
-		}
+		$query = $this->db->query("SELECT `last_four`, `created_at` FROM `" . DB_PREFIX . "cartadmin_token` WHERE `active` = '1' ORDER BY `token_id` DESC LIMIT 1");
+		$count = $this->db->query("SELECT COUNT(*) AS `total` FROM `" . DB_PREFIX . "cartadmin_token` WHERE `active` = '1'");
 
 		return [
-			'configured' => !empty($values['token_hash']),
-			'last_four'  => $values['token_last_four'] ?? '',
-			'created_at' => $values['token_created_at'] ?? ''
+			'configured' => (int)($count->row['total'] ?? 0) > 0,
+			'active_count' => (int)($count->row['total'] ?? 0),
+			'last_four'  => $query->num_rows ? (string)$query->row['last_four'] : '',
+			'created_at' => $query->num_rows ? (string)$query->row['created_at'] : ''
 		];
+	}
+
+	public function getTokens(): array {
+		$query = $this->db->query("SELECT `token_id`, `last_four`, `label`, `operator_user_id`, `operator_name`, `scopes`, `device_hash`, `active`, `created_at`, `last_used_at`, `revoked_at` FROM `" . DB_PREFIX . "cartadmin_token` ORDER BY `active` DESC, `token_id` DESC LIMIT 100");
+
+		return $query->rows;
+	}
+
+	public function getOperators(): array {
+		$query = $this->db->query("SELECT `user_id`, `username`, `firstname`, `lastname` FROM `" . DB_PREFIX . "user` WHERE `status` = '1' ORDER BY `username` ASC");
+
+		return $query->rows;
+	}
+
+	public function revokeToken(int $token_id): bool {
+		if ($token_id < 1) {
+			return false;
+		}
+		$this->db->query("UPDATE `" . DB_PREFIX . "cartadmin_token` SET `active` = '0', `revoked_at` = NOW() WHERE `token_id` = '" . (int)$token_id . "' AND `active` = '1'");
+
+		return $this->db->countAffected() === 1;
 	}
 
 	public function getPendingCommands(): array {
@@ -154,22 +233,32 @@ class Cartadmin extends \Opencart\System\Engine\Model {
 	}
 
 	private function migrateLegacyToken(): void {
+		if ($this->getValue('legacy_token_migrated') === '1') {
+			return;
+		}
 		$hash = $this->getValue('token_hash');
-
-		if ($hash !== '') {
-			return;
-		}
-
 		$legacy = trim($this->getValue('api_key'));
+		$lastFour = $this->getValue('token_last_four');
+		$createdAt = $this->getValue('token_created_at');
 
-		if ($legacy === '') {
-			return;
+		if ($hash === '' && $legacy !== '') {
+			$hash = $this->hashToken($legacy);
+			$lastFour = substr($legacy, -4);
 		}
 
-		$this->upsert('token_hash', $this->hashToken($legacy));
-		$this->upsert('token_last_four', substr($legacy, -4));
-		$this->upsert('token_created_at', date('Y-m-d H:i:s'));
-		$this->db->query("DELETE FROM `" . DB_PREFIX . "cartadmin_setting` WHERE `key` = 'api_key'");
+		$this->db->query("START TRANSACTION");
+		try {
+			if ($hash !== '') {
+				$createdSql = $createdAt !== '' ? "'" . $this->db->escape($createdAt) . "'" : 'NOW()';
+				$this->db->query("INSERT INTO `" . DB_PREFIX . "cartadmin_token` SET `token_hash` = '" . $this->db->escape($hash) . "', `last_four` = '" . $this->db->escape(substr($lastFour, -4)) . "', `label` = 'Token legacy da sostituire', `operator_name` = 'Operatore legacy', `scopes` = 'read,orders.write,catalog.write,content.write,customers.write,audit.write', `active` = '1', `created_at` = " . $createdSql);
+			}
+			$this->upsert('legacy_token_migrated', '1');
+			$this->db->query("DELETE FROM `" . DB_PREFIX . "cartadmin_setting` WHERE `key` IN ('api_key', 'token_hash', 'token_last_four', 'token_created_at')");
+			$this->db->query("COMMIT");
+		} catch (\Throwable $exception) {
+			$this->db->query("ROLLBACK");
+			throw $exception;
+		}
 	}
 
 	private function hashToken(string $token): string {

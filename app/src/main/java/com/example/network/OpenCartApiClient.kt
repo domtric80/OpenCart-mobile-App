@@ -104,7 +104,11 @@ class OpenCartApiClient(context: Context) {
                                 detail = item.optString("detail", ""),
                                 actionable = item.optBoolean("actionable", false),
                                 pendingCommandId = if (item.isNull("pending_command_id")) "" else item.optString("pending_command_id"),
-                                pendingOperation = item.optString("pending_operation", "")
+                                pendingOperation = item.optString("pending_operation", ""),
+                                content = item.optString("content", ""),
+                                rating = if (item.has("rating") && !item.isNull("rating")) item.optInt("rating") else null,
+                                sortOrder = if (item.has("sort_order") && !item.isNull("sort_order")) item.optInt("sort_order") else null,
+                                editable = item.optBoolean("editable", false)
                             )
                         )
                     }
@@ -596,6 +600,49 @@ class OpenCartApiClient(context: Context) {
                     Result.success(true)
                 } else {
                     Result.failure(Exception(json.optString("error", "Aggiornamento prodotto rifiutato")))
+                }
+            }
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
+    /** Aggiorna i campi editoriali allowlisted di un record esistente. */
+    suspend fun updateAdminContent(
+        baseUrl: String,
+        apiKey: String,
+        username: String,
+        module: AdminModule,
+        record: AdminRecord
+    ): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            var cleanUrl = baseUrl.trim().removeSuffix("/")
+            if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
+                cleanUrl = "https://$cleanUrl"
+            }
+            val request = BridgeRequestFactory.authenticatedFormPost(
+                baseUrl = cleanUrl,
+                action = "management_content",
+                apiKey = apiKey,
+                username = username,
+                fields = mapOf(
+                    "module" to module.apiKey,
+                    "id" to record.id,
+                    "title" to record.title,
+                    "secondary" to record.subtitle,
+                    "content" to record.content,
+                    "rating" to (record.rating?.toString() ?: ""),
+                    "sort_order" to (record.sortOrder?.toString() ?: "")
+                )
+            )
+            tlsClient.execute(request).use { response ->
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    Result.failure(Exception("HTTP ${response.code}: $body"))
+                } else {
+                    val json = JSONObject(body)
+                    if (json.optBoolean("success", false)) Result.success(true)
+                    else Result.failure(Exception(json.optString("error", "Modifica editoriale rifiutata")))
                 }
             }
         } catch (error: Exception) {
