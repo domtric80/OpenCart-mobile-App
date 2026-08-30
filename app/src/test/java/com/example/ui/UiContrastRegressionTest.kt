@@ -48,6 +48,8 @@ class UiContrastRegressionTest {
                 "color = MaterialTheme.colorScheme.onSurfaceVariant"
             )
         )
+        assertTrue(configSource.contains("?: \"Configura il primo negozio\""))
+        assertFalse(configSource.contains("\${currentStore?.url} • \${currentStore?.version}"))
     }
 
     @Test

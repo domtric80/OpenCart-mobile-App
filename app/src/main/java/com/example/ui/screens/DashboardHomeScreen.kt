@@ -215,7 +215,7 @@ fun DashboardHomeScreen(
         // Quick Action Fulfillment & Stock Alert Cards
         StatsGrid(
             pendingOrdersCount = salesMetrics.pendingOrdersCount,
-            stockAlertsCount = currentStore?.stockAlertsCount ?: 12,
+            stockAlertsCount = currentStore?.stockAlertsCount ?: 0,
             onPendingOrdersClick = onPendingOrdersClick,
             onStockAlertsClick = onStockAlertsClick
         )

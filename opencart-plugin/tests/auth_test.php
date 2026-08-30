@@ -61,7 +61,7 @@ $bridgeSource = file_get_contents(__DIR__ . '/../upload/cartadmin_api.php');
 $adminModelSource = file_get_contents(__DIR__ . '/../admin/model/module/cartadmin.php');
 $manifest = json_decode(file_get_contents(__DIR__ . '/../install.json'), true);
 
-assertSameValue('2.0.0', $manifest['version'] ?? '', 'The OpenCart manifest version must match the stable release.');
+assertSameValue('2.0.1', $manifest['version'] ?? '', 'The OpenCart manifest version must match the stable release.');
 assertSourceOmits($bridgeSource, 'get_key_setup', 'The bridge must not expose public token setup.');
 assertSourceOmits($bridgeSource, "\$_REQUEST['api_key']", 'The bridge must ignore URL/form credentials.');
 assertSourceOmits($bridgeSource, '`username` = ? AND `key` = ?', 'The bridge must not authenticate against plaintext native API keys.');

@@ -260,7 +260,7 @@ jobs:
             cat << EOF > release_notes.md
           ## CartAdmin ${TAG_NAME}
 
-          Release stabile 2.0 con navigazione riorganizzata e nuovi moduli amministrativi collegati ai dati reali di OpenCart 4.1.x.
+          Aggiornamento stabile dedicato a leggibilità, identità visiva, integrità dei dati e documentazione guidata.
 
           ### Novità confermate
 
@@ -275,7 +275,11 @@ jobs:
           - telemetria reale basata sulla tabella nativa OpenCart \`customer_online\`, senza valori dimostrativi;
           - modifica prodotto inviata al bridge e applicata localmente soltanto dopo conferma remota;
           - rimossi dal runtime i dati dimostrativi di abbonamenti e resi; una risposta valida vuota azzera anche la cache locale;
-          - app Android e bridge riportano entrambi la versione 2.0.0 e devono essere aggiornati insieme;
+          - corretto il contrasto dell'avviso di prima configurazione e del badge della versione OpenCart;
+          - adottata come icona launcher l'identità visiva ufficiale OpenCart Italia, incluse icone adattive, tonde e monocromatiche;
+          - eliminato l'ultimo valore dimostrativo degli avvisi scorte: senza negozio configurato la dashboard mostra esclusivamente valori zero;
+          - README ampliato con schermate reali e guida passo-passo per installare il bridge, generare o ruotare il token e aggiungere il primo negozio;
+          - app Android e bridge riportano entrambi la versione 2.0.1 e devono essere aggiornati insieme;
           - installazione del bridge dal pannello OpenCart tramite \`cartadmin.ocmod.zip\` e \`install.json\`;
           - token generato e ruotato dal pannello, salvato su OpenCart soltanto come hash non reversibile;
           - nell'app il token resta cifrato AES-256-GCM con chiave Android Keystore hardware-backed e non viene riproposto nell'interfaccia;

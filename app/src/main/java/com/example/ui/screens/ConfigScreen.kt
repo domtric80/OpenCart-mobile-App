@@ -239,7 +239,8 @@ fun ConfigScreen(
                                 color = if (isSuccess) TrendGreen else AlertRed
                             )
                             Text(
-                                text = "${currentStore?.url} • ${currentStore?.version}",
+                                text = currentStore?.let { "${it.url} • ${it.version}" }
+                                    ?: "Configura il primo negozio",
                                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
                                 color = if (isSuccess) TrendGreen else AlertRed
                             )

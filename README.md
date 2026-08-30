@@ -1,6 +1,6 @@
-# CartAdmin 2.0.0
+# CartAdmin 2.0.1
 
-CartAdmin è un'app Android per consultare e amministrare un negozio OpenCart da smartphone. Il progetto è sviluppato in Kotlin con Jetpack Compose e include il bridge CartAdmin per OpenCart 4.1.x. La release stabile corrente è la v2.0.0.
+CartAdmin è un'app Android per consultare e amministrare un negozio OpenCart da smartphone. Il progetto è sviluppato in Kotlin con Jetpack Compose e include il bridge CartAdmin per OpenCart 4.1.x. La release stabile corrente è la v2.0.1.
 
 ## Download
 
@@ -8,10 +8,20 @@ La release stabile è disponibile in [GitHub Releases](https://github.com/domtri
 
 | Componente | File | Compatibilità confermata |
 | --- | --- | --- |
-| App Android | `CartAdmin-v2.0.0.apk` | Android 7.0 o successivo, API 24–36 |
+| App Android | `CartAdmin-v2.0.1.apk` | Android 7.0 o successivo, API 24–36 |
 | Bridge OpenCart | `cartadmin.ocmod.zip` | OpenCart 4.1.x |
 
 Il bridge incluso non dichiara compatibilità con OpenCart 3.x. Un eventuale pacchetto per quel ramo dovrà essere pubblicato e verificato separatamente.
+
+### Novità della 2.0.1
+
+- migliorato il contrasto dell'avviso di prima configurazione e del badge della versione OpenCart;
+- nuova icona launcher ufficiale OpenCart Italia, adattiva, tonda e monocromatica;
+- eliminato l'ultimo valore dimostrativo degli avvisi scorte: senza negozio la dashboard mostra valori zero;
+- aggiunta una guida illustrata completa per installare il bridge, generare o ruotare il token e configurare il primo negozio;
+- mantenute le funzionalità e la navigazione amministrativa introdotte nella 2.0.0.
+
+App Android e bridge devono essere aggiornati entrambi alla v2.0.1.
 
 ### Novità della 2.0.0
 
@@ -41,27 +51,70 @@ Per usare i nuovi moduli, app Android e bridge OpenCart devono essere aggiornati
 
 La creazione e l'eliminazione dei prodotti e il CRUD delle categorie restano temporaneamente non disponibili dall'app: CartAdmin non modifica più soltanto la cache fingendo un aggiornamento dello store. Le offerte e le promozioni programmate continuano a essere gestite dal pannello OpenCart.
 
-## Prima configurazione
+## Installazione e prima configurazione
 
-### 1. Installa il bridge in OpenCart
+Usare sempre l'APK e il bridge provenienti dalla stessa release. Servono un sito OpenCart 4.1.x raggiungibile in HTTPS, l'accesso al pannello amministrativo e un dispositivo Android 7.0 o successivo.
 
-1. Scarica `cartadmin.ocmod.zip` dalla release.
-2. Nel pannello OpenCart apri **Estensioni > Installer** e carica lo ZIP.
-3. Apri **Estensioni > Estensioni > Moduli** e installa **CartAdmin Bridge**.
-4. Apri il modulo e premi **Genera token** oppure **Ruota token**.
-5. Copia subito il token: OpenCart mostra il valore completo una sola volta e conserva nel database soltanto il suo hash non reversibile.
+### 1. Scarica i due file della release
 
-### 2. Aggiungi il primo negozio nell'app
+Da [GitHub Releases](https://github.com/domtric80/OpenCart-mobile-App/releases/latest) scarica:
 
-1. Apri **Config**. Se non esistono profili, la schermata mostra l'avviso **Nessun negozio configurato**.
-2. Inserisci il nome del negozio e l'URL HTTPS, senza il percorso del file API. Esempio: `https://negozio.example`.
-3. Inserisci un nome operatore per l'audit e incolla il token generato da OpenCart.
-4. Seleziona la versione OpenCart e premi **Aggiungi**. Questo crea e salva il primo profilo; non è necessario passare prima dal selettore dei negozi.
-5. Premi **Test API**, quindi **Sincronizza dati adesso**.
+- `CartAdmin-v2.0.1.apk`, da installare sul dispositivo Android;
+- `cartadmin.ocmod.zip`, da caricare nel pannello OpenCart senza estrarlo e senza rinominarlo.
+
+### 2. Installa il bridge dal pannello OpenCart
+
+1. Accedi all'amministrazione OpenCart con un account autorizzato a gestire le estensioni.
+2. Apri **Estensioni > Programma di installazione**; nelle interfacce inglesi la voce è **Extensions > Installer**.
+3. Premi **Carica** e seleziona `cartadmin.ocmod.zip`. Attendi il messaggio di installazione completata. Lo ZIP contiene `install.json`: se OpenCart segnala che manca, il file caricato non è quello della release o è stato estratto/ricomposto.
+4. Apri **Estensioni > Estensioni**, seleziona **Moduli** dal tipo di estensione e cerca **CartAdmin Bridge**.
+5. Premi **Installa** accanto al modulo, poi **Modifica** per aprirne la configurazione.
+
+Non copiare manualmente `cartadmin_api.php` sul server e non modificare file PHP per configurare la chiave: installazione e configurazione avvengono dal pannello.
+
+### 3. Genera la chiave CartAdmin
+
+1. Alla prima apertura del modulo premi **Genera token**.
+2. Copia immediatamente l'intero valore che inizia con `ca_`: viene mostrato una sola volta.
+3. Conservalo temporaneamente soltanto per il tempo necessario a inserirlo nell'app. Non inviarlo in chat, email, issue o screenshot.
+4. Dopo la generazione, il pannello mostra **Token configurato**, endpoint, ultime quattro cifre e data. Nel database rimane soltanto un hash non reversibile.
+5. Se la chiave è stata persa o esposta, premi **Ruota token**. La rotazione invalida subito la chiave precedente: copia il nuovo valore e aggiornalo nell'app.
+
+<p align="center">
+  <img src="docs/screenshots/opencart-bridge-configured.png" alt="Modulo CartAdmin Bridge configurato nel pannello OpenCart" width="860">
+</p>
+
+Nell'immagine il token completo non è visibile: è il comportamento previsto dopo il salvataggio.
+
+### 4. Installa e proteggi l'app Android
+
+1. Apri `CartAdmin-v2.0.1.apk` sul dispositivo. Se Android lo richiede, autorizza l'installazione da questa origine soltanto per il gestore file o browser usato.
+2. Al primo avvio inserisci un nome operatore e una password locale robusta, quindi confermala.
+3. La password protegge l'accesso all'app; lo sblocco biometrico forte può essere abilitato sui dispositivi compatibili.
+
+<p align="center">
+  <img src="docs/screenshots/app-first-access.png" alt="Primo accesso protetto di CartAdmin" width="300">
+</p>
+
+### 5. Aggiungi il primo negozio nell'app
+
+1. Tocca **Altro > Configurazione**. Se non esistono profili compare l'avviso viola **Nessun negozio configurato**.
+2. Inserisci un nome riconoscibile, per esempio `Negozio principale`.
+3. Inserisci soltanto l'URL base HTTPS, per esempio `https://negozio.example`. Non aggiungere `/admin`, `/extension/cartadmin/` o `cartadmin_api.php`.
+4. Inserisci il nome dell'operatore usato nel registro di audit. Con il bridge CartAdmin non è necessario creare manualmente una chiave nell'area API nativa di OpenCart.
+5. Incolla nel campo protetto il token `ca_...` generato dal modulo e seleziona **OpenCart 4.1.x**.
+6. Premi **Aggiungi**. Questo pulsante crea e salva il primo profilo; finché i campi obbligatori non sono completi rimane disattivato.
+7. Dopo il salvataggio premi **Test API**. Se il test riesce, premi **Sincronizza dati adesso**.
+
+<p align="center">
+  <img src="docs/screenshots/app-first-store-config.png" alt="Configurazione del primo negozio in CartAdmin" width="300">
+</p>
 
 Dopo il salvataggio il campo token torna vuoto e il valore non viene più mostrato. Per aggiornare gli altri dati lascia il campo vuoto: CartAdmin mantiene il token protetto. Inserisci un nuovo valore solo dopo aver ruotato il token dal pannello OpenCart.
 
-### 3. Abilita la telemetria visitatori
+Se compare `401 Non autorizzato`, verificare che il valore incollato non sia vuoto, che inizi realmente con `ca_`, che non contenga spazi e che non sia stato ruotato dopo il salvataggio nell'app. Verificare inoltre di usare l'URL base dello stesso sito in cui è installato il modulo.
+
+### 6. Abilita la telemetria visitatori
 
 1. Nel pannello OpenCart apri **Sistema > Impostazioni** e modifica il negozio.
 2. Nella scheda **Opzioni** abilita **Clienti online** e imposta il tempo di inattività desiderato.
@@ -96,7 +149,15 @@ Le schermate possono mostrare dati memorizzati localmente quando il negozio non 
 
 ## Screenshot
 
-Gli screenshot reali della v2.0.0 verranno aggiunti dopo una sessione di acquisizione su uno store di test con dati anonimizzati. Non vengono pubblicati mockup o schermate che contengano token, password, dati cliente reali o altri segreti. La schermata Config nasconde sempre il token digitato e non lo ripropone dopo il salvataggio.
+Schermate reali della v2.0.1 acquisite su emulatore Android senza credenziali o dati cliente. La dashboard senza negozio non genera contenuti dimostrativi; i sottomenu mantengono accessibili le funzioni senza affollare la barra inferiore.
+
+<p align="center">
+  <img src="docs/screenshots/app-home-no-store.png" alt="Dashboard CartAdmin senza negozio configurato" width="300">
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/app-catalog-menu.png" alt="Sottomenu Catalogo di CartAdmin" width="300">
+</p>
+
+Non vengono pubblicati mockup o schermate che contengano token, password, dati cliente reali o altri segreti. La schermata Config nasconde sempre il token digitato e non lo ripropone dopo il salvataggio.
 
 L'icona launcher usa l'[asset quadrato pubblicato dal sito ufficiale OpenCart Italia](https://opencartitalia.it/wp-content/uploads/2024/05/opencart-300x300.png), conservato senza modifiche nel progetto e ridimensionato per le densità Android.
 
