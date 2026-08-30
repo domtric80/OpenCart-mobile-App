@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -51,10 +52,12 @@ fun AdminModuleScreen(
     onStatusChange: (recordId: String, active: Boolean) -> Unit = { _, _ -> },
     onAddAntispam: (keyword: String) -> Unit = {},
     onDeleteAntispam: (recordId: String) -> Unit = {},
+    onSensitiveAction: (recordId: String, operation: String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val state = snapshot ?: AdminModuleSnapshot(module = module, isLoading = true)
     var antispamKeyword by remember(module) { mutableStateOf("") }
+    var pendingSensitiveAction by remember(module) { mutableStateOf<Pair<String, String>?>(null) }
 
     LazyColumn(
         modifier = modifier
@@ -127,6 +130,12 @@ fun AdminModuleScreen(
                         Text("Aggiungi")
                     }
                 }
+            }
+        }
+
+        if (module == AdminModule.CUSTOMER_APPROVALS || module == AdminModule.GDPR) {
+            item {
+                ModuleMessageCard("Le azioni sensibili vengono accodate. Un amministratore deve confermarle nel pannello CartAdmin Bridge; solo allora OpenCart esegue eventi ed email native.")
             }
         }
 
@@ -235,6 +244,33 @@ fun AdminModuleScreen(
                                     Text(" Rimuovi")
                                 }
                             }
+                            if ((module == AdminModule.CUSTOMER_APPROVALS || module == AdminModule.GDPR) && record.actionable) {
+                                if (record.pendingOperation.isNotBlank()) {
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Text(
+                                            text = "In attesa nel pannello: ${if (record.pendingOperation == "approve") "approvazione" else "rifiuto"}",
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                } else {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Button(
+                                            onClick = { pendingSensitiveAction = record.id to "approve" },
+                                            modifier = Modifier.testTag("approve_${module.apiKey}_${record.id}")
+                                        ) { Text("Approva") }
+                                        OutlinedButton(
+                                            onClick = { pendingSensitiveAction = record.id to "deny" },
+                                            modifier = Modifier.testTag("deny_${module.apiKey}_${record.id}")
+                                        ) { Text("Rifiuta") }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -242,6 +278,23 @@ fun AdminModuleScreen(
         }
 
         item { Spacer(Modifier.height(20.dp)) }
+    }
+
+    pendingSensitiveAction?.let { (recordId, operation) ->
+        AlertDialog(
+            onDismissRequest = { pendingSensitiveAction = null },
+            title = { Text(if (operation == "approve") "Richiedi approvazione" else "Richiedi rifiuto") },
+            text = { Text("La richiesta verrà inviata al pannello OpenCart e non sarà eseguita finché un amministratore non la conferma.") },
+            confirmButton = {
+                Button(onClick = {
+                    onSensitiveAction(recordId, operation)
+                    pendingSensitiveAction = null
+                }) { Text("Invia al pannello") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { pendingSensitiveAction = null }) { Text("Annulla") }
+            }
+        )
     }
 }
 

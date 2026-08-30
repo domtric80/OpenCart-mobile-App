@@ -42,6 +42,17 @@ class RemoteMutationIntegrityRegressionTest {
         assertRemoteBeforeLocal("fun deleteCategory(", "fun toggleCategoryStatus(", "apiClient.deleteCategory", "repository.deleteCategory")
     }
 
+    @Test
+    fun sensitiveCustomerActionsAreQueuedInsteadOfMutatingLocalState() {
+        val function = viewModelSource.substringAfter("fun requestSensitiveAdminCommand(")
+            .substringBefore("fun addAntispamKeyword(")
+
+        assertTrue(function.contains("apiClient.enqueueAdminCommand"))
+        assertTrue(function.contains("loadAdminModule(module, forceRefresh = true)"))
+        assertFalse(function.contains("repository."))
+        assertFalse(function.contains("offline"))
+    }
+
     private fun assertRemoteBeforeLocal(
         functionStart: String,
         functionEnd: String,

@@ -31,6 +31,37 @@
         </div>
       </div>
     </div>
+    <div class="card mt-3">
+      <div class="card-header"><i class="fa-solid fa-user-shield"></i> {{ text_command_queue }}</div>
+      <div class="card-body">
+        <div class="alert alert-warning"><i class="fa-solid fa-triangle-exclamation"></i> {{ text_command_queue_help }}</div>
+        {% if commands %}
+          <div class="table-responsive">
+            <table class="table table-striped align-middle">
+              <thead><tr><th>ID</th><th>{{ text_extension }}</th><th>Target</th><th>Operazione</th><th>Richiesta da</th><th>Data</th><th class="text-end">Azioni</th></tr></thead>
+              <tbody>
+                {% for command in commands %}
+                  <tr>
+                    <td>#{{ command.command_id }}</td>
+                    <td>{{ command.module_label }}</td>
+                    <td>#{{ command.target_id }}</td>
+                    <td><span class="badge bg-warning text-dark">{{ command.operation_label }}</span></td>
+                    <td>{{ command.requested_by }}</td>
+                    <td>{{ command.created_at }}</td>
+                    <td class="text-end">
+                      <button type="button" class="btn btn-success btn-sm command-action" data-command-id="{{ command.command_id }}" data-decision="execute"><i class="fa-solid fa-check"></i> {{ button_execute }}</button>
+                      <button type="button" class="btn btn-outline-danger btn-sm command-action" data-command-id="{{ command.command_id }}" data-decision="reject"><i class="fa-solid fa-xmark"></i> {{ button_reject }}</button>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p class="text-muted mb-0">{{ text_no_commands }}</p>
+        {% endif %}
+      </div>
+    </div>
   </div>
 </div>
 <script>
@@ -61,6 +92,28 @@ function showAlert(type, message) {
 document.getElementById('button-copy').addEventListener('click', function () {
   const input = document.getElementById('generated-token');
   navigator.clipboard.writeText(input.value);
+});
+document.querySelectorAll('.command-action').forEach(function (button) {
+  button.addEventListener('click', async function () {
+    const decision = this.dataset.decision;
+    if (!window.confirm(decision === 'execute' ? '{{ button_execute|escape('js') }}?' : '{{ button_reject|escape('js') }}?')) return;
+    this.disabled = true;
+    try {
+      const body = new URLSearchParams({command_id: this.dataset.commandId, decision});
+      const response = await fetch('{{ process_command }}', {
+        method: 'POST',
+        headers: {'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'},
+        body
+      });
+      const json = await response.json();
+      if (json.error) throw new Error(json.error);
+      window.alert(json.success);
+      window.location.reload();
+    } catch (error) {
+      showAlert('danger', error.message);
+      this.disabled = false;
+    }
+  });
 });
 </script>
 {{ footer }}

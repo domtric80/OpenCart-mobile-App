@@ -23,6 +23,22 @@ class Cartadmin extends \Opencart\System\Engine\Model {
 			INDEX `idx_timestamp` (`created_at`)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+		$this->db->query("CREATE TABLE IF NOT EXISTS `" . DB_PREFIX . "cartadmin_command` (
+			`command_id` INT AUTO_INCREMENT PRIMARY KEY,
+			`module` VARCHAR(32) NOT NULL,
+			`target_id` INT NOT NULL,
+			`operation` VARCHAR(16) NOT NULL,
+			`requested_by` VARCHAR(64) NOT NULL,
+			`status` VARCHAR(16) NOT NULL DEFAULT 'pending',
+			`dedupe_key` VARCHAR(80) NULL,
+			`error_message` VARCHAR(255) NOT NULL DEFAULT '',
+			`created_at` DATETIME NOT NULL,
+			`processed_at` DATETIME NULL,
+			`processed_by` INT NULL,
+			UNIQUE KEY `uq_pending_target` (`dedupe_key`),
+			INDEX `idx_command_status` (`status`, `created_at`)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
 		$this->migrateLegacyToken();
 	}
 
@@ -59,6 +75,82 @@ class Cartadmin extends \Opencart\System\Engine\Model {
 			'last_four'  => $values['token_last_four'] ?? '',
 			'created_at' => $values['token_created_at'] ?? ''
 		];
+	}
+
+	public function getPendingCommands(): array {
+		$query = $this->db->query("SELECT `command_id`, `module`, `target_id`, `operation`, `requested_by`, `created_at` FROM `" . DB_PREFIX . "cartadmin_command` WHERE `status` = 'pending' ORDER BY `created_at` ASC, `command_id` ASC");
+
+		return $query->rows;
+	}
+
+	/**
+	 * Esegue una richiesta mobile soltanto nel contesto amministrativo nativo.
+	 * Le chiamate ai model passano dal Loader OpenCart e attivano quindi gli
+	 * eventi ufficiali (incluse le email cliente/GDPR configurate dallo store).
+	 */
+	public function processCommand(int $command_id, string $decision, int $user_id): void {
+		if (!in_array($decision, ['execute', 'reject'], true)) {
+			throw new \InvalidArgumentException('Decisione comando non valida.');
+		}
+
+		$query = $this->db->query("SELECT * FROM `" . DB_PREFIX . "cartadmin_command` WHERE `command_id` = '" . (int)$command_id . "' AND `status` = 'pending' LIMIT 1");
+		if (!$query->num_rows) {
+			throw new \OutOfBoundsException('Comando non trovato o già elaborato.');
+		}
+		$command = $query->row;
+
+		if ($decision === 'reject') {
+			$this->db->query("UPDATE `" . DB_PREFIX . "cartadmin_command` SET `status` = 'rejected', `dedupe_key` = NULL, `processed_at` = NOW(), `processed_by` = '" . (int)$user_id . "' WHERE `command_id` = '" . (int)$command_id . "' AND `status` = 'pending'");
+			return;
+		}
+
+		$this->db->query("UPDATE `" . DB_PREFIX . "cartadmin_command` SET `status` = 'processing', `processed_by` = '" . (int)$user_id . "' WHERE `command_id` = '" . (int)$command_id . "' AND `status` = 'pending'");
+		if ($this->db->countAffected() !== 1) {
+			throw new \RuntimeException('Il comando è già in elaborazione.');
+		}
+
+		try {
+			$target_id = (int)$command['target_id'];
+			$operation = (string)$command['operation'];
+			if (!in_array($operation, ['approve', 'deny'], true)) {
+				throw new \RuntimeException('Operazione comando non supportata.');
+			}
+
+			if ($command['module'] === 'customer_approvals') {
+				$this->load->model('customer/customer_approval');
+				$approval = $this->model_customer_customer_approval->getCustomerApproval($target_id);
+				if (!$approval) {
+					throw new \OutOfBoundsException('Richiesta cliente non più disponibile.');
+				}
+
+				if ($approval['type'] === 'customer') {
+					$operation === 'approve'
+						? $this->model_customer_customer_approval->approveCustomer((int)$approval['customer_id'])
+						: $this->model_customer_customer_approval->denyCustomer((int)$approval['customer_id']);
+				} elseif ($approval['type'] === 'affiliate') {
+					$operation === 'approve'
+						? $this->model_customer_customer_approval->approveAffiliate((int)$approval['customer_id'])
+						: $this->model_customer_customer_approval->denyAffiliate((int)$approval['customer_id']);
+				} else {
+					throw new \RuntimeException('Tipo approvazione cliente non supportato.');
+				}
+			} elseif ($command['module'] === 'gdpr') {
+				$this->load->model('customer/gdpr');
+				$gdpr = $this->model_customer_gdpr->getGdpr($target_id);
+				if (!$gdpr || (int)$gdpr['status'] !== 1) {
+					throw new \OutOfBoundsException('Richiesta GDPR non più in attesa.');
+				}
+				$status = $operation === 'deny' ? -1 : ((string)$gdpr['action'] === 'export' ? 3 : 2);
+				$this->model_customer_gdpr->editStatus($target_id, $status);
+			} else {
+				throw new \RuntimeException('Modulo comando non supportato.');
+			}
+
+			$this->db->query("UPDATE `" . DB_PREFIX . "cartadmin_command` SET `status` = 'completed', `dedupe_key` = NULL, `processed_at` = NOW(), `error_message` = '' WHERE `command_id` = '" . (int)$command_id . "'");
+		} catch (\Throwable $exception) {
+			$this->db->query("UPDATE `" . DB_PREFIX . "cartadmin_command` SET `status` = 'failed', `dedupe_key` = NULL, `processed_at` = NOW(), `error_message` = 'Esecuzione nativa OpenCart non riuscita.' WHERE `command_id` = '" . (int)$command_id . "'");
+			throw $exception;
+		}
 	}
 
 	private function migrateLegacyToken(): void {

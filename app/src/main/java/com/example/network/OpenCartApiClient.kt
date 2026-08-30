@@ -101,7 +101,10 @@ class OpenCartApiClient(context: Context) {
                                     item.optBoolean("active")
                                 } else null,
                                 date = item.optString("date", ""),
-                                detail = item.optString("detail", "")
+                                detail = item.optString("detail", ""),
+                                actionable = item.optBoolean("actionable", false),
+                                pendingCommandId = if (item.isNull("pending_command_id")) "" else item.optString("pending_command_id"),
+                                pendingOperation = item.optString("pending_operation", "")
                             )
                         )
                     }
@@ -593,6 +596,44 @@ class OpenCartApiClient(context: Context) {
                     Result.success(true)
                 } else {
                     Result.failure(Exception(json.optString("error", "Aggiornamento prodotto rifiutato")))
+                }
+            }
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
+    suspend fun enqueueAdminCommand(
+        baseUrl: String,
+        apiKey: String,
+        username: String,
+        module: AdminModule,
+        recordId: String,
+        operation: String
+    ): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            require(module == AdminModule.CUSTOMER_APPROVALS || module == AdminModule.GDPR) {
+                "Il modulo non supporta richieste amministrative sensibili"
+            }
+            require(operation == "approve" || operation == "deny") { "Operazione non valida" }
+            val request = BridgeRequestFactory.authenticatedFormPost(
+                baseUrl = baseUrl,
+                action = "management_command",
+                apiKey = apiKey,
+                username = username,
+                fields = mapOf("module" to module.apiKey, "id" to recordId, "operation" to operation)
+            )
+            tlsClient.execute(request).use { response ->
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    Result.failure(Exception("HTTP ${response.code}: $body"))
+                } else {
+                    val json = JSONObject(body)
+                    if (json.optBoolean("success", false) && json.optString("status") == "pending") {
+                        Result.success(true)
+                    } else {
+                        Result.failure(Exception(json.optString("error", "Richiesta amministrativa rifiutata")))
+                    }
                 }
             }
         } catch (error: Exception) {

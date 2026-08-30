@@ -379,6 +379,28 @@ class MainViewModel(
         }
     }
 
+    fun requestSensitiveAdminCommand(module: AdminModule, recordId: String, operation: String) {
+        val store = uiState.value.currentStore ?: return
+        if (module != AdminModule.CUSTOMER_APPROVALS && module != AdminModule.GDPR) return
+        viewModelScope.launch(Dispatchers.IO) {
+            apiClient.enqueueAdminCommand(
+                baseUrl = store.url,
+                apiKey = store.apiKey,
+                username = store.apiUsername,
+                module = module,
+                recordId = recordId,
+                operation = operation
+            ).onSuccess {
+                loadAdminModule(module, forceRefresh = true)
+            }.onFailure { error ->
+                val current = _adminModules.value[module] ?: AdminModuleSnapshot(module = module)
+                _adminModules.value = _adminModules.value + (
+                    module to current.copy(message = error.localizedMessage ?: "Invio al pannello OpenCart non riuscito.")
+                )
+            }
+        }
+    }
+
     fun addAntispamKeyword(keyword: String) {
         val cleanKeyword = keyword.trim()
         val store = uiState.value.currentStore ?: return

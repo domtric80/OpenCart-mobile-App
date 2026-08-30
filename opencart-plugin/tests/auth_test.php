@@ -59,9 +59,11 @@ assertSameValue(false, strpos($hash, $token) !== false, 'The stored hash must no
 
 $bridgeSource = file_get_contents(__DIR__ . '/../upload/cartadmin_api.php');
 $adminModelSource = file_get_contents(__DIR__ . '/../admin/model/module/cartadmin.php');
+$adminControllerSource = file_get_contents(__DIR__ . '/../admin/controller/module/cartadmin.php');
+$adminViewSource = file_get_contents(__DIR__ . '/../admin/view/template/module/cartadmin.twig');
 $manifest = json_decode(file_get_contents(__DIR__ . '/../install.json'), true);
 
-assertSameValue('2.1.0-dev.1', $manifest['version'] ?? '', 'The OpenCart manifest version must match the development release.');
+assertSameValue('2.1.0-dev.2', $manifest['version'] ?? '', 'The OpenCart manifest version must match the development release.');
 assertSourceOmits($bridgeSource, 'get_key_setup', 'The bridge must not expose public token setup.');
 assertSourceOmits($bridgeSource, "\$_REQUEST['api_key']", 'The bridge must ignore URL/form credentials.');
 assertSourceOmits($bridgeSource, '`username` = ? AND `key` = ?', 'The bridge must not authenticate against plaintext native API keys.');
@@ -86,6 +88,15 @@ assertSourceOmits($bridgeSource, 'product_special', 'The bridge must not depend 
 assertSourceContains($bridgeSource, "case 'management_list':", 'The bridge must expose authenticated management lists.');
 assertSourceContains($bridgeSource, "case 'management_status':", 'The bridge must verify management status changes remotely.');
 assertSourceContains($bridgeSource, "case 'management_antispam':", 'The bridge must expose verified Antispam mutations.');
+assertSourceContains($bridgeSource, "case 'management_command':", 'Sensitive customer operations must use the authenticated command queue.');
+assertSourceContains($bridgeSource, "'status' => 'pending'", 'The mobile bridge must only acknowledge queued sensitive operations.');
+assertSourceContains($bridgeSource, 'UNIQUE KEY `uq_pending_target` (`dedupe_key`)', 'Pending sensitive commands must be deduplicated per target.');
+assertSourceContains($adminModelSource, "->approveCustomer((int)\$approval['customer_id'])", 'Customer approval must use the native OpenCart model.');
+assertSourceContains($adminModelSource, 'model_customer_gdpr->editStatus($target_id, $status)', 'GDPR processing must use the native OpenCart model.');
+assertSourceContains($adminModelSource, "in_array(\$operation, ['approve', 'deny'], true)", 'Queued operations must be allowlisted again before native execution.');
+assertSourceContains($adminControllerSource, "hasPermission('modify', \$this->route)", 'Command execution must require OpenCart modify permission.');
+assertSourceContains($adminControllerSource, "['execute', 'reject']", 'The admin controller must allow only reviewed command decisions.');
+assertSourceContains($adminViewSource, 'data-decision="execute"', 'The admin panel must require an explicit execution action.');
 assertSourceContains($bridgeSource, '$moduleQueries = [', 'Management queries must use a server-side module allowlist.');
 assertSourceContains($bridgeSource, '$statusTargets = [', 'Management mutations must use a server-side target allowlist.');
 assertSourceContains($bridgeSource, 'mb_substr($keyword, 0, 64)', 'Antispam keywords must respect the native OpenCart field length.');

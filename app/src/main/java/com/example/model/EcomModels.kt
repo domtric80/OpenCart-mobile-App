@@ -284,7 +284,10 @@ data class AdminRecord(
     val statusLabel: String = "",
     val active: Boolean? = null,
     val date: String = "",
-    val detail: String = ""
+    val detail: String = "",
+    val actionable: Boolean = false,
+    val pendingCommandId: String = "",
+    val pendingOperation: String = ""
 )
 
 data class AdminModuleSnapshot(

@@ -149,6 +149,22 @@ $mysqli->query("CREATE TABLE IF NOT EXISTS `{$db_prefix}cartadmin_audit` (
     INDEX `idx_timestamp` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+$mysqli->query("CREATE TABLE IF NOT EXISTS `{$db_prefix}cartadmin_command` (
+    `command_id` INT AUTO_INCREMENT PRIMARY KEY,
+    `module` VARCHAR(32) NOT NULL,
+    `target_id` INT NOT NULL,
+    `operation` VARCHAR(16) NOT NULL,
+    `requested_by` VARCHAR(64) NOT NULL,
+    `status` VARCHAR(16) NOT NULL DEFAULT 'pending',
+    `dedupe_key` VARCHAR(80) NULL,
+    `error_message` VARCHAR(255) NOT NULL DEFAULT '',
+    `created_at` DATETIME NOT NULL,
+    `processed_at` DATETIME NULL,
+    `processed_by` INT NULL,
+    UNIQUE KEY `uq_pending_target` (`dedupe_key`),
+    INDEX `idx_command_status` (`status`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
 // 5. Recupero dell'hash del token configurato dal pannello amministrativo.
 $resKey = $mysqli->query("SELECT `value` FROM `{$db_prefix}cartadmin_setting` WHERE `key` = 'token_hash' LIMIT 1");
 $configuredHash = '';
@@ -210,7 +226,7 @@ try {
             sendJson([
                 'success' => true,
                 'status' => 'online',
-                'bridge_version' => '2.1.0-dev.1',
+                'bridge_version' => '2.1.0-dev.2',
                 'author' => 'SOLO SOLUZIONI (OpenCart ITALIA)',
                 'store_name' => $storeName,
                 'total_orders' => $totalOrders,
@@ -449,6 +465,25 @@ try {
                 sendJson(['success' => false, 'error' => 'Impossibile leggere il modulo amministrativo richiesto.'], 500);
             }
 
+            $pendingCommands = [];
+            if (in_array($rawModule, ['customer_approvals', 'gdpr'], true)) {
+                $pendingStmt = $mysqli->prepare("SELECT `command_id`, `target_id`, `operation` FROM `{$db_prefix}cartadmin_command` WHERE `module` = ? AND `status` = 'pending'");
+                if ($pendingStmt) {
+                    $pendingStmt->bind_param('s', $rawModule);
+                    $pendingStmt->execute();
+                    $pendingResult = $pendingStmt->get_result();
+                    if ($pendingResult) {
+                        while ($pendingRow = $pendingResult->fetch_assoc()) {
+                            $pendingCommands[(int)$pendingRow['target_id']] = [
+                                'id' => (int)$pendingRow['command_id'],
+                                'operation' => (string)$pendingRow['operation']
+                            ];
+                        }
+                    }
+                    $pendingStmt->close();
+                }
+            }
+
             $items = [];
             while ($row = $result->fetch_assoc()) {
                 $statusLabel = '';
@@ -464,6 +499,7 @@ try {
                 $title = html_entity_decode(strip_tags((string)($row['title'] ?? '')), ENT_QUOTES | ENT_HTML5, 'UTF-8');
                 $subtitle = html_entity_decode(strip_tags((string)($row['subtitle'] ?? '')), ENT_QUOTES | ENT_HTML5, 'UTF-8');
                 $detail = html_entity_decode(strip_tags((string)($row['detail'] ?? '')), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                $pending = $pendingCommands[(int)$row['id']] ?? null;
                 $items[] = [
                     'id' => (string)$row['id'],
                     'title' => mb_substr($title !== '' ? $title : ('#' . $row['id']), 0, 180),
@@ -471,7 +507,10 @@ try {
                     'active' => $row['active'] === null ? null : ((int)$row['active'] === 1),
                     'status_label' => $statusLabel,
                     'date' => mb_substr((string)($row['date_value'] ?? ''), 0, 32),
-                    'detail' => mb_substr($detail, 0, 240)
+                    'detail' => mb_substr($detail, 0, 240),
+                    'actionable' => $rawModule === 'customer_approvals' || ($rawModule === 'gdpr' && (int)$row['status_code'] === 1),
+                    'pending_command_id' => $pending['id'] ?? null,
+                    'pending_operation' => $pending['operation'] ?? ''
                 ];
             }
 
@@ -484,6 +523,59 @@ try {
                 'message' => '',
                 'generated_at' => date('c')
             ]);
+            break;
+
+        case 'management_command':
+            $rawModule = isset($_POST['module']) && is_string($_POST['module']) ? strtolower(trim($_POST['module'])) : '';
+            $recordId = isset($_POST['id']) ? (int)$_POST['id'] : 0;
+            $operation = isset($_POST['operation']) && is_string($_POST['operation']) ? strtolower(trim($_POST['operation'])) : '';
+
+            if (!in_array($rawModule, ['customer_approvals', 'gdpr'], true) || !in_array($operation, ['approve', 'deny'], true) || $recordId < 1) {
+                sendJson(['success' => false, 'error' => 'Richiesta amministrativa non valida.'], 400);
+            }
+
+            if ($rawModule === 'customer_approvals') {
+                $targetStmt = $mysqli->prepare("SELECT `customer_approval_id` FROM `{$db_prefix}customer_approval` WHERE `customer_approval_id` = ? LIMIT 1");
+            } else {
+                $targetStmt = $mysqli->prepare("SELECT `gdpr_id` FROM `{$db_prefix}gdpr` WHERE `gdpr_id` = ? AND `status` = 1 LIMIT 1");
+            }
+            if (!$targetStmt) {
+                sendJson(['success' => false, 'error' => 'Modulo amministrativo non disponibile.'], 409);
+            }
+            $targetStmt->bind_param('i', $recordId);
+            $targetStmt->execute();
+            $targetResult = $targetStmt->get_result();
+            $targetExists = $targetResult && $targetResult->num_rows === 1;
+            $targetStmt->close();
+            if (!$targetExists) {
+                sendJson(['success' => false, 'error' => 'Elemento non trovato o non più in attesa.'], 409);
+            }
+
+            $requestedBy = mb_substr($receivedUsername !== '' ? $receivedUsername : 'CartAdmin Android', 0, 64);
+            $dedupeKey = $rawModule . ':' . $recordId;
+            $commandStmt = $mysqli->prepare("INSERT INTO `{$db_prefix}cartadmin_command` (`module`, `target_id`, `operation`, `requested_by`, `status`, `dedupe_key`, `created_at`) VALUES (?, ?, ?, ?, 'pending', ?, NOW())");
+            if (!$commandStmt) {
+                sendJson(['success' => false, 'error' => 'Impossibile accodare la richiesta.'], 500);
+            }
+            $commandStmt->bind_param('sisss', $rawModule, $recordId, $operation, $requestedBy, $dedupeKey);
+            $executed = $commandStmt->execute();
+            if (!$executed) {
+                $commandError = $commandStmt->errno;
+                $commandStmt->close();
+                if ($commandError === 1062) {
+                    sendJson(['success' => false, 'error' => 'Esiste già una richiesta in attesa per questo elemento.'], 409);
+                }
+                sendJson(['success' => false, 'error' => 'Impossibile accodare la richiesta.'], 500);
+            }
+            $commandId = (int)$mysqli->insert_id;
+            $commandStmt->close();
+
+            sendJson([
+                'success' => true,
+                'command_id' => $commandId,
+                'status' => 'pending',
+                'message' => 'Richiesta inviata al pannello OpenCart per la conferma di un amministratore.'
+            ], 202);
             break;
 
         case 'management_antispam':

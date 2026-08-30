@@ -34,6 +34,22 @@ class Cartadmin extends \Opencart\System\Engine\Controller {
 		$data['generate'] = $this->url->link($this->route . '.generate', $token, true);
 		$data['back'] = $this->url->link('marketplace/extension', $token . '&type=module');
 		$data['endpoint'] = rtrim(HTTP_CATALOG, '/') . '/extension/cartadmin/cartadmin_api.php';
+		$data['commands'] = array_map(function (array $command): array {
+			$moduleLabels = [
+				'customer_approvals' => $this->language->get('text_customer_approvals'),
+				'gdpr' => $this->language->get('text_gdpr')
+			];
+			$operationLabels = [
+				'approve' => $this->language->get('text_approve'),
+				'deny' => $this->language->get('text_deny')
+			];
+
+			return $command + [
+				'module_label' => $moduleLabels[$command['module']] ?? $command['module'],
+				'operation_label' => $operationLabels[$command['operation']] ?? $command['operation']
+			];
+		}, $this->model_extension_cartadmin_module_cartadmin->getPendingCommands());
+		$data['process_command'] = $this->url->link($this->route . '.processCommand', $token, true);
 		$data['header'] = $this->load->controller('common/header');
 		$data['column_left'] = $this->load->controller('common/column_left');
 		$data['footer'] = $this->load->controller('common/footer');
@@ -59,6 +75,40 @@ class Cartadmin extends \Opencart\System\Engine\Controller {
 			$json['success'] = $this->language->get('text_token_generated');
 			$json['token'] = $token;
 			$json['last_four'] = substr($token, -4);
+		}
+
+		$this->response->addHeader('Content-Type: application/json');
+		$this->response->addHeader('Cache-Control: no-store');
+		$this->response->addHeader('X-Content-Type-Options: nosniff');
+		$this->response->setOutput(json_encode($json, JSON_UNESCAPED_SLASHES));
+	}
+
+	public function processCommand(): void {
+		$this->load->language($this->route);
+		$json = [];
+
+		if (!$this->user->hasPermission('modify', $this->route)) {
+			$json['error'] = $this->language->get('error_permission');
+		} elseif (($this->request->server['REQUEST_METHOD'] ?? '') !== 'POST') {
+			$json['error'] = $this->language->get('error_method');
+		}
+
+		$command_id = isset($this->request->post['command_id']) ? (int)$this->request->post['command_id'] : 0;
+		$decision = isset($this->request->post['decision']) ? (string)$this->request->post['decision'] : '';
+		if (!$json && ($command_id < 1 || !in_array($decision, ['execute', 'reject'], true))) {
+			$json['error'] = $this->language->get('error_command');
+		}
+
+		if (!$json) {
+			try {
+				$this->load->model('extension/cartadmin/module/cartadmin');
+				$this->model_extension_cartadmin_module_cartadmin->processCommand($command_id, $decision, (int)$this->user->getId());
+				$json['success'] = $decision === 'execute'
+					? $this->language->get('text_command_executed')
+					: $this->language->get('text_command_rejected');
+			} catch (\Throwable $exception) {
+				$json['error'] = $this->language->get('error_command_execution');
+			}
 		}
 
 		$this->response->addHeader('Content-Type: application/json');

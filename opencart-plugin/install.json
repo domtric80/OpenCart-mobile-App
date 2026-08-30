@@ -1,7 +1,7 @@
 {
   "name": "CartAdmin Bridge - OpenCart ITALIA",
   "description": "Bridge HTTPS sicuro tra CartAdmin Android e OpenCart 4.1.x, configurabile dal pannello amministrativo con token memorizzato esclusivamente come hash non reversibile.",
-  "version": "2.1.0-dev.1",
+  "version": "2.1.0-dev.2",
   "author": "OpenCart ITALIA by SOLOSOLUZIONI",
   "link": "https://www.opencartitalia.it"
 }

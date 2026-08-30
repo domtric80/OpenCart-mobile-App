@@ -172,6 +172,25 @@ class BridgeRequestFactoryTest {
     }
 
     @Test
+    fun sensitiveCommandUsesHeaderAuthenticationAndContainsOnlyQueueFields() {
+        val request = BridgeRequestFactory.authenticatedFormPost(
+            baseUrl = "https://shop.example",
+            action = "management_command",
+            apiKey = "queue-secret",
+            username = "mobile-admin",
+            fields = mapOf("module" to "gdpr", "id" to "7", "operation" to "approve")
+        )
+        val body = request.body as FormBody
+        val names = (0 until body.size).map(body::name)
+
+        assertEquals(listOf("action", "module", "id", "operation"), names)
+        assertFalse(names.contains("api_key"))
+        assertFalse(names.contains("username"))
+        assertEquals("queue-secret", request.header("X-CartAdmin-Key"))
+        assertEquals("mobile-admin", request.header("X-CartAdmin-User"))
+    }
+
+    @Test
     fun antispamMutationUsesAuthenticatedFormWithoutCredentials() {
         val request = BridgeRequestFactory.authenticatedFormPost(
             baseUrl = "https://shop.example",
