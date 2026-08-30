@@ -112,6 +112,8 @@ assertSourceContains($adminModelSource, "FROM `\" . DB_PREFIX . \"user` WHERE `u
 assertSourceContains($adminModelSource, "AND `status` = '1' LIMIT 1", 'Disabled OpenCart users must not be assigned to new tokens.');
 assertSourceContains($adminModelSource, "`active` = '0', `revoked_at` = NOW()", 'Individual tokens must be immediately revocable.');
 assertSourceContains($adminModelSource, "WHERE `key` IN ('api_key', 'token_hash', 'token_last_four', 'token_created_at')", 'Legacy token settings must be removed after migration.');
+assertSourceContains($bridgeSource, '$legacyCredentialsPresent', 'A token recreated after a rollback must be migrated on the next upgrade.');
+assertSourceContains($adminModelSource, "&& \$hash === '' && \$legacy === ''", 'The migration marker must not hide credentials recreated by an older rollback.');
 assertSourceContains($adminModelSource, "'ca_' . \$lookup . '_' . bin2hex(random_bytes(32))", 'Tokens must use an indexed prefix and a cryptographically secure secret.');
 assertSourceContains($bridgeSource, 'cartadminStateDigest($beforeState, $auditSalt)', 'Editorial before-state must be represented by a keyed digest.');
 assertSourceContains($bridgeSource, 'cartadminStateDigest($afterState, $auditSalt)', 'Editorial after-state must be represented by a keyed digest.');

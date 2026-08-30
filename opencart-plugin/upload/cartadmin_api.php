@@ -285,7 +285,9 @@ $mysqli->query("CREATE TABLE IF NOT EXISTS `{$db_prefix}cartadmin_command` (
 // 5. Migrazione una tantum del token singolo verso credenziali revocabili.
 $legacyMarkerResult = $mysqli->query("SELECT `value` FROM `{$db_prefix}cartadmin_setting` WHERE `key` = 'legacy_token_migrated' LIMIT 1");
 $legacyMigrated = ($legacyMarkerResult && $row = $legacyMarkerResult->fetch_assoc()) ? (string)$row['value'] === '1' : false;
-if (!$legacyMigrated) {
+$legacyCredentialResult = $mysqli->query("SELECT COUNT(*) AS total FROM `{$db_prefix}cartadmin_setting` WHERE `key` IN ('api_key', 'token_hash') AND `value` <> ''");
+$legacyCredentialsPresent = ($legacyCredentialResult && $row = $legacyCredentialResult->fetch_assoc()) ? (int)$row['total'] > 0 : false;
+if (!$legacyMigrated || $legacyCredentialsPresent) {
     $legacyValues = [];
     $legacyResult = $mysqli->query("SELECT `key`, `value` FROM `{$db_prefix}cartadmin_setting` WHERE `key` IN ('api_key', 'token_hash', 'token_last_four', 'token_created_at')");
     if ($legacyResult) {

@@ -233,13 +233,13 @@ class Cartadmin extends \Opencart\System\Engine\Model {
 	}
 
 	private function migrateLegacyToken(): void {
-		if ($this->getValue('legacy_token_migrated') === '1') {
-			return;
-		}
 		$hash = $this->getValue('token_hash');
 		$legacy = trim($this->getValue('api_key'));
 		$lastFour = $this->getValue('token_last_four');
 		$createdAt = $this->getValue('token_created_at');
+		if ($this->getValue('legacy_token_migrated') === '1' && $hash === '' && $legacy === '') {
+			return;
+		}
 
 		if ($hash === '' && $legacy !== '') {
 			$hash = $this->hashToken($legacy);
