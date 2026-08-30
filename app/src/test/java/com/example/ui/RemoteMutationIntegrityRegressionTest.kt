@@ -34,10 +34,36 @@ class RemoteMutationIntegrityRegressionTest {
     }
 
     @Test
-    fun unsupportedCatalogMutationsDoNotChangeLocalRepository() {
-        assertFalse(viewModelSource.contains("repository.addProduct("))
-        assertFalse(viewModelSource.contains("repository.deleteProduct("))
-        assertFalse(viewModelSource.contains("repository.addCategory("))
-        assertFalse(viewModelSource.contains("repository.deleteCategory("))
+    fun catalogMutationsWaitForRemoteConfirmationBeforeChangingLocalState() {
+        assertRemoteBeforeLocal("fun addNewProduct(", "fun updateProduct(", "apiClient.createProduct", "repository.insertProduct")
+        assertRemoteBeforeLocal("fun deleteProduct(", "fun toggleProductStatus(", "apiClient.deleteProduct", "repository.deleteProduct")
+        assertRemoteBeforeLocal("fun addNewCategory(", "fun updateCategory(", "apiClient.createCategory", "repository.insertCategory")
+        assertRemoteBeforeLocal("fun updateCategory(", "fun deleteCategory(", "apiClient.updateCategory", "repository.updateCategory")
+        assertRemoteBeforeLocal("fun deleteCategory(", "fun toggleCategoryStatus(", "apiClient.deleteCategory", "repository.deleteCategory")
+    }
+
+    @Test
+    fun sensitiveCustomerActionsAreQueuedInsteadOfMutatingLocalState() {
+        val function = viewModelSource.substringAfter("fun requestSensitiveAdminCommand(")
+            .substringBefore("fun addAntispamKeyword(")
+
+        assertTrue(function.contains("apiClient.enqueueAdminCommand"))
+        assertTrue(function.contains("loadAdminModule(module, forceRefresh = true)"))
+        assertFalse(function.contains("repository."))
+        assertFalse(function.contains("offline"))
+    }
+
+    private fun assertRemoteBeforeLocal(
+        functionStart: String,
+        functionEnd: String,
+        remoteCallName: String,
+        localCallName: String
+    ) {
+        val function = viewModelSource.substringAfter(functionStart).substringBefore(functionEnd)
+        val remoteCall = function.indexOf(remoteCallName)
+        val localCall = function.indexOf(localCallName)
+        assertTrue("Remote call missing for $functionStart", remoteCall >= 0)
+        assertTrue("Local mutation must follow remote confirmation for $functionStart", localCall > remoteCall)
+        assertTrue("Success must be checked for $functionStart", function.contains("result.getOr"))
     }
 }

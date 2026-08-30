@@ -101,7 +101,10 @@ class OpenCartApiClient(context: Context) {
                                     item.optBoolean("active")
                                 } else null,
                                 date = item.optString("date", ""),
-                                detail = item.optString("detail", "")
+                                detail = item.optString("detail", ""),
+                                actionable = item.optBoolean("actionable", false),
+                                pendingCommandId = if (item.isNull("pending_command_id")) "" else item.optString("pending_command_id"),
+                                pendingOperation = item.optString("pending_operation", "")
                             )
                         )
                     }
@@ -480,7 +483,7 @@ class OpenCartApiClient(context: Context) {
                             price = price,
                             specialPrice = specialPrice,
                             quantity = qty,
-                            minQuantityAlert = 5,
+                            minQuantityAlert = obj.optInt("minimum", 5).coerceAtLeast(1),
                             category = category,
                             description = obj.optString("description", ""),
                             status = status
@@ -576,6 +579,7 @@ class OpenCartApiClient(context: Context) {
                     "sku" to product.sku,
                     "price" to product.price.toString(),
                     "quantity" to product.quantity.coerceAtLeast(0).toString(),
+                    "minimum" to product.minQuantityAlert.coerceAtLeast(1).toString(),
                     "category" to product.category,
                     "description" to product.description,
                     "status" to if (product.status) "1" else "0"
@@ -592,6 +596,220 @@ class OpenCartApiClient(context: Context) {
                     Result.success(true)
                 } else {
                     Result.failure(Exception(json.optString("error", "Aggiornamento prodotto rifiutato")))
+                }
+            }
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
+    suspend fun enqueueAdminCommand(
+        baseUrl: String,
+        apiKey: String,
+        username: String,
+        module: AdminModule,
+        recordId: String,
+        operation: String
+    ): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            require(module == AdminModule.CUSTOMER_APPROVALS || module == AdminModule.GDPR) {
+                "Il modulo non supporta richieste amministrative sensibili"
+            }
+            require(operation == "approve" || operation == "deny") { "Operazione non valida" }
+            val request = BridgeRequestFactory.authenticatedFormPost(
+                baseUrl = baseUrl,
+                action = "management_command",
+                apiKey = apiKey,
+                username = username,
+                fields = mapOf("module" to module.apiKey, "id" to recordId, "operation" to operation)
+            )
+            tlsClient.execute(request).use { response ->
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    Result.failure(Exception("HTTP ${response.code}: $body"))
+                } else {
+                    val json = JSONObject(body)
+                    if (json.optBoolean("success", false) && json.optString("status") == "pending") {
+                        Result.success(true)
+                    } else {
+                        Result.failure(Exception(json.optString("error", "Richiesta amministrativa rifiutata")))
+                    }
+                }
+            }
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
+    /** Crea il prodotto sullo store e restituisce l'ID assegnato da OpenCart. */
+    suspend fun createProduct(
+        baseUrl: String,
+        apiKey: String,
+        product: Product,
+        username: String = ""
+    ): Result<Product> = withContext(Dispatchers.IO) {
+        try {
+            val request = BridgeRequestFactory.authenticatedFormPost(
+                baseUrl = baseUrl,
+                action = "create_product",
+                apiKey = apiKey,
+                username = username,
+                fields = mapOf(
+                    "name" to product.name,
+                    "model" to product.model,
+                    "sku" to product.sku,
+                    "price" to product.price.toString(),
+                    "quantity" to product.quantity.coerceAtLeast(0).toString(),
+                    "minimum" to product.minQuantityAlert.coerceAtLeast(1).toString(),
+                    "category" to product.category,
+                    "description" to product.description,
+                    "status" to if (product.status) "1" else "0"
+                )
+            )
+
+            tlsClient.execute(request).use { response ->
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    return@use Result.failure(Exception("HTTP ${response.code}: $body"))
+                }
+                val json = JSONObject(body)
+                if (!json.optBoolean("success", false)) {
+                    return@use Result.failure(Exception(json.optString("error", "Creazione prodotto rifiutata")))
+                }
+                val created = json.optJSONObject("product")
+                    ?: return@use Result.failure(Exception("Risposta prodotto incompleta"))
+                val productId = created.optString("product_id")
+                if (productId.isBlank()) {
+                    return@use Result.failure(Exception("ID prodotto mancante nella risposta"))
+                }
+                Result.success(
+                    product.copy(
+                        id = productId,
+                        specialPrice = null,
+                        quantity = created.optInt("quantity", product.quantity),
+                        minQuantityAlert = created.optInt("minimum", product.minQuantityAlert),
+                        status = created.optBoolean("status", product.status)
+                    )
+                )
+            }
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
+    suspend fun deleteProduct(
+        baseUrl: String,
+        apiKey: String,
+        productId: String,
+        username: String = ""
+    ): Result<Boolean> = executeCatalogMutation(
+        baseUrl = baseUrl,
+        apiKey = apiKey,
+        username = username,
+        action = "delete_product",
+        fields = mapOf("product_id" to productId.removePrefix("prod_").removePrefix("product_")),
+        fallbackError = "Eliminazione prodotto rifiutata"
+    )
+
+    suspend fun createCategory(
+        baseUrl: String,
+        apiKey: String,
+        category: Category,
+        username: String = ""
+    ): Result<Category> = withContext(Dispatchers.IO) {
+        try {
+            val request = BridgeRequestFactory.authenticatedFormPost(
+                baseUrl = baseUrl,
+                action = "create_category",
+                apiKey = apiKey,
+                username = username,
+                fields = mapOf(
+                    "name" to category.name,
+                    "description" to category.description,
+                    "sort_order" to category.sortOrder.coerceAtLeast(0).toString(),
+                    "status" to if (category.status) "1" else "0"
+                )
+            )
+            tlsClient.execute(request).use { response ->
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    return@use Result.failure(Exception("HTTP ${response.code}: $body"))
+                }
+                val json = JSONObject(body)
+                if (!json.optBoolean("success", false)) {
+                    return@use Result.failure(Exception(json.optString("error", "Creazione categoria rifiutata")))
+                }
+                val created = json.optJSONObject("category")
+                    ?: return@use Result.failure(Exception("Risposta categoria incompleta"))
+                val categoryId = created.optString("category_id")
+                if (categoryId.isBlank()) {
+                    return@use Result.failure(Exception("ID categoria mancante nella risposta"))
+                }
+                Result.success(
+                    category.copy(
+                        id = categoryId,
+                        productsCount = created.optInt("products_count", 0),
+                        status = created.optBoolean("status", category.status)
+                    )
+                )
+            }
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
+    suspend fun updateCategory(
+        baseUrl: String,
+        apiKey: String,
+        category: Category,
+        username: String = ""
+    ): Result<Boolean> = executeCatalogMutation(
+        baseUrl = baseUrl,
+        apiKey = apiKey,
+        username = username,
+        action = "update_category",
+        fields = mapOf(
+            "category_id" to category.id.removePrefix("cat_").removePrefix("category_"),
+            "name" to category.name,
+            "description" to category.description,
+            "sort_order" to category.sortOrder.coerceAtLeast(0).toString(),
+            "status" to if (category.status) "1" else "0"
+        ),
+        fallbackError = "Aggiornamento categoria rifiutato"
+    )
+
+    suspend fun deleteCategory(
+        baseUrl: String,
+        apiKey: String,
+        categoryId: String,
+        username: String = ""
+    ): Result<Boolean> = executeCatalogMutation(
+        baseUrl = baseUrl,
+        apiKey = apiKey,
+        username = username,
+        action = "delete_category",
+        fields = mapOf("category_id" to categoryId.removePrefix("cat_").removePrefix("category_")),
+        fallbackError = "Eliminazione categoria rifiutata"
+    )
+
+    private suspend fun executeCatalogMutation(
+        baseUrl: String,
+        apiKey: String,
+        username: String,
+        action: String,
+        fields: Map<String, String>,
+        fallbackError: String
+    ): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val request = BridgeRequestFactory.authenticatedFormPost(baseUrl, action, apiKey, username, fields)
+            tlsClient.execute(request).use { response ->
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    Result.failure(Exception("HTTP ${response.code}: $body"))
+                } else {
+                    val json = JSONObject(body)
+                    if (json.optBoolean("success", false)) Result.success(true)
+                    else Result.failure(Exception(json.optString("error", fallbackError)))
                 }
             }
         } catch (error: Exception) {

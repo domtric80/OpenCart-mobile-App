@@ -332,6 +332,10 @@ class EcomRepository(
         }
     }
 
+    fun insertProduct(product: Product) {
+        _products.update { current -> listOf(product) + current.filterNot { it.id == product.id } }
+    }
+
     fun deleteProduct(productId: String) {
         _products.update { current -> current.filterNot { it.id == productId } }
     }
@@ -374,6 +378,10 @@ class EcomRepository(
                 } else it
             }
         }
+    }
+
+    fun insertCategory(category: Category) {
+        _categories.update { current -> (current.filterNot { it.id == category.id } + category).sortedBy { it.sortOrder } }
     }
 
     fun deleteCategory(categoryId: String) {

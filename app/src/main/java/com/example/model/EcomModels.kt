@@ -263,7 +263,7 @@ data class OrderReturn(
     val comment: String = ""
 )
 
-/** Moduli amministrativi OpenCart esposti dal bridge 2.0. */
+/** Moduli amministrativi OpenCart esposti dal bridge CartAdmin. */
 enum class AdminModule(val apiKey: String, val label: String, val description: String) {
     SUBSCRIPTION_PLANS("subscription_plans", "Piani di abbonamento", "Piani e cicli ricorrenti"),
     PAGES("pages", "Pagine", "Pagine informative dello store"),
@@ -284,7 +284,10 @@ data class AdminRecord(
     val statusLabel: String = "",
     val active: Boolean? = null,
     val date: String = "",
-    val detail: String = ""
+    val detail: String = "",
+    val actionable: Boolean = false,
+    val pendingCommandId: String = "",
+    val pendingOperation: String = ""
 )
 
 data class AdminModuleSnapshot(

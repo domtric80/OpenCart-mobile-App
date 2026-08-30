@@ -23,6 +23,18 @@ Non creare né modificare manualmente file PHP. Il nome `cartadmin.ocmod.zip` è
 
 L'app Android conserva la propria copia del token tramite AES-256-GCM e Android Keystore hardware-backed.
 
+## Approvazioni clienti e richieste GDPR
+
+Queste operazioni non vengono applicate direttamente dal bridge pubblico. Dall'app è possibile inviare una richiesta **Approva** o **Rifiuta**, che compare nella sezione **Richieste sensibili dall'app** del modulo CartAdmin Bridge.
+
+Un amministratore OpenCart con permesso di modifica deve quindi:
+
+1. aprire **Estensioni > Estensioni > Moduli > CartAdmin Bridge**;
+2. verificare modulo, ID, operazione e operatore che ha inviato la richiesta;
+3. scegliere **Conferma ed esegui** oppure **Rifiuta richiesta**.
+
+Solo la conferma dal pannello richiama i modelli amministrativi nativi OpenCart. In questo modo vengono rispettati eventi, notifiche email e stati GDPR ufficiali. Una richiesta mobile pendente non modifica il cliente e non elabora dati personali.
+
 ## Endpoint
 
 L'estensione espone:

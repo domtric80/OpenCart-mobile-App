@@ -73,6 +73,34 @@ function cartadminInvalidateFileCache(array $keys): void {
     }
 }
 
+/**
+ * Restituisce gli ID delle lingue attive. Le descrizioni create da CartAdmin
+ * vengono replicate su tutte le lingue per non produrre record invisibili nel
+ * pannello OpenCart quando la lingua predefinita non ha ID 1.
+ */
+function cartadminActiveLanguageIds(mysqli $mysqli, string $dbPrefix): array {
+    $languageIds = [];
+    $result = $mysqli->query("SELECT `language_id` FROM `{$dbPrefix}language` WHERE `status` = 1 ORDER BY `sort_order`, `language_id`");
+
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $languageId = (int)$row['language_id'];
+            if ($languageId > 0) {
+                $languageIds[] = $languageId;
+            }
+        }
+    }
+
+    if ($languageIds === []) {
+        $fallback = $mysqli->query("SELECT `language_id` FROM `{$dbPrefix}language` ORDER BY `language_id` LIMIT 1");
+        if ($fallback && $row = $fallback->fetch_assoc()) {
+            $languageIds[] = (int)$row['language_id'];
+        }
+    }
+
+    return array_values(array_filter(array_unique($languageIds), static fn(int $id): bool => $id > 0));
+}
+
 // 2. Localizzazione del file config.php di OpenCart
 if (file_exists(__DIR__ . '/config.php')) {
     require_once(__DIR__ . '/config.php');
@@ -119,6 +147,22 @@ $mysqli->query("CREATE TABLE IF NOT EXISTS `{$db_prefix}cartadmin_audit` (
     `app_version` VARCHAR(32) NOT NULL,
     `created_at` DATETIME NOT NULL,
     INDEX `idx_timestamp` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+$mysqli->query("CREATE TABLE IF NOT EXISTS `{$db_prefix}cartadmin_command` (
+    `command_id` INT AUTO_INCREMENT PRIMARY KEY,
+    `module` VARCHAR(32) NOT NULL,
+    `target_id` INT NOT NULL,
+    `operation` VARCHAR(16) NOT NULL,
+    `requested_by` VARCHAR(64) NOT NULL,
+    `status` VARCHAR(16) NOT NULL DEFAULT 'pending',
+    `dedupe_key` VARCHAR(80) NULL,
+    `error_message` VARCHAR(255) NOT NULL DEFAULT '',
+    `created_at` DATETIME NOT NULL,
+    `processed_at` DATETIME NULL,
+    `processed_by` INT NULL,
+    UNIQUE KEY `uq_pending_target` (`dedupe_key`),
+    INDEX `idx_command_status` (`status`, `created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
 // 5. Recupero dell'hash del token configurato dal pannello amministrativo.
@@ -182,7 +226,7 @@ try {
             sendJson([
                 'success' => true,
                 'status' => 'online',
-                'bridge_version' => '2.0.1',
+                'bridge_version' => '2.1.0-dev.2',
                 'author' => 'SOLO SOLUZIONI (OpenCart ITALIA)',
                 'store_name' => $storeName,
                 'total_orders' => $totalOrders,
@@ -251,20 +295,22 @@ try {
 
         case 'products':
             $limit = isset($_GET['limit']) ? max(1, min(200, (int)$_GET['limit'])) : 100;
-            $stmt = $mysqli->prepare("SELECT p.product_id, p.model, p.sku, p.quantity, p.price, p.status, p.image,
+            $languageIds = cartadminActiveLanguageIds($mysqli, $db_prefix);
+            $languageId = $languageIds[0] ?? 1;
+            $stmt = $mysqli->prepare("SELECT p.product_id, p.model, p.sku, p.quantity, p.minimum, p.price, p.status, p.image,
                                              pd.name, pd.description,
                                              (SELECT cd.name FROM `{$db_prefix}product_to_category` p2c
-                                              LEFT JOIN `{$db_prefix}category_description` cd ON (p2c.category_id = cd.category_id AND cd.language_id = 1)
+                                              LEFT JOIN `{$db_prefix}category_description` cd ON (p2c.category_id = cd.category_id AND cd.language_id = ?)
                                               WHERE p2c.product_id = p.product_id ORDER BY p2c.category_id ASC LIMIT 1) AS category_name,
-                                             (SELECT ps.price FROM `{$db_prefix}product_special` ps
-                                              WHERE ps.product_id = p.product_id
-                                              ORDER BY ps.priority ASC, ps.product_special_id ASC LIMIT 1) AS special_price
+                                             (SELECT pdx.price FROM `{$db_prefix}product_discount` pdx
+                                              WHERE pdx.product_id = p.product_id AND pdx.special = 1
+                                              ORDER BY pdx.priority ASC, pdx.product_discount_id ASC LIMIT 1) AS special_price
                                       FROM `{$db_prefix}product` p
-                                      LEFT JOIN `{$db_prefix}product_description` pd ON (p.product_id = pd.product_id AND pd.language_id = 1)
+                                      LEFT JOIN `{$db_prefix}product_description` pd ON (p.product_id = pd.product_id AND pd.language_id = ?)
                                       ORDER BY p.product_id DESC LIMIT ?");
             $products = [];
             if ($stmt) {
-                $stmt->bind_param('i', $limit);
+                $stmt->bind_param('iii', $languageId, $languageId, $limit);
                 $stmt->execute();
                 $res = $stmt->get_result();
                 if ($res) {
@@ -276,6 +322,7 @@ try {
                             'model' => $row['model'],
                             'sku' => $row['sku'],
                             'quantity' => (int)$row['quantity'],
+                            'minimum' => max(1, (int)$row['minimum']),
                             'price' => (float)$row['price'],
                             'special_price' => $row['special_price'] !== null ? (float)$row['special_price'] : null,
                             'category' => $row['category_name'] ?: '',
@@ -297,16 +344,18 @@ try {
 
         case 'categories':
             $limit = isset($_GET['limit']) ? max(1, min(200, (int)$_GET['limit'])) : 100;
+            $languageIds = cartadminActiveLanguageIds($mysqli, $db_prefix);
+            $languageId = $languageIds[0] ?? 1;
             $stmt = $mysqli->prepare("SELECT c.category_id, cd.name, cd.description, c.status, c.sort_order,
                                              (SELECT COUNT(p2c.product_id) FROM `{$db_prefix}product_to_category` p2c WHERE p2c.category_id = c.category_id) AS products_count
                                       FROM `{$db_prefix}category` c
-                                      LEFT JOIN `{$db_prefix}category_description` cd ON (c.category_id = cd.category_id AND cd.language_id = 1)
+                                      LEFT JOIN `{$db_prefix}category_description` cd ON (c.category_id = cd.category_id AND cd.language_id = ?)
                                       GROUP BY c.category_id
                                       ORDER BY c.sort_order ASC, cd.name ASC
                                       LIMIT ?");
             $categories = [];
             if ($stmt) {
-                $stmt->bind_param('i', $limit);
+                $stmt->bind_param('ii', $languageId, $limit);
                 $stmt->execute();
                 $res = $stmt->get_result();
                 if ($res) {
@@ -416,6 +465,25 @@ try {
                 sendJson(['success' => false, 'error' => 'Impossibile leggere il modulo amministrativo richiesto.'], 500);
             }
 
+            $pendingCommands = [];
+            if (in_array($rawModule, ['customer_approvals', 'gdpr'], true)) {
+                $pendingStmt = $mysqli->prepare("SELECT `command_id`, `target_id`, `operation` FROM `{$db_prefix}cartadmin_command` WHERE `module` = ? AND `status` = 'pending'");
+                if ($pendingStmt) {
+                    $pendingStmt->bind_param('s', $rawModule);
+                    $pendingStmt->execute();
+                    $pendingResult = $pendingStmt->get_result();
+                    if ($pendingResult) {
+                        while ($pendingRow = $pendingResult->fetch_assoc()) {
+                            $pendingCommands[(int)$pendingRow['target_id']] = [
+                                'id' => (int)$pendingRow['command_id'],
+                                'operation' => (string)$pendingRow['operation']
+                            ];
+                        }
+                    }
+                    $pendingStmt->close();
+                }
+            }
+
             $items = [];
             while ($row = $result->fetch_assoc()) {
                 $statusLabel = '';
@@ -431,6 +499,7 @@ try {
                 $title = html_entity_decode(strip_tags((string)($row['title'] ?? '')), ENT_QUOTES | ENT_HTML5, 'UTF-8');
                 $subtitle = html_entity_decode(strip_tags((string)($row['subtitle'] ?? '')), ENT_QUOTES | ENT_HTML5, 'UTF-8');
                 $detail = html_entity_decode(strip_tags((string)($row['detail'] ?? '')), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                $pending = $pendingCommands[(int)$row['id']] ?? null;
                 $items[] = [
                     'id' => (string)$row['id'],
                     'title' => mb_substr($title !== '' ? $title : ('#' . $row['id']), 0, 180),
@@ -438,7 +507,10 @@ try {
                     'active' => $row['active'] === null ? null : ((int)$row['active'] === 1),
                     'status_label' => $statusLabel,
                     'date' => mb_substr((string)($row['date_value'] ?? ''), 0, 32),
-                    'detail' => mb_substr($detail, 0, 240)
+                    'detail' => mb_substr($detail, 0, 240),
+                    'actionable' => $rawModule === 'customer_approvals' || ($rawModule === 'gdpr' && (int)$row['status_code'] === 1),
+                    'pending_command_id' => $pending['id'] ?? null,
+                    'pending_operation' => $pending['operation'] ?? ''
                 ];
             }
 
@@ -451,6 +523,59 @@ try {
                 'message' => '',
                 'generated_at' => date('c')
             ]);
+            break;
+
+        case 'management_command':
+            $rawModule = isset($_POST['module']) && is_string($_POST['module']) ? strtolower(trim($_POST['module'])) : '';
+            $recordId = isset($_POST['id']) ? (int)$_POST['id'] : 0;
+            $operation = isset($_POST['operation']) && is_string($_POST['operation']) ? strtolower(trim($_POST['operation'])) : '';
+
+            if (!in_array($rawModule, ['customer_approvals', 'gdpr'], true) || !in_array($operation, ['approve', 'deny'], true) || $recordId < 1) {
+                sendJson(['success' => false, 'error' => 'Richiesta amministrativa non valida.'], 400);
+            }
+
+            if ($rawModule === 'customer_approvals') {
+                $targetStmt = $mysqli->prepare("SELECT `customer_approval_id` FROM `{$db_prefix}customer_approval` WHERE `customer_approval_id` = ? LIMIT 1");
+            } else {
+                $targetStmt = $mysqli->prepare("SELECT `gdpr_id` FROM `{$db_prefix}gdpr` WHERE `gdpr_id` = ? AND `status` = 1 LIMIT 1");
+            }
+            if (!$targetStmt) {
+                sendJson(['success' => false, 'error' => 'Modulo amministrativo non disponibile.'], 409);
+            }
+            $targetStmt->bind_param('i', $recordId);
+            $targetStmt->execute();
+            $targetResult = $targetStmt->get_result();
+            $targetExists = $targetResult && $targetResult->num_rows === 1;
+            $targetStmt->close();
+            if (!$targetExists) {
+                sendJson(['success' => false, 'error' => 'Elemento non trovato o non più in attesa.'], 409);
+            }
+
+            $requestedBy = mb_substr($receivedUsername !== '' ? $receivedUsername : 'CartAdmin Android', 0, 64);
+            $dedupeKey = $rawModule . ':' . $recordId;
+            $commandStmt = $mysqli->prepare("INSERT INTO `{$db_prefix}cartadmin_command` (`module`, `target_id`, `operation`, `requested_by`, `status`, `dedupe_key`, `created_at`) VALUES (?, ?, ?, ?, 'pending', ?, NOW())");
+            if (!$commandStmt) {
+                sendJson(['success' => false, 'error' => 'Impossibile accodare la richiesta.'], 500);
+            }
+            $commandStmt->bind_param('sisss', $rawModule, $recordId, $operation, $requestedBy, $dedupeKey);
+            $executed = $commandStmt->execute();
+            if (!$executed) {
+                $commandError = $commandStmt->errno;
+                $commandStmt->close();
+                if ($commandError === 1062) {
+                    sendJson(['success' => false, 'error' => 'Esiste già una richiesta in attesa per questo elemento.'], 409);
+                }
+                sendJson(['success' => false, 'error' => 'Impossibile accodare la richiesta.'], 500);
+            }
+            $commandId = (int)$mysqli->insert_id;
+            $commandStmt->close();
+
+            sendJson([
+                'success' => true,
+                'command_id' => $commandId,
+                'status' => 'pending',
+                'message' => 'Richiesta inviata al pannello OpenCart per la conferma di un amministratore.'
+            ], 202);
             break;
 
         case 'management_antispam':
@@ -765,6 +890,376 @@ try {
             ]);
             break;
 
+        case 'create_product':
+            $name = isset($_POST['name']) && is_string($_POST['name']) ? trim(strip_tags($_POST['name'])) : '';
+            $model = isset($_POST['model']) && is_string($_POST['model']) ? trim(strip_tags($_POST['model'])) : '';
+            $sku = isset($_POST['sku']) && is_string($_POST['sku']) ? trim(strip_tags($_POST['sku'])) : '';
+            $description = isset($_POST['description']) && is_string($_POST['description']) ? trim(strip_tags($_POST['description'])) : '';
+            $category = isset($_POST['category']) && is_string($_POST['category']) ? trim(strip_tags($_POST['category'])) : '';
+            $price = isset($_POST['price']) && is_numeric($_POST['price']) ? max(0.0, (float)$_POST['price']) : -1.0;
+            $quantity = isset($_POST['quantity']) ? max(0, (int)$_POST['quantity']) : -1;
+            $minimum = isset($_POST['minimum']) ? max(1, (int)$_POST['minimum']) : 1;
+            $status = isset($_POST['status']) && (string)$_POST['status'] === '1' ? 1 : 0;
+
+            if ($name === '' || mb_strlen($name) > 255 || $model === '' || mb_strlen($model) > 64 || mb_strlen($sku) > 64 || $price < 0 || $quantity < 0 || mb_strlen($description) > 65535 || $category === '' || mb_strlen($category) > 255) {
+                sendJson(['success' => false, 'error' => 'Dati prodotto non validi. Nome, modello e categoria sono obbligatori.'], 400);
+            }
+
+            $languageIds = cartadminActiveLanguageIds($mysqli, $db_prefix);
+            if ($languageIds === []) {
+                sendJson(['success' => false, 'error' => 'Nessuna lingua OpenCart configurata.'], 409);
+            }
+
+            $primaryLanguageId = $languageIds[0];
+            $stmtCategory = $mysqli->prepare("SELECT `category_id` FROM `{$db_prefix}category_description` WHERE `name` = ? AND `language_id` = ? LIMIT 1");
+            if (!$stmtCategory) {
+                sendJson(['success' => false, 'error' => 'Impossibile verificare la categoria.'], 500);
+            }
+            $stmtCategory->bind_param('si', $category, $primaryLanguageId);
+            $stmtCategory->execute();
+            $categoryResult = $stmtCategory->get_result();
+            $categoryRow = $categoryResult ? $categoryResult->fetch_assoc() : null;
+            $stmtCategory->close();
+            if (!$categoryRow) {
+                sendJson(['success' => false, 'error' => 'La categoria selezionata non esiste nello store.'], 409);
+            }
+            $categoryId = (int)$categoryRow['category_id'];
+
+            $stockStatusId = 0;
+            $stockResult = $mysqli->query("SELECT `stock_status_id` FROM `{$db_prefix}stock_status` WHERE `language_id` = {$primaryLanguageId} ORDER BY `stock_status_id` LIMIT 1");
+            if ($stockResult && $row = $stockResult->fetch_assoc()) {
+                $stockStatusId = (int)$row['stock_status_id'];
+            }
+            if ($stockStatusId <= 0) {
+                sendJson(['success' => false, 'error' => 'Nessuno stato magazzino OpenCart configurato.'], 409);
+            }
+
+            $mysqli->begin_transaction();
+            try {
+                $stmtProduct = $mysqli->prepare("INSERT INTO `{$db_prefix}product` (`master_id`, `model`, `sku`, `upc`, `ean`, `jan`, `isbn`, `mpn`, `location`, `variant`, `override`, `quantity`, `stock_status_id`, `image`, `manufacturer_id`, `shipping`, `price`, `points`, `tax_class_id`, `date_available`, `weight`, `weight_class_id`, `length`, `width`, `height`, `length_class_id`, `subtract`, `minimum`, `rating`, `sort_order`, `status`, `date_added`, `date_modified`) VALUES (0, ?, ?, '', '', '', '', '', '', '', '', ?, ?, '', 0, 1, ?, 0, 0, CURDATE(), 0, 0, 0, 0, 0, 0, 1, ?, 0, 0, ?, NOW(), NOW())");
+                if (!$stmtProduct) {
+                    throw new RuntimeException('Preparazione creazione prodotto fallita.');
+                }
+                $stmtProduct->bind_param('ssiidii', $model, $sku, $quantity, $stockStatusId, $price, $minimum, $status);
+                $stmtProduct->execute();
+                $productId = (int)$mysqli->insert_id;
+                $stmtProduct->close();
+                if ($productId <= 0) {
+                    throw new RuntimeException('OpenCart non ha restituito un ID prodotto valido.');
+                }
+
+                $stmtDescription = $mysqli->prepare("INSERT INTO `{$db_prefix}product_description` (`product_id`, `language_id`, `name`, `description`, `tag`, `meta_title`, `meta_description`, `meta_keyword`) VALUES (?, ?, ?, ?, '', ?, '', '')");
+                if (!$stmtDescription) {
+                    throw new RuntimeException('Preparazione descrizione prodotto fallita.');
+                }
+                foreach ($languageIds as $languageId) {
+                    $stmtDescription->bind_param('iisss', $productId, $languageId, $name, $description, $name);
+                    $stmtDescription->execute();
+                }
+                $stmtDescription->close();
+
+                $stmtStore = $mysqli->prepare("INSERT INTO `{$db_prefix}product_to_store` (`product_id`, `store_id`) VALUES (?, 0)");
+                $stmtLink = $mysqli->prepare("INSERT INTO `{$db_prefix}product_to_category` (`product_id`, `category_id`) VALUES (?, ?)");
+                if (!$stmtStore || !$stmtLink) {
+                    throw new RuntimeException('Preparazione associazioni prodotto fallita.');
+                }
+                $stmtStore->bind_param('i', $productId);
+                $stmtStore->execute();
+                $stmtStore->close();
+                $stmtLink->bind_param('ii', $productId, $categoryId);
+                $stmtLink->execute();
+                $stmtLink->close();
+                $mysqli->commit();
+            } catch (Throwable $error) {
+                $mysqli->rollback();
+                sendJson(['success' => false, 'error' => 'Creazione prodotto non riuscita.'], 500);
+            }
+
+            cartadminInvalidateFileCache(['product', 'category']);
+            sendJson([
+                'success' => true,
+                'product' => [
+                    'product_id' => $productId,
+                    'name' => $name,
+                    'model' => $model,
+                    'sku' => $sku,
+                    'price' => $price,
+                    'quantity' => $quantity,
+                    'minimum' => $minimum,
+                    'category' => $category,
+                    'description' => $description,
+                    'status' => (bool)$status
+                ]
+            ], 201);
+            break;
+
+        case 'delete_product':
+            $productId = isset($_POST['product_id']) ? (int)$_POST['product_id'] : 0;
+            if ($productId <= 0) {
+                sendJson(['success' => false, 'error' => 'ID prodotto non valido.'], 400);
+            }
+
+            $stmtExists = $mysqli->prepare("SELECT `product_id` FROM `{$db_prefix}product` WHERE `product_id` = ? LIMIT 1");
+            if (!$stmtExists) {
+                sendJson(['success' => false, 'error' => 'Impossibile verificare il prodotto.'], 500);
+            }
+            $stmtExists->bind_param('i', $productId);
+            $stmtExists->execute();
+            $existsResult = $stmtExists->get_result();
+            $productExists = $existsResult && $existsResult->num_rows > 0;
+            $stmtExists->close();
+            if (!$productExists) {
+                sendJson(['success' => false, 'error' => 'Prodotto non trovato.'], 404);
+            }
+
+            $mysqli->begin_transaction();
+            try {
+                $stmtVariants = $mysqli->prepare("UPDATE `{$db_prefix}product` SET `master_id` = 0 WHERE `master_id` = ?");
+                if (!$stmtVariants) {
+                    throw new RuntimeException('Preparazione scollegamento varianti fallita.');
+                }
+                $stmtVariants->bind_param('i', $productId);
+                $stmtVariants->execute();
+                $stmtVariants->close();
+                $cleanupTables = [
+                    'product_attribute', 'product_code', 'product_to_category', 'product_description',
+                    'product_discount', 'product_to_download', 'product_filter', 'product_image',
+                    'product_to_layout', 'product_option_value', 'product_option', 'product_report',
+                    'product_reward', 'product_to_store', 'product_subscription', 'review', 'coupon_product'
+                ];
+                foreach ($cleanupTables as $cleanupTable) {
+                    $stmtCleanup = $mysqli->prepare("DELETE FROM `{$db_prefix}{$cleanupTable}` WHERE `product_id` = ?");
+                    if (!$stmtCleanup) {
+                        throw new RuntimeException('Preparazione pulizia prodotto fallita.');
+                    }
+                    $stmtCleanup->bind_param('i', $productId);
+                    $stmtCleanup->execute();
+                    $stmtCleanup->close();
+                }
+                $stmtRelated = $mysqli->prepare("DELETE FROM `{$db_prefix}product_related` WHERE `product_id` = ? OR `related_id` = ?");
+                $stmtSeo = $mysqli->prepare("DELETE FROM `{$db_prefix}seo_url` WHERE `key` = 'product_id' AND `value` = ?");
+                $stmtDelete = $mysqli->prepare("DELETE FROM `{$db_prefix}product` WHERE `product_id` = ?");
+                if (!$stmtRelated || !$stmtSeo || !$stmtDelete) {
+                    throw new RuntimeException('Preparazione eliminazione prodotto fallita.');
+                }
+                $stmtRelated->bind_param('ii', $productId, $productId);
+                $stmtRelated->execute();
+                $stmtRelated->close();
+                $productValue = (string)$productId;
+                $stmtSeo->bind_param('s', $productValue);
+                $stmtSeo->execute();
+                $stmtSeo->close();
+                $stmtDelete->bind_param('i', $productId);
+                $stmtDelete->execute();
+                $deleted = $stmtDelete->affected_rows === 1;
+                $stmtDelete->close();
+                if (!$deleted) {
+                    throw new RuntimeException('Il prodotto non è stato eliminato.');
+                }
+                $mysqli->commit();
+            } catch (Throwable $error) {
+                $mysqli->rollback();
+                sendJson(['success' => false, 'error' => 'Eliminazione prodotto non riuscita.'], 500);
+            }
+
+            cartadminInvalidateFileCache(['product', 'category']);
+            sendJson(['success' => true, 'product_id' => $productId, 'deleted' => true]);
+            break;
+
+        case 'create_category':
+            $name = isset($_POST['name']) && is_string($_POST['name']) ? trim(strip_tags($_POST['name'])) : '';
+            $description = isset($_POST['description']) && is_string($_POST['description']) ? trim(strip_tags($_POST['description'])) : '';
+            $sortOrder = isset($_POST['sort_order']) ? max(0, (int)$_POST['sort_order']) : 0;
+            $status = isset($_POST['status']) && (string)$_POST['status'] === '1' ? 1 : 0;
+            if ($name === '' || mb_strlen($name) > 255 || mb_strlen($description) > 65535) {
+                sendJson(['success' => false, 'error' => 'Dati categoria non validi.'], 400);
+            }
+            $languageIds = cartadminActiveLanguageIds($mysqli, $db_prefix);
+            if ($languageIds === []) {
+                sendJson(['success' => false, 'error' => 'Nessuna lingua OpenCart configurata.'], 409);
+            }
+
+            $mysqli->begin_transaction();
+            try {
+                $stmtCategory = $mysqli->prepare("INSERT INTO `{$db_prefix}category` (`image`, `parent_id`, `sort_order`, `status`) VALUES ('', 0, ?, ?)");
+                if (!$stmtCategory) {
+                    throw new RuntimeException('Preparazione creazione categoria fallita.');
+                }
+                $stmtCategory->bind_param('ii', $sortOrder, $status);
+                $stmtCategory->execute();
+                $categoryId = (int)$mysqli->insert_id;
+                $stmtCategory->close();
+                if ($categoryId <= 0) {
+                    throw new RuntimeException('OpenCart non ha restituito un ID categoria valido.');
+                }
+
+                $stmtDescription = $mysqli->prepare("INSERT INTO `{$db_prefix}category_description` (`category_id`, `language_id`, `name`, `description`, `meta_title`, `meta_description`, `meta_keyword`) VALUES (?, ?, ?, ?, ?, '', '')");
+                if (!$stmtDescription) {
+                    throw new RuntimeException('Preparazione descrizione categoria fallita.');
+                }
+                foreach ($languageIds as $languageId) {
+                    $stmtDescription->bind_param('iisss', $categoryId, $languageId, $name, $description, $name);
+                    $stmtDescription->execute();
+                }
+                $stmtDescription->close();
+
+                $stmtPath = $mysqli->prepare("INSERT INTO `{$db_prefix}category_path` (`category_id`, `path_id`, `level`) VALUES (?, ?, 0)");
+                $stmtStore = $mysqli->prepare("INSERT INTO `{$db_prefix}category_to_store` (`category_id`, `store_id`) VALUES (?, 0)");
+                if (!$stmtPath || !$stmtStore) {
+                    throw new RuntimeException('Preparazione associazioni categoria fallita.');
+                }
+                $stmtPath->bind_param('ii', $categoryId, $categoryId);
+                $stmtPath->execute();
+                $stmtPath->close();
+                $stmtStore->bind_param('i', $categoryId);
+                $stmtStore->execute();
+                $stmtStore->close();
+                $mysqli->commit();
+            } catch (Throwable $error) {
+                $mysqli->rollback();
+                sendJson(['success' => false, 'error' => 'Creazione categoria non riuscita.'], 500);
+            }
+
+            cartadminInvalidateFileCache(['category', 'product']);
+            sendJson(['success' => true, 'category' => ['category_id' => $categoryId, 'name' => $name, 'description' => $description, 'products_count' => 0, 'sort_order' => $sortOrder, 'status' => (bool)$status]], 201);
+            break;
+
+        case 'update_category':
+            $categoryId = isset($_POST['category_id']) ? (int)$_POST['category_id'] : 0;
+            $name = isset($_POST['name']) && is_string($_POST['name']) ? trim(strip_tags($_POST['name'])) : '';
+            $description = isset($_POST['description']) && is_string($_POST['description']) ? trim(strip_tags($_POST['description'])) : '';
+            $sortOrder = isset($_POST['sort_order']) ? max(0, (int)$_POST['sort_order']) : 0;
+            $status = isset($_POST['status']) && (string)$_POST['status'] === '1' ? 1 : 0;
+            if ($categoryId <= 0 || $name === '' || mb_strlen($name) > 255 || mb_strlen($description) > 65535) {
+                sendJson(['success' => false, 'error' => 'Dati categoria non validi.'], 400);
+            }
+            $languageIds = cartadminActiveLanguageIds($mysqli, $db_prefix);
+            if ($languageIds === []) {
+                sendJson(['success' => false, 'error' => 'Nessuna lingua OpenCart configurata.'], 409);
+            }
+
+            $stmtExists = $mysqli->prepare("SELECT `category_id` FROM `{$db_prefix}category` WHERE `category_id` = ? LIMIT 1");
+            if (!$stmtExists) {
+                sendJson(['success' => false, 'error' => 'Impossibile verificare la categoria.'], 500);
+            }
+            $stmtExists->bind_param('i', $categoryId);
+            $stmtExists->execute();
+            $existsResult = $stmtExists->get_result();
+            $categoryExists = $existsResult && $existsResult->num_rows > 0;
+            $stmtExists->close();
+            if (!$categoryExists) {
+                sendJson(['success' => false, 'error' => 'Categoria non trovata.'], 404);
+            }
+
+            $mysqli->begin_transaction();
+            try {
+                $stmtCategory = $mysqli->prepare("UPDATE `{$db_prefix}category` SET `sort_order` = ?, `status` = ? WHERE `category_id` = ?");
+                $stmtDescription = $mysqli->prepare("INSERT INTO `{$db_prefix}category_description` (`category_id`, `language_id`, `name`, `description`, `meta_title`, `meta_description`, `meta_keyword`) VALUES (?, ?, ?, ?, ?, '', '') ON DUPLICATE KEY UPDATE `name` = VALUES(`name`), `description` = VALUES(`description`), `meta_title` = VALUES(`meta_title`)");
+                if (!$stmtCategory || !$stmtDescription) {
+                    throw new RuntimeException('Preparazione aggiornamento categoria fallita.');
+                }
+                $stmtCategory->bind_param('iii', $sortOrder, $status, $categoryId);
+                $stmtCategory->execute();
+                $stmtCategory->close();
+                foreach ($languageIds as $languageId) {
+                    $stmtDescription->bind_param('iisss', $categoryId, $languageId, $name, $description, $name);
+                    $stmtDescription->execute();
+                }
+                $stmtDescription->close();
+                $mysqli->commit();
+            } catch (Throwable $error) {
+                $mysqli->rollback();
+                sendJson(['success' => false, 'error' => 'Aggiornamento categoria non riuscito.'], 500);
+            }
+
+            cartadminInvalidateFileCache(['category', 'product']);
+            sendJson(['success' => true, 'category_id' => $categoryId, 'status' => (bool)$status]);
+            break;
+
+        case 'delete_category':
+            $categoryId = isset($_POST['category_id']) ? (int)$_POST['category_id'] : 0;
+            if ($categoryId <= 0) {
+                sendJson(['success' => false, 'error' => 'ID categoria non valido.'], 400);
+            }
+            $stmtExists = $mysqli->prepare("SELECT `category_id` FROM `{$db_prefix}category` WHERE `category_id` = ? LIMIT 1");
+            $stmtChildren = $mysqli->prepare("SELECT COUNT(*) AS total FROM `{$db_prefix}category` WHERE `parent_id` = ?");
+            if (!$stmtExists || !$stmtChildren) {
+                sendJson(['success' => false, 'error' => 'Impossibile verificare la categoria.'], 500);
+            }
+            $stmtExists->bind_param('i', $categoryId);
+            $stmtExists->execute();
+            $existsResult = $stmtExists->get_result();
+            $categoryExists = $existsResult && $existsResult->num_rows > 0;
+            $stmtExists->close();
+            if (!$categoryExists) {
+                sendJson(['success' => false, 'error' => 'Categoria non trovata.'], 404);
+            }
+            $stmtChildren->bind_param('i', $categoryId);
+            $stmtChildren->execute();
+            $childrenResult = $stmtChildren->get_result();
+            $childrenRow = $childrenResult ? $childrenResult->fetch_assoc() : null;
+            $stmtChildren->close();
+            if ($childrenRow && (int)$childrenRow['total'] > 0) {
+                sendJson(['success' => false, 'error' => 'La categoria contiene sottocategorie. Rimuoverle o spostarle dal pannello OpenCart prima di eliminarla.'], 409);
+            }
+
+            $categoryPath = (string)$categoryId;
+            $stmtPathValue = $mysqli->prepare("SELECT GROUP_CONCAT(`path_id` ORDER BY `level` SEPARATOR '_') AS path_value FROM `{$db_prefix}category_path` WHERE `category_id` = ?");
+            if (!$stmtPathValue) {
+                sendJson(['success' => false, 'error' => 'Impossibile verificare il percorso della categoria.'], 500);
+            }
+            $stmtPathValue->bind_param('i', $categoryId);
+            $stmtPathValue->execute();
+            $pathResult = $stmtPathValue->get_result();
+            if ($pathResult && $pathRow = $pathResult->fetch_assoc()) {
+                $resolvedPath = (string)($pathRow['path_value'] ?? '');
+                if ($resolvedPath !== '') {
+                    $categoryPath = $resolvedPath;
+                }
+            }
+            $stmtPathValue->close();
+
+            $mysqli->begin_transaction();
+            try {
+                $cleanupTables = ['category_description', 'category_filter', 'category_to_store', 'category_to_layout', 'product_to_category', 'coupon_category'];
+                foreach ($cleanupTables as $cleanupTable) {
+                    $stmtCleanup = $mysqli->prepare("DELETE FROM `{$db_prefix}{$cleanupTable}` WHERE `category_id` = ?");
+                    if (!$stmtCleanup) {
+                        throw new RuntimeException('Preparazione pulizia categoria fallita.');
+                    }
+                    $stmtCleanup->bind_param('i', $categoryId);
+                    $stmtCleanup->execute();
+                    $stmtCleanup->close();
+                }
+                $stmtPath = $mysqli->prepare("DELETE FROM `{$db_prefix}category_path` WHERE `category_id` = ? OR `path_id` = ?");
+                $stmtSeo = $mysqli->prepare("DELETE FROM `{$db_prefix}seo_url` WHERE `key` = 'path' AND `value` = ?");
+                $stmtDelete = $mysqli->prepare("DELETE FROM `{$db_prefix}category` WHERE `category_id` = ?");
+                if (!$stmtPath || !$stmtSeo || !$stmtDelete) {
+                    throw new RuntimeException('Preparazione eliminazione categoria fallita.');
+                }
+                $stmtPath->bind_param('ii', $categoryId, $categoryId);
+                $stmtPath->execute();
+                $stmtPath->close();
+                $stmtSeo->bind_param('s', $categoryPath);
+                $stmtSeo->execute();
+                $stmtSeo->close();
+                $stmtDelete->bind_param('i', $categoryId);
+                $stmtDelete->execute();
+                $deleted = $stmtDelete->affected_rows === 1;
+                $stmtDelete->close();
+                if (!$deleted) {
+                    throw new RuntimeException('La categoria non è stata eliminata.');
+                }
+                $mysqli->commit();
+            } catch (Throwable $error) {
+                $mysqli->rollback();
+                sendJson(['success' => false, 'error' => 'Eliminazione categoria non riuscita.'], 500);
+            }
+
+            cartadminInvalidateFileCache(['category', 'product']);
+            sendJson(['success' => true, 'category_id' => $categoryId, 'deleted' => true]);
+            break;
+
         case 'update_stock':
             $productId = isset($_POST['product_id']) ? (int)$_POST['product_id'] : 0;
             $quantity = isset($_POST['quantity']) ? max(0, (int)$_POST['quantity']) : 0;
@@ -799,6 +1294,7 @@ try {
             $category = isset($_POST['category']) && is_string($_POST['category']) ? trim(strip_tags($_POST['category'])) : '';
             $price = isset($_POST['price']) && is_numeric($_POST['price']) ? max(0.0, (float)$_POST['price']) : -1.0;
             $quantity = isset($_POST['quantity']) ? max(0, (int)$_POST['quantity']) : -1;
+            $minimum = isset($_POST['minimum']) ? max(1, (int)$_POST['minimum']) : 1;
             $status = isset($_POST['status']) && (string)$_POST['status'] === '1' ? 1 : 0;
 
             if ($productId <= 0 || $name === '' || mb_strlen($name) > 255 || $model === '' || mb_strlen($model) > 64 || mb_strlen($sku) > 64 || $price < 0 || $quantity < 0 || mb_strlen($description) > 65535 || mb_strlen($category) > 255) {
@@ -818,30 +1314,38 @@ try {
                 sendJson(['success' => false, 'error' => 'Prodotto non trovato.'], 404);
             }
 
+            $languageIds = cartadminActiveLanguageIds($mysqli, $db_prefix);
+            if ($languageIds === []) {
+                sendJson(['success' => false, 'error' => 'Nessuna lingua OpenCart configurata.'], 409);
+            }
+            $primaryLanguageId = $languageIds[0];
+
             $mysqli->begin_transaction();
             try {
-                $stmtProduct = $mysqli->prepare("UPDATE `{$db_prefix}product` SET `model` = ?, `sku` = ?, `quantity` = ?, `price` = ?, `status` = ?, `date_modified` = NOW() WHERE `product_id` = ?");
+                $stmtProduct = $mysqli->prepare("UPDATE `{$db_prefix}product` SET `model` = ?, `sku` = ?, `quantity` = ?, `minimum` = ?, `price` = ?, `status` = ?, `date_modified` = NOW() WHERE `product_id` = ?");
                 if (!$stmtProduct) {
                     throw new RuntimeException('Preparazione aggiornamento prodotto fallita.');
                 }
-                $stmtProduct->bind_param('ssidii', $model, $sku, $quantity, $price, $status, $productId);
+                $stmtProduct->bind_param('ssiidii', $model, $sku, $quantity, $minimum, $price, $status, $productId);
                 $stmtProduct->execute();
                 $stmtProduct->close();
 
-                $stmtDescription = $mysqli->prepare("UPDATE `{$db_prefix}product_description` SET `name` = ?, `description` = ? WHERE `product_id` = ? AND `language_id` = 1");
+                $stmtDescription = $mysqli->prepare("INSERT INTO `{$db_prefix}product_description` (`product_id`, `language_id`, `name`, `description`, `tag`, `meta_title`, `meta_description`, `meta_keyword`) VALUES (?, ?, ?, ?, '', ?, '', '') ON DUPLICATE KEY UPDATE `name` = VALUES(`name`), `description` = VALUES(`description`), `meta_title` = VALUES(`meta_title`)");
                 if (!$stmtDescription) {
                     throw new RuntimeException('Preparazione descrizione prodotto fallita.');
                 }
-                $stmtDescription->bind_param('ssi', $name, $description, $productId);
-                $stmtDescription->execute();
+                foreach ($languageIds as $languageId) {
+                    $stmtDescription->bind_param('iisss', $productId, $languageId, $name, $description, $name);
+                    $stmtDescription->execute();
+                }
                 $stmtDescription->close();
 
                 if ($category !== '') {
-                    $stmtCategory = $mysqli->prepare("SELECT `category_id` FROM `{$db_prefix}category_description` WHERE `name` = ? AND `language_id` = 1 LIMIT 1");
+                    $stmtCategory = $mysqli->prepare("SELECT `category_id` FROM `{$db_prefix}category_description` WHERE `name` = ? AND `language_id` = ? LIMIT 1");
                     if (!$stmtCategory) {
                         throw new RuntimeException('Preparazione categoria fallita.');
                     }
-                    $stmtCategory->bind_param('s', $category);
+                    $stmtCategory->bind_param('si', $category, $primaryLanguageId);
                     $stmtCategory->execute();
                     $categoryResult = $stmtCategory->get_result();
                     $categoryRow = $categoryResult ? $categoryResult->fetch_assoc() : null;
@@ -850,10 +1354,14 @@ try {
                         throw new RuntimeException('La categoria selezionata non esiste nello store.');
                     }
                     $categoryId = (int)$categoryRow['category_id'];
-                    $stmtInsertLink = $mysqli->prepare("INSERT IGNORE INTO `{$db_prefix}product_to_category` (`product_id`, `category_id`) VALUES (?, ?)");
-                    if (!$stmtInsertLink) {
+                    $stmtDeleteLinks = $mysqli->prepare("DELETE FROM `{$db_prefix}product_to_category` WHERE `product_id` = ?");
+                    $stmtInsertLink = $mysqli->prepare("INSERT INTO `{$db_prefix}product_to_category` (`product_id`, `category_id`) VALUES (?, ?)");
+                    if (!$stmtDeleteLinks || !$stmtInsertLink) {
                         throw new RuntimeException('Aggiornamento associazione categoria fallito.');
                     }
+                    $stmtDeleteLinks->bind_param('i', $productId);
+                    $stmtDeleteLinks->execute();
+                    $stmtDeleteLinks->close();
                     $stmtInsertLink->bind_param('ii', $productId, $categoryId);
                     $stmtInsertLink->execute();
                     $stmtInsertLink->close();
@@ -862,8 +1370,10 @@ try {
                 $mysqli->commit();
             } catch (Throwable $error) {
                 $mysqli->rollback();
-                sendJson(['success' => false, 'error' => $error->getMessage()], 500);
+                sendJson(['success' => false, 'error' => 'Aggiornamento prodotto non riuscito.'], 500);
             }
+
+            cartadminInvalidateFileCache(['product', 'category']);
 
             sendJson([
                 'success' => true,

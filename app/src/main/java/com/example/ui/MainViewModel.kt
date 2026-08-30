@@ -379,6 +379,28 @@ class MainViewModel(
         }
     }
 
+    fun requestSensitiveAdminCommand(module: AdminModule, recordId: String, operation: String) {
+        val store = uiState.value.currentStore ?: return
+        if (module != AdminModule.CUSTOMER_APPROVALS && module != AdminModule.GDPR) return
+        viewModelScope.launch(Dispatchers.IO) {
+            apiClient.enqueueAdminCommand(
+                baseUrl = store.url,
+                apiKey = store.apiKey,
+                username = store.apiUsername,
+                module = module,
+                recordId = recordId,
+                operation = operation
+            ).onSuccess {
+                loadAdminModule(module, forceRefresh = true)
+            }.onFailure { error ->
+                val current = _adminModules.value[module] ?: AdminModuleSnapshot(module = module)
+                _adminModules.value = _adminModules.value + (
+                    module to current.copy(message = error.localizedMessage ?: "Invio al pannello OpenCart non riuscito.")
+                )
+            }
+        }
+    }
+
     fun addAntispamKeyword(keyword: String) {
         val cleanKeyword = keyword.trim()
         val store = uiState.value.currentStore ?: return
@@ -517,6 +539,7 @@ class MainViewModel(
                             price = prod.price,
                             specialPrice = prod.specialPrice,
                             quantity = prod.quantity,
+                            minQuantityAlert = prod.minQuantityAlert,
                             category = prod.category,
                             description = prod.description,
                             status = prod.status
@@ -657,6 +680,7 @@ class MainViewModel(
                             price = prod.price,
                             specialPrice = prod.specialPrice,
                             quantity = prod.quantity,
+                            minQuantityAlert = prod.minQuantityAlert,
                             category = prod.category,
                             description = prod.description,
                             status = prod.status
@@ -916,11 +940,39 @@ class MainViewModel(
         price: Double,
         specialPrice: Double? = null,
         quantity: Int,
+        minQuantityAlert: Int,
         category: String,
-        description: String = ""
+        description: String = "",
+        status: Boolean = true
     ) {
         viewModelScope.launch(Dispatchers.IO) {
-            showOperationMessage("Creazione prodotto non disponibile: il bridge non espone ancora un endpoint sicuro di creazione.")
+            val store = uiState.value.currentStore
+            if (store == null || store.url.isBlank()) {
+                showOperationMessage("Prodotto non creato: nessun negozio configurato.")
+                return@launch
+            }
+            val draft = Product(
+                id = "",
+                name = name.trim(),
+                model = model.trim(),
+                sku = sku.trim(),
+                price = price.coerceAtLeast(0.0),
+                specialPrice = null,
+                quantity = quantity.coerceAtLeast(0),
+                minQuantityAlert = minQuantityAlert.coerceAtLeast(1),
+                category = category.trim(),
+                description = description.trim(),
+                status = status
+            )
+            val result = apiClient.createProduct(store.url, store.apiKey, draft, store.apiUsername)
+            val created = result.getOrNull()
+            if (created != null) {
+                repository.insertProduct(created)
+                offlineCatalogRepository.saveProduct(created, store.id)
+                showOperationMessage("Prodotto “${created.name}” creato sullo store.")
+            } else {
+                showOperationMessage("Prodotto non creato: ${result.exceptionOrNull()?.message ?: "risposta rifiutata dal bridge"}.")
+            }
         }
     }
 
@@ -944,7 +996,19 @@ class MainViewModel(
 
     fun deleteProduct(productId: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            showOperationMessage("Eliminazione prodotto non disponibile: nessun dato è stato rimosso dallo store.")
+            val store = uiState.value.currentStore
+            if (store == null || store.url.isBlank()) {
+                showOperationMessage("Prodotto non eliminato: nessun negozio configurato.")
+                return@launch
+            }
+            val result = apiClient.deleteProduct(store.url, store.apiKey, productId, store.apiUsername)
+            if (result.getOrDefault(false)) {
+                repository.deleteProduct(productId)
+                offlineCatalogRepository.deleteProduct(productId)
+                showOperationMessage("Prodotto eliminato dallo store.")
+            } else {
+                showOperationMessage("Prodotto non eliminato: ${result.exceptionOrNull()?.message ?: "risposta rifiutata dal bridge"}.")
+            }
         }
     }
 
@@ -955,26 +1019,77 @@ class MainViewModel(
 
     fun addNewCategory(name: String, description: String = "", sortOrder: Int = 0, status: Boolean = true) {
         viewModelScope.launch(Dispatchers.IO) {
-            showOperationMessage("Creazione categoria non disponibile: nessun dato è stato aggiunto allo store.")
+            val store = uiState.value.currentStore
+            if (store == null || store.url.isBlank()) {
+                showOperationMessage("Categoria non creata: nessun negozio configurato.")
+                return@launch
+            }
+            val draft = Category(
+                id = "",
+                name = name.trim(),
+                description = description.trim(),
+                productsCount = 0,
+                status = status,
+                sortOrder = sortOrder.coerceAtLeast(0)
+            )
+            val result = apiClient.createCategory(store.url, store.apiKey, draft, store.apiUsername)
+            val created = result.getOrNull()
+            if (created != null) {
+                repository.insertCategory(created)
+                offlineCatalogRepository.saveCategory(created, store.id)
+                showOperationMessage("Categoria “${created.name}” creata sullo store.")
+            } else {
+                showOperationMessage("Categoria non creata: ${result.exceptionOrNull()?.message ?: "risposta rifiutata dal bridge"}.")
+            }
         }
     }
 
     fun updateCategory(categoryId: String, name: String, description: String, sortOrder: Int, status: Boolean) {
         viewModelScope.launch(Dispatchers.IO) {
-            showOperationMessage("Modifica categoria non disponibile: nessun dato è stato cambiato sullo store.")
+            val store = uiState.value.currentStore
+            val current = uiState.value.categories.find { it.id == categoryId }
+            if (store == null || store.url.isBlank() || current == null) {
+                showOperationMessage("Categoria non aggiornata: negozio o categoria non disponibili.")
+                return@launch
+            }
+            val updated = current.copy(
+                name = name.trim(),
+                description = description.trim(),
+                sortOrder = sortOrder.coerceAtLeast(0),
+                status = status
+            )
+            val result = apiClient.updateCategory(store.url, store.apiKey, updated, store.apiUsername)
+            if (result.getOrDefault(false)) {
+                repository.updateCategory(updated.id, updated.name, updated.description, updated.sortOrder, updated.status)
+                offlineCatalogRepository.saveCategory(updated, store.id)
+                showOperationMessage("Categoria “${updated.name}” aggiornata sullo store.")
+            } else {
+                showOperationMessage("Categoria non aggiornata: ${result.exceptionOrNull()?.message ?: "risposta rifiutata dal bridge"}.")
+            }
         }
     }
 
     fun deleteCategory(categoryId: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            showOperationMessage("Eliminazione categoria non disponibile: nessun dato è stato rimosso dallo store.")
+            val store = uiState.value.currentStore
+            if (store == null || store.url.isBlank()) {
+                showOperationMessage("Categoria non eliminata: nessun negozio configurato.")
+                return@launch
+            }
+            val result = apiClient.deleteCategory(store.url, store.apiKey, categoryId, store.apiUsername)
+            if (result.getOrDefault(false)) {
+                repository.deleteCategory(categoryId)
+                offlineCatalogRepository.deleteCategory(categoryId)
+                showOperationMessage("Categoria eliminata dallo store; i prodotti restano disponibili senza questa associazione.")
+            } else {
+                showOperationMessage("Categoria non eliminata: ${result.exceptionOrNull()?.message ?: "risposta rifiutata dal bridge"}.")
+            }
         }
     }
 
     fun toggleCategoryStatus(categoryId: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            showOperationMessage("Cambio stato categoria non disponibile: nessun dato è stato cambiato sullo store.")
-        }
+        val category = uiState.value.categories.find { it.id == categoryId } ?: return
+        updateCategory(category.id, category.name, category.description, category.sortOrder, !category.status)
     }
 
     private suspend fun showOperationMessage(message: String) {

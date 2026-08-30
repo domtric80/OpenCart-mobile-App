@@ -61,7 +61,7 @@ class Navigation2InstrumentedTest {
             listOf("traffic", "cms", "config").forEach {
                 composeRule.onNodeWithTag("menu_$it").assertExists()
             }
-            composeRule.onNodeWithText("v2.0.1").assertExists()
+            composeRule.onNodeWithText("v${BuildConfig.VERSION_NAME}").assertExists()
             composeRule.onNodeWithTag("menu_cms").performClick()
             listOf("articles", "topics", "comments", "antispam").forEach {
                 composeRule.onNodeWithTag("menu_$it").assertExists()

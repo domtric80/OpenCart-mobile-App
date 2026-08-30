@@ -571,7 +571,7 @@ fun CatalogScreen(
             onDismissRequest = { categoryToDelete = null },
             icon = { Icon(Icons.Default.Delete, contentDescription = null, tint = AlertRed) },
             title = { Text("Eliminare Categoria?") },
-            text = { Text("Sei sicuro di voler eliminare la categoria '${cat.name}'? I prodotti associati (${cat.productsCount}) verranno spostati nella categoria 'Generale'.") },
+            text = { Text("Sei sicuro di voler eliminare la categoria '${cat.name}'? L'associazione verrà rimossa, ma i prodotti (${cat.productsCount}) resteranno nello store. Le categorie con sottocategorie devono essere gestite dal pannello OpenCart.") },
             confirmButton = {
                 Button(
                     onClick = {
