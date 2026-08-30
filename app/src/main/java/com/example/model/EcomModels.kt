@@ -19,10 +19,10 @@ data class Store(
     val isConnected: Boolean = true,
     val connectionStatus: ConnectionStatus = ConnectionStatus.CONNECTED,
     val lastSyncTime: String = "Pochi secondi fa",
-    val pendingOrdersCount: Int = 24,
-    val stockAlertsCount: Int = 12,
-    val todayRevenue: Double = 2840.50,
-    val revenueGrowthPercent: Double = 12.4
+    val pendingOrdersCount: Int = 0,
+    val stockAlertsCount: Int = 0,
+    val todayRevenue: Double = 0.0,
+    val revenueGrowthPercent: Double = 0.0
 )
 
 data class ActivityItem(

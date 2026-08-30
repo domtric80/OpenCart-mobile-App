@@ -7,6 +7,8 @@ import org.junit.Test
 
 class LiveDataIntegrityRegressionTest {
     private val source = File("src/main/java/com/example/ui/MainViewModel.kt").readText()
+    private val dashboardSource = File("src/main/java/com/example/ui/screens/DashboardHomeScreen.kt").readText()
+    private val modelSource = File("src/main/java/com/example/model/EcomModels.kt").readText()
 
     @Test
     fun productionRuntimeDoesNotInjectDemoSubscriptionsOrReturns() {
@@ -23,5 +25,15 @@ class LiveDataIntegrityRegressionTest {
         assertTrue(source.contains("repository.setReturns(liveReturns)"))
         assertTrue(source.contains("db.subscriptionDao().clearAllSubscriptions()"))
         assertTrue(source.contains("db.orderReturnDao().clearAllReturns()"))
+    }
+
+    @Test
+    fun emptyStoreStateDoesNotShowDemoSalesOrStockValues() {
+        assertTrue(dashboardSource.contains("currentStore?.stockAlertsCount ?: 0"))
+        assertFalse(dashboardSource.contains("currentStore?.stockAlertsCount ?: 12"))
+        assertTrue(modelSource.contains("val pendingOrdersCount: Int = 0"))
+        assertTrue(modelSource.contains("val stockAlertsCount: Int = 0"))
+        assertTrue(modelSource.contains("val todayRevenue: Double = 0.0"))
+        assertTrue(modelSource.contains("val revenueGrowthPercent: Double = 0.0"))
     }
 }

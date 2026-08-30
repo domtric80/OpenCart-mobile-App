@@ -239,7 +239,8 @@ fun ConfigScreen(
                                 color = if (isSuccess) TrendGreen else AlertRed
                             )
                             Text(
-                                text = "${currentStore?.url} • ${currentStore?.version}",
+                                text = currentStore?.let { "${it.url} • ${it.version}" }
+                                    ?: "Configura il primo negozio",
                                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
                                 color = if (isSuccess) TrendGreen else AlertRed
                             )
@@ -596,14 +597,14 @@ fun ConfigScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(14.dp))
-                                .background(ThemePrimaryContainer)
+                                .background(MaterialTheme.colorScheme.primaryContainer)
                                 .padding(12.dp)
                                 .testTag("first_store_help")
                         ) {
                             Text(
                                 text = "Nessun negozio configurato. Compila questi dati e premi Aggiungi negozio: il profilo verrà creato e salvato sul dispositivo.",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
                     }
@@ -632,7 +633,7 @@ fun ConfigScreen(
                             Text(
                                 text = storeVersion,
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = ThemePrimary
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }

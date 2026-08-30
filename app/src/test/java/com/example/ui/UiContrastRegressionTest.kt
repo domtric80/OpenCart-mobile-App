@@ -27,6 +27,32 @@ class UiContrastRegressionTest {
     }
 
     @Test
+    fun configFirstStoreHelpAndVersionBadgeUsePairedThemeColors() {
+        val configSource = File("src/main/java/com/example/ui/screens/ConfigScreen.kt").readText()
+        val firstStoreHelp = configSource
+            .substringAfter("if (currentStore == null)")
+            .substringBefore("OutlinedTextField(")
+
+        assertTrue(
+            firstStoreHelp.contains(
+                ".background(MaterialTheme.colorScheme.primaryContainer)"
+            )
+        )
+        assertTrue(
+            firstStoreHelp.contains(
+                "color = MaterialTheme.colorScheme.onPrimaryContainer"
+            )
+        )
+        assertTrue(
+            firstStoreHelp.contains(
+                "color = MaterialTheme.colorScheme.onSurfaceVariant"
+            )
+        )
+        assertTrue(configSource.contains("?: \"Configura il primo negozio\""))
+        assertFalse(configSource.contains("\${currentStore?.url} • \${currentStore?.version}"))
+    }
+
+    @Test
     fun fixedDiagnosticPalettesMeetNormalTextContrast() {
         assertTrue(contrastRatio(0xFF3730A3, 0xFFFFFFFF) >= 4.5)
         assertTrue(contrastRatio(0xFFDCFCE7, 0xFF15803D) >= 4.5)
