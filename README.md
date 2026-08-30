@@ -1,124 +1,144 @@
-# 🛒 CartAdmin — E-Commerce Store Admin & Analytics for Android
+# CartAdmin 2.0.0
 
-<p align="center">
-  <a href="https://github.com"><img src="https://img.shields.io/badge/Platform-Android%207.0+-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android" /></a>
-  <a href="https://kotlinlang.org"><img src="https://img.shields.io/badge/Kotlin-2.0+-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white" alt="Kotlin" /></a>
-  <a href="https://developer.android.com/jetpack/compose"><img src="https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white" alt="Jetpack Compose" /></a>
-  <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GNU%20GPL%20v3-blue.svg?style=for-the-badge" alt="License: GNU GPL v3" /></a>
-  <a href="https://github.com"><img src="https://img.shields.io/badge/Version-v1.2.3-brightgreen?style=for-the-badge" alt="Version" /></a>
-</p>
+CartAdmin è un'app Android per consultare e amministrare un negozio OpenCart da smartphone. Il progetto è sviluppato in Kotlin con Jetpack Compose e include il bridge CartAdmin per OpenCart 4.1.x. La release stabile corrente è la v2.0.0.
 
-<p align="center">
-  <img src="app/src/main/res/drawable/img_cartadmin_preview_1786997536667.jpg" alt="CartAdmin App Banner" width="85%" />
-</p>
+## Download
 
----
+La release stabile è disponibile in [GitHub Releases](https://github.com/domtric80/OpenCart-mobile-App/releases/latest).
 
-## 📱 About CartAdmin
+| Componente | File | Compatibilità confermata |
+| --- | --- | --- |
+| App Android | `CartAdmin-v2.0.0.apk` | Android 7.0 o successivo, API 24–36 |
+| Bridge OpenCart | `cartadmin.ocmod.zip` | OpenCart 4.1.x |
 
-**CartAdmin** è l'**App Ufficiale di OpenCart ITALIA** ([www.opencartitalia.it](https://www.opencartitalia.it)) sviluppata da **SOLO SOLUZIONI** ([www.solosoluzioni.it](https://www.solosoluzioni.it)).
+Il bridge incluso non dichiara compatibilità con OpenCart 3.x. Un eventuale pacchetto per quel ramo dovrà essere pubblicato e verificato separatamente.
 
-Un'applicazione Android moderna e ad alte prestazioni creata per i gestori e gli amministratori di negozi e-commerce OpenCart. Sviluppata interamente con **Jetpack Compose** e **Material Design 3**, CartAdmin offre metriche di vendita in tempo reale, gestione ordini, catalogo prodotti e notifiche push direttamente sul tuo smartphone.
+### Novità della 2.0.0
 
----
+- barra inferiore ridotta a cinque voci: Home, Vendite, Catalogo, Clienti e Altro;
+- sottomenu Catalogo con Prodotti, Categorie, Piani di abbonamento, Pagine e Recensioni;
+- nuovo menu CMS con Articoli, Argomenti, Commenti e Antispam;
+- nuovo menu Clienti con Clienti, Approvazione clienti e GDPR;
+- Traffic, CMS e Configurazione raggruppati sotto Altro;
+- Audit e Licenza spostati nella schermata Configurazione;
+- elenchi amministrativi letti in tempo reale dalle tabelle native OpenCart, senza record dimostrativi;
+- attivazione e disattivazione remota verificata per i moduli che espongono uno stato semplice;
+- compatibilità esplicita: se una tabella non esiste nella versione installata, l'app mostra “funzione non disponibile” invece di dati fittizi.
 
-## 📥 Download Release & Compatibilità Hardware
+Approvazioni clienti e richieste GDPR sono inizialmente in sola lettura: approvazione, rifiuto, esportazione o cancellazione richiedono il flusso completo OpenCart con notifiche ed eventi e non vengono simulati con una semplice modifica al database.
 
-Tutti i rilasci compilati dell'**App Android** e del **Plugin per OpenCart** sono scaricabili direttamente dalla sezione [GitHub Releases](../../releases).
+Per usare i nuovi moduli, app Android e bridge OpenCart devono essere aggiornati entrambi alla v2.0.0.
 
-### 📦 File Disponibili per il Download:
+### Novità della 1.2.8
 
-| Componente | File Scaricabile | Compatibilità | Note di Installazione |
-| :--- | :--- | :--- | :--- |
-| 📱 **App Android** (Latest) | [`CartAdmin-v1.2.3.apk`](../../releases/tag/v1.2.3) | Android 7.0 (API 24) o superiore | Scarica sul telefono/tablet e tocca Installa |
-| 🔌 **Plugin OpenCart** (Latest) | [`cartadmin-opencart-bridge-v1.2.3.ocmod.zip`](../../releases/tag/v1.2.3) | OpenCart 2.x, 3.x, 4.x | Carica in *Estensioni > Programma di Installazione* (OCMOD) |
+- telemetria visitatori reale letta dalla tabella nativa OpenCart `customer_online`, con aggiornamento automatico ogni 30 secondi;
+- diagnostica esplicita quando il tracciamento **Clienti online** è disabilitato o il bridge non è aggiornato;
+- modifica remota verificata di nome, descrizione, modello, SKU, prezzo, quantità, stato e categoria esistente dei prodotti;
+- aggiornamenti locali applicati soltanto dopo la conferma positiva del bridge;
+- eliminati i messaggi di successo per operazioni che non hanno ancora un endpoint remoto sicuro;
+- versione e build installate visibili nella schermata Config;
+- mantenute le correzioni 1.2.7 per abbonamenti e resi senza dati dimostrativi.
 
----
+La creazione e l'eliminazione dei prodotti e il CRUD delle categorie restano temporaneamente non disponibili dall'app: CartAdmin non modifica più soltanto la cache fingendo un aggiornamento dello store. Le offerte e le promozioni programmate continuano a essere gestite dal pannello OpenCart.
 
-### 🕒 Cronologia Release
+## Prima configurazione
 
-| Versione Release | App Android (`.apk`) | Plugin OpenCart (`.ocmod.zip`) | Stato |
-| :--- | :--- | :--- | :--- |
-| **v1.2.3** (Latest) | [`CartAdmin-v1.2.3.apk`](../../releases/tag/v1.2.3) | [`cartadmin-opencart-bridge-v1.2.3.ocmod.zip`](../../releases/tag/v1.2.3) | 🟢 Stabile (Risoluzione sincronizzazione reale catalogo OpenCart, supporto chiavi universali, parsing polimorfo ID/HTML) |
-| **v1.2.2** | [`CartAdmin-v1.2.2.apk`](../../releases/tag/v1.2.2) | [`cartadmin-opencart-bridge-v1.2.2.ocmod.zip`](../../releases/tag/v1.2.2) | ⚪ Precedente (Persistenza Room StoreProfile, eliminazione dati demo) |
-| **v1.2.1** | [`CartAdmin-v1.2.1.apk`](../../releases/tag/v1.2.1) | [`cartadmin-opencart-bridge-v1.2.1.ocmod.zip`](../../releases/tag/v1.2.1) | ⚪ Precedente (Risoluzione Token FCM Push, Sicurezza Bancaria, Timeout 5m) |
-| **v1.2.0** | [`CartAdmin-v1.2.0.apk`](../../releases/tag/v1.2.0) | — | ⚪ Precedente |
-| **v1.1.3** | [`CartAdmin-v1.1.3.apk`](../../releases/tag/v1.1.3) | — | ⚪ Precedente |
-| **v1.1.2** | [`CartAdmin-v1.1.2.apk`](../../releases/tag/v1.1.2) | — | ⚪ Precedente |
-| **v1.1.1** | [`CartAdmin-v1.1.1.apk`](../../releases/tag/v1.1.1) | — | ⚪ Precedente |
-| **v1.1.0** | [`CartAdmin-v1.1.0.apk`](../../releases/tag/v1.1.0) | — | ⚪ Precedente |
+### 1. Installa il bridge in OpenCart
 
-### 📋 Requisiti di Sistema & Dispositivi
-- **Sistema Operativo**: Android 7.0 Nougat (API 24) fino ad Android 15 (API 35/36)
-- **Fattori di forma supportati**: Smartphone, Foldables, Tablet e ambienti ChromeOS (layout responsive con supporto Window Size Classes)
-- **OpenCart Supportati**: OpenCart 3.0.x, OpenCart 4.0.x (tramite modulo API `cartadmin_api.php`)
+1. Scarica `cartadmin.ocmod.zip` dalla release.
+2. Nel pannello OpenCart apri **Estensioni > Installer** e carica lo ZIP.
+3. Apri **Estensioni > Estensioni > Moduli** e installa **CartAdmin Bridge**.
+4. Apri il modulo e premi **Genera token** oppure **Ruota token**.
+5. Copia subito il token: OpenCart mostra il valore completo una sola volta e conserva nel database soltanto il suo hash non reversibile.
 
----
+### 2. Aggiungi il primo negozio nell'app
 
-## ✨ Funzionalità Principali
+1. Apri **Config**. Se non esistono profili, la schermata mostra l'avviso **Nessun negozio configurato**.
+2. Inserisci il nome del negozio e l'URL HTTPS, senza il percorso del file API. Esempio: `https://negozio.example`.
+3. Inserisci un nome operatore per l'audit e incolla il token generato da OpenCart.
+4. Seleziona la versione OpenCart e premi **Aggiungi**. Questo crea e salva il primo profilo; non è necessario passare prima dal selettore dei negozi.
+5. Premi **Test API**, quindi **Sincronizza dati adesso**.
 
-- 📊 **Metriche & Statistiche di Vendita in Tempo Reale**: Monitora fatturato giornaliero, ordini recenti, nuovi clienti e grafici di trend.
-- 📦 **Gestione Ciclo di Vita Ordini**: Filtra per stato (In attesa, In lavorazione, Spedito, Completato, Rimborsato), visualizza il dettaglio dei prodotti acquistati e aggiorna gli stati in tempo reale.
-- 🏷️ **Catalogo Prodotti & Allarmi Stock**: Gestione rapida dell'inventario, prezzi, quantità in magazzino e avvisi automatici sottoscorta.
-- 📶 **Resilienza Offline (Room Database)**: I dati del negozio vengono salvati localmente per una consultazione istantanea anche in assenza di rete.
-- 🔔 **Notifiche Push Istantanee**: Supporto Firebase Cloud Messaging per la ricezione immediata dei nuovi ordini.
-- 🎨 **Interfaccia Material Design 3**: Dynamic theming, tipografia ad alto contrasto e transizioni fluide.
+Dopo il salvataggio il campo token torna vuoto e il valore non viene più mostrato. Per aggiornare gli altri dati lascia il campo vuoto: CartAdmin mantiene il token protetto. Inserisci un nuovo valore solo dopo aver ruotato il token dal pannello OpenCart.
 
----
+### 3. Abilita la telemetria visitatori
 
-## 💖 Supporto & Sponsorizzazione
+1. Nel pannello OpenCart apri **Sistema > Impostazioni** e modifica il negozio.
+2. Nella scheda **Opzioni** abilita **Clienti online** e imposta il tempo di inattività desiderato.
+3. Installa il bridge della stessa release dell'app e riapri **Traffic**.
 
-Se utilizzi CartAdmin per gestire il tuo business e desideri supportare lo sviluppo continuo del progetto o richiedere personalizzazioni dedicate:
+OpenCart registra soltanto visitatori attivi, URL, provenienza e ultimo aggiornamento. Non registra nella tabella `customer_online` user agent, geolocalizzazione, durata completa della sessione o bounce rate; CartAdmin lascia queste metriche non disponibili invece di generare valori dimostrativi.
 
-<p align="center">
-  <a href="https://github.com/sponsors/domtric80"><img src="https://img.shields.io/badge/Sponsor-%E2%9D%A4-ea4aaa?style=for-the-badge&logo=github&logoColor=white" alt="Sponsor domtric80 on GitHub" /></a>
-  &nbsp;&nbsp;
-  <a href="https://www.domenicotricarico.it"><img src="https://img.shields.io/badge/Domenico%20Tricarico-Developer-10b981?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Domenico Tricarico" /></a>
-  &nbsp;&nbsp;
-  <a href="https://www.solosoluzioni.it"><img src="https://img.shields.io/badge/SOLO%20SOLUZIONI-Azienda%20del%20Progetto-6366f1?style=for-the-badge" alt="Solo Soluzioni" /></a>
-  &nbsp;&nbsp;
-  <a href="https://www.opencartitalia.it"><img src="https://img.shields.io/badge/OpenCart%20ITALIA-Community-0284c7?style=for-the-badge&logo=opencart&logoColor=white" alt="OpenCart Italia" /></a>
-</p>
+## Come viene protetto il token
 
-- 👨‍💻 **Sito dello Sviluppatore**: [www.domenicotricarico.it](https://www.domenicotricarico.it)
-- 🏢 **Azienda del Progetto**: **SOLO SOLUZIONI** — [www.solosoluzioni.it](https://www.solosoluzioni.it)
-- 🌐 **Portale Ufficiale Community**: **OpenCart ITALIA** — [www.opencartitalia.it](https://www.opencartitalia.it)
-- ☕ **Sostieni lo sviluppo su GitHub**: [github.com/sponsors/domtric80](https://github.com/sponsors/domtric80)
+- OpenCart genera un token casuale a 256 bit e salva soltanto un hash Argon2id, con fallback all'algoritmo sicuro disponibile in PHP.
+- Android salva la propria copia cifrata con AES-256-GCM e una chiave non esportabile di Android Keystore.
+- StrongBox viene preferito quando presente; in alternativa è obbligatoria una chiave hardware-backed nel TEE. Se il dispositivo offre soltanto protezione software, il salvataggio fallisce in modo sicuro.
+- Il token salvato non viene associato al campo dell'interfaccia. Dopo lo sblocco dell'app la credenziale può essere decifrata in memoria soltanto per effettuare richieste HTTPS autenticate.
+- Il bridge accetta il token negli header HTTP e ignora credenziali inviate in URL o form body.
+- La rotazione dal pannello OpenCart invalida immediatamente il token precedente.
 
----
+Non inserire token, password, keystore o chiavi di firma in issue, screenshot, commit o file di configurazione versionati.
 
-## 📸 Screenshot
+## Funzionalità presenti
 
-<p align="center">
-  <img src="app/src/main/res/drawable/img_cartadmin_screen_dash_1786997549527.jpg" width="45%" alt="Dashboard Screen" />
-  &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="app/src/main/res/drawable/img_cartadmin_screen_orders_1786997562634.jpg" width="45%" alt="Orders Screen" />
-</p>
+- dashboard con indicatori di vendita e attività;
+- consultazione e aggiornamento dello stato degli ordini;
+- catalogo, categorie, quantità e prezzi;
+- abbonamenti e resi esposti dal bridge;
+- cache locale Room e sincronizzazione manuale;
+- selezione di più profili negozio;
+- notifiche Firebase Cloud Messaging quando configurate;
+- audit delle operazioni inviate al bridge;
+- blocco dell'app con password locale PBKDF2 e sblocco biometrico forte opzionale.
 
----
+Le schermate possono mostrare dati memorizzati localmente quando il negozio non è raggiungibile. Una sincronizzazione riuscita che restituisce zero abbonamenti o zero resi svuota le rispettive cache: l'app non inserisce dati dimostrativi. Verificare sempre l'esito della sincronizzazione prima di considerare aggiornati i dati.
 
-## 🛠️ Architettura & Stack Tecnologico
+## Screenshot
 
-- **UI Framework**: Jetpack Compose con componenti Material 3
-- **Architettura**: Clean MVVM con Kotlin Coroutines & StateFlow
-- **Persistenza Locale**: Android Room Database
-- **Networking**: Retrofit 2 + OkHttp3 + Kotlinx Serialization
-- **Cloud Messaging**: Firebase Cloud Messaging (FCM)
-- **Target SDK**: minSdk 24, targetSdk 36
+Gli screenshot reali della v2.0.0 verranno aggiunti dopo una sessione di acquisizione su uno store di test con dati anonimizzati. Non vengono pubblicati mockup o schermate che contengano token, password, dati cliente reali o altri segreti. La schermata Config nasconde sempre il token digitato e non lo ripropone dopo il salvataggio.
 
----
+## Architettura
 
-## 📄 Licenza (License)
+- UI: Jetpack Compose e Material 3;
+- stato applicativo: MVVM, `MainViewModel`, Coroutines e `StateFlow`;
+- persistenza: Room;
+- rete: Retrofit/OkHttp e JSON Moshi;
+- sicurezza locale: Android Keystore, AES-256-GCM, PBKDF2 e BiometricPrompt;
+- integrazione server: estensione PHP CartAdmin Bridge per OpenCart 4.1.x.
 
-Questo progetto è rilasciato sotto licenza libera e open-source **GNU General Public License v3.0 (GNU GPL v3)**.  
-Consulta il file [`LICENSE`](LICENSE) per il testo completo dei termini e delle condizioni di licenza.
+## Build e test locali
 
-```text
-CartAdmin - App Ufficiale OpenCart ITALIA by SOLO SOLUZIONI
-Copyright (C) 2026 OpenCart ITALIA & SOLO SOLUZIONI
+Il progetto usa il Gradle Wrapper e richiede Android Studio con Android SDK 36. È preferibile il JDK integrato in Android Studio.
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+In PowerShell:
+
+```powershell
+$env:JAVA_HOME = 'C:\Program Files\Android\Android Studio\jbr'
+$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
+./gradlew.bat :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:lintDebug :app:assembleDebug
 ```
+
+Con un emulatore o dispositivo collegato:
+
+```powershell
+& "$env:ANDROID_HOME\platform-tools\adb.exe" devices
+./gradlew.bat :app:connectedDebugAndroidTest
+```
+
+I workflow GitHub Actions compilano l'APK, eseguono test e Lint, validano il pacchetto OpenCart ed effettuano controlli CodeQL, Semgrep e PHP. La pubblicazione stabile richiede un tag identico al `versionName` e usa i segreti di firma configurati nel repository GitHub.
+
+## Repository
+
+- `app/`: applicazione Android e test;
+- `opencart-plugin/`: manifest, modulo amministrativo, bridge PHP e test di autenticazione;
+- `.github/workflows/`: build, pubblicazione e controlli di sicurezza;
+- `gradle/` e `gradlew*`: Gradle Wrapper.
+
+## Licenza e progetto
+
+CartAdmin è distribuito con licenza [GNU GPL v3](LICENSE).
+
+- OpenCart ITALIA: [www.opencartitalia.it](https://www.opencartitalia.it)
+- SOLO SOLUZIONI: [www.solosoluzioni.it](https://www.solosoluzioni.it)
+- Sviluppatore: [www.domenicotricarico.it](https://www.domenicotricarico.it)

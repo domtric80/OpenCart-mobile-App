@@ -64,6 +64,32 @@ class EcomRepositoryCredentialEncryptionTest {
         assertTrue(dao.row!!.apiKey.startsWith("test-protected:"))
         assertFalse(dao.row!!.apiKey.contains("new-secret"))
         assertTrue(dao.row!!.adminUsername.startsWith("test-protected:"))
+        assertTrue(dao.row!!.isPrimary)
+    }
+
+    @Test
+    fun blankTokenUpdateKeepsExistingProtectedCredential() = runTest {
+        val dao = FakeStoreProfileDao()
+        val repository = repository(dao)
+        val store = repository.addStore(
+            name = "Secure",
+            url = "https://shop.example",
+            version = "4.1.x",
+            username = "operator",
+            key = "existing-secret"
+        )
+
+        repository.updateStoreCredentials(
+            storeId = store.id,
+            name = "Secure updated",
+            url = "https://shop.example",
+            username = "operator",
+            key = "",
+            version = "4.1.x"
+        )
+
+        assertFalse(dao.row!!.apiKey.contains("existing-secret"))
+        assertEquals("existing-secret", repository.stores.value.single().apiKey)
     }
 
     private fun repository(dao: StoreProfileDao): EcomRepository = EcomRepository(

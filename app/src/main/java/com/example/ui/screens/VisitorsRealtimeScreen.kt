@@ -193,7 +193,7 @@ fun VisitorsRealtimeScreen(
                                 .background(TrendGreen.copy(alpha = pulseAlpha))
                         )
                         Text(
-                            text = "LIVE STREAM",
+                            text = if (visitorStats.trackingEnabled) "LIVE" else "NON ATTIVO",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Black,
                                 fontSize = 10.sp,
@@ -204,6 +204,10 @@ fun VisitorsRealtimeScreen(
                     }
                 }
             }
+        }
+
+        item {
+            TelemetryStatusCard(visitorStats)
         }
 
         // 2. Hero Active Visitors Card with Key Telemetry Metrics
@@ -245,6 +249,48 @@ fun VisitorsRealtimeScreen(
         // 8. Live Real-Time Event Stream
         item {
             LiveVisitorEventsCard(events = visitorStats.liveEvents)
+        }
+    }
+}
+
+@Composable
+private fun TelemetryStatusCard(stats: VisitorRealtimeStats) {
+    val isReady = stats.dataAvailable && stats.trackingEnabled
+    val container = when {
+        !stats.dataAvailable -> MaterialTheme.colorScheme.errorContainer
+        !stats.trackingEnabled -> StatusPendingGoldBg
+        else -> StatusShippedGreenBg
+    }
+    val foreground = when {
+        !stats.dataAvailable -> MaterialTheme.colorScheme.onErrorContainer
+        !stats.trackingEnabled -> StatusPendingGold
+        else -> StatusShippedGreen
+    }
+    val message = when {
+        !stats.dataAvailable -> "Il bridge installato non espone ancora la telemetria. Aggiorna il plugin CartAdmin alla stessa versione dell’app."
+        !stats.trackingEnabled -> "Il tracciamento OpenCart è disattivato. Nel pannello admin apri Sistema > Impostazioni > Opzioni e abilita “Clienti online”."
+        else -> "Dati reali da ${stats.source.ifBlank { "OpenCart customer_online" }}${stats.lastUpdated.takeIf { it.isNotBlank() }?.let { " • $it" }.orEmpty()}"
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = container),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth().testTag("visitor_telemetry_status")
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = if (isReady) "Telemetria OpenCart attiva" else "Telemetria non disponibile",
+                color = foreground,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Text(message, color = foreground, style = MaterialTheme.typography.bodySmall)
+            if (isReady && stats.limitations.isNotBlank()) {
+                Text(stats.limitations, color = foreground, style = MaterialTheme.typography.labelSmall)
+            }
         }
     }
 }
@@ -341,7 +387,7 @@ private fun HeroActiveVisitorsCard(
                 TelemetryMiniPill(
                     icon = Icons.Default.Visibility,
                     value = "${visitorStats.pageViewsPerMin}",
-                    label = "Pagine / min",
+                    label = "Aggiornati / min",
                     color = StatusConfirmedBlue,
                     bgColor = StatusConfirmedBlueBg,
                     modifier = Modifier.weight(1f)
@@ -375,8 +421,8 @@ private fun HeroActiveVisitorsCard(
                 // Metric 4: Avg Duration
                 TelemetryMiniPill(
                     icon = Icons.Default.Timer,
-                    value = "${visitorStats.avgDurationSeconds / 60}m ${visitorStats.avgDurationSeconds % 60}s",
-                    label = "Tempo medio",
+                    value = if (visitorStats.avgDurationSeconds > 0) "${visitorStats.avgDurationSeconds / 60}m ${visitorStats.avgDurationSeconds % 60}s" else "N/D",
+                    label = "Durata sessione",
                     color = ThemeSecondary,
                     bgColor = ThemeSecondary.copy(alpha = 0.1f),
                     modifier = Modifier.weight(1f)

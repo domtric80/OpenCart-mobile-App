@@ -188,18 +188,23 @@ data class LiveVisitorEvent(
 )
 
 data class VisitorRealtimeStats(
-    val activeVisitorsNow: Int = 42,
-    val pageViewsPerMin: Int = 138,
-    val activeCartsCount: Int = 8,
-    val activeCheckoutsCount: Int = 3,
-    val avgDurationSeconds: Int = 245,
-    val bounceRate: Double = 28.4,
+    val trackingEnabled: Boolean = false,
+    val dataAvailable: Boolean = false,
+    val activeVisitorsNow: Int = 0,
+    val pageViewsPerMin: Int = 0,
+    val activeCartsCount: Int = 0,
+    val activeCheckoutsCount: Int = 0,
+    val avgDurationSeconds: Int = 0,
+    val bounceRate: Double = 0.0,
     val trafficHistory: List<LiveVisitorPoint> = emptyList(),
     val topPages: List<ActivePageVisit> = emptyList(),
     val topCountries: List<GeoVisitor> = emptyList(),
     val trafficSources: List<TrafficSource> = emptyList(),
     val deviceStats: List<DeviceBreakdown> = emptyList(),
-    val liveEvents: List<LiveVisitorEvent> = emptyList()
+    val liveEvents: List<LiveVisitorEvent> = emptyList(),
+    val source: String = "",
+    val lastUpdated: String = "",
+    val limitations: String = ""
 )
 
 enum class OrdersSubSection(val label: String, val shortDesc: String) {
@@ -256,5 +261,38 @@ data class OrderReturn(
     val action: String = "In attesa di verifica",
     val dateAdded: String,
     val comment: String = ""
+)
+
+/** Moduli amministrativi OpenCart esposti dal bridge 2.0. */
+enum class AdminModule(val apiKey: String, val label: String, val description: String) {
+    SUBSCRIPTION_PLANS("subscription_plans", "Piani di abbonamento", "Piani e cicli ricorrenti"),
+    PAGES("pages", "Pagine", "Pagine informative dello store"),
+    REVIEWS("reviews", "Recensioni", "Recensioni dei prodotti"),
+    ARTICLES("articles", "Articoli", "Contenuti editoriali"),
+    TOPICS("topics", "Argomenti", "Categorie editoriali"),
+    COMMENTS("comments", "Commenti", "Commenti agli articoli"),
+    ANTISPAM("antispam", "Antispam", "Parole bloccate nei commenti"),
+    CUSTOMERS("customers", "Clienti", "Account registrati nello store"),
+    CUSTOMER_APPROVALS("customer_approvals", "Approvazione clienti", "Richieste in attesa"),
+    GDPR("gdpr", "GDPR", "Richieste privacy OpenCart")
+}
+
+data class AdminRecord(
+    val id: String,
+    val title: String,
+    val subtitle: String = "",
+    val statusLabel: String = "",
+    val active: Boolean? = null,
+    val date: String = "",
+    val detail: String = ""
+)
+
+data class AdminModuleSnapshot(
+    val module: AdminModule,
+    val supported: Boolean = true,
+    val isLoading: Boolean = false,
+    val records: List<AdminRecord> = emptyList(),
+    val message: String = "",
+    val lastUpdated: String = ""
 )
 

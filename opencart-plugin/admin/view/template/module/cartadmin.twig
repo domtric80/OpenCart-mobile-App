@@ -1,0 +1,66 @@
+{{ header }}{{ column_left }}
+<div id="content">
+  <div class="page-header">
+    <div class="container-fluid">
+      <div class="float-end"><a href="{{ back }}" class="btn btn-light" title="{{ button_back }}"><i class="fa-solid fa-reply"></i></a></div>
+      <h1>{{ heading_title }}</h1>
+      <ol class="breadcrumb">
+        {% for breadcrumb in breadcrumbs %}<li class="breadcrumb-item"><a href="{{ breadcrumb.href }}">{{ breadcrumb.text }}</a></li>{% endfor %}
+      </ol>
+    </div>
+  </div>
+  <div class="container-fluid">
+    <div id="alert"></div>
+    <div class="card">
+      <div class="card-header"><i class="fa-solid fa-shield-halved"></i> {{ heading_title }}</div>
+      <div class="card-body">
+        <div class="alert alert-info"><i class="fa-solid fa-lock"></i> {{ text_security }}</div>
+        <dl class="row">
+          <dt class="col-sm-3">Stato</dt>
+          <dd class="col-sm-9"><span id="token-status" class="badge {{ configured ? 'bg-success' : 'bg-warning text-dark' }}">{{ configured ? text_configured : text_not_configured }}</span></dd>
+          <dt class="col-sm-3">{{ text_endpoint }}</dt><dd class="col-sm-9"><code>{{ endpoint }}</code></dd>
+          {% if configured %}<dt class="col-sm-3">{{ text_last_four }}</dt><dd id="last-four" class="col-sm-9"><code>••••{{ last_four }}</code></dd>
+          <dt class="col-sm-3">{{ text_created_at }}</dt><dd class="col-sm-9">{{ created_at }}</dd>{% endif %}
+        </dl>
+        <button type="button" id="button-generate" class="btn btn-primary"><i class="fa-solid fa-key"></i> {{ configured ? button_rotate : button_generate }}</button>
+        <div id="token-once" class="card border-danger mt-3 d-none">
+          <div class="card-header text-bg-danger">{{ text_token_once }}</div>
+          <div class="card-body">
+            <div class="input-group"><input id="generated-token" type="text" class="form-control font-monospace" readonly><button id="button-copy" type="button" class="btn btn-outline-secondary">{{ button_copy }}</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+document.getElementById('button-generate').addEventListener('click', async function () {
+  if ({{ configured ? 'true' : 'false' }} && !window.confirm('Il token attuale smetterà immediatamente di funzionare. Continuare?')) return;
+  this.disabled = true;
+  try {
+    const response = await fetch('{{ generate }}', {method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'}});
+    const json = await response.json();
+    if (json.error) throw new Error(json.error);
+    document.getElementById('generated-token').value = json.token;
+    document.getElementById('token-once').classList.remove('d-none');
+    document.getElementById('token-status').textContent = '{{ text_configured|escape('js') }}';
+    document.getElementById('token-status').className = 'badge bg-success';
+    showAlert('success', json.success);
+  } catch (error) {
+    showAlert('danger', error.message);
+  } finally {
+    this.disabled = false;
+  }
+});
+function showAlert(type, message) {
+  const notice = document.createElement('div');
+  notice.className = 'alert alert-' + type;
+  notice.textContent = message;
+  document.getElementById('alert').replaceChildren(notice);
+}
+document.getElementById('button-copy').addEventListener('click', function () {
+  const input = document.getElementById('generated-token');
+  navigator.clipboard.writeText(input.value);
+});
+</script>
+{{ footer }}

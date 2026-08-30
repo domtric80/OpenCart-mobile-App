@@ -29,6 +29,7 @@ class BridgeRequestFactoryTest {
         assertNull(request.url.queryParameter("username"))
         assertFalse(request.url.toString().contains("secret-key-value"))
         assertTrue(request.url.isHttps)
+        assertEquals("/opencart/extension/cartadmin/cartadmin_api.php", request.url.encodedPath)
     }
 
     @Test
@@ -83,5 +84,83 @@ class BridgeRequestFactoryTest {
                 fields = mapOf("username" to "leaked")
             )
         }
+    }
+
+    @Test
+    fun telemetryRequestUsesAuthenticatedHttpsEndpoint() {
+        val request = BridgeRequestFactory.authenticatedGet(
+            baseUrl = "https://shop.example",
+            action = "visitor_telemetry",
+            apiKey = "telemetry-secret"
+        )
+
+        assertEquals("visitor_telemetry", request.url.queryParameter("action"))
+        assertEquals("telemetry-secret", request.header("X-CartAdmin-Key"))
+        assertFalse(request.url.toString().contains("telemetry-secret"))
+        assertTrue(request.url.isHttps)
+    }
+
+    @Test
+    fun productUpdateKeepsCredentialsOutOfFormData() {
+        val request = BridgeRequestFactory.authenticatedFormPost(
+            baseUrl = "https://shop.example",
+            action = "update_product",
+            apiKey = "product-secret",
+            fields = mapOf("product_id" to "42", "name" to "Prodotto", "quantity" to "8")
+        )
+        val body = request.body as FormBody
+        val names = (0 until body.size).map(body::name)
+
+        assertEquals(listOf("action", "product_id", "name", "quantity"), names)
+        assertFalse(names.contains("api_key"))
+        assertFalse(names.contains("username"))
+        assertEquals("product-secret", request.header("X-CartAdmin-Key"))
+    }
+
+    @Test
+    fun managementListUsesAllowlistedModuleQueryAndHeaderOnlyCredentials() {
+        val request = BridgeRequestFactory.authenticatedGet(
+            baseUrl = "https://shop.example",
+            action = "management_list",
+            apiKey = "management-secret",
+            queryParameters = mapOf("module" to "customers", "limit" to "100")
+        )
+
+        assertEquals("management_list", request.url.queryParameter("action"))
+        assertEquals("customers", request.url.queryParameter("module"))
+        assertEquals("management-secret", request.header("X-CartAdmin-Key"))
+        assertFalse(request.url.toString().contains("management-secret"))
+    }
+
+    @Test
+    fun managementStatusKeepsCredentialsOutOfMutationBody() {
+        val request = BridgeRequestFactory.authenticatedFormPost(
+            baseUrl = "https://shop.example",
+            action = "management_status",
+            apiKey = "management-secret",
+            fields = mapOf("module" to "reviews", "id" to "12", "active" to "1")
+        )
+        val body = request.body as FormBody
+        val names = (0 until body.size).map(body::name)
+
+        assertEquals(listOf("action", "module", "id", "active"), names)
+        assertFalse(names.contains("api_key"))
+        assertEquals("management-secret", request.header("X-CartAdmin-Key"))
+    }
+
+    @Test
+    fun antispamMutationUsesAuthenticatedFormWithoutCredentials() {
+        val request = BridgeRequestFactory.authenticatedFormPost(
+            baseUrl = "https://shop.example",
+            action = "management_antispam",
+            apiKey = "antispam-secret",
+            fields = mapOf("operation" to "add", "keyword" to "spamword")
+        )
+        val body = request.body as FormBody
+        val names = (0 until body.size).map(body::name)
+
+        assertEquals(listOf("action", "operation", "keyword"), names)
+        assertFalse(names.contains("api_key"))
+        assertEquals("antispam-secret", request.header("X-CartAdmin-Key"))
     }
 }

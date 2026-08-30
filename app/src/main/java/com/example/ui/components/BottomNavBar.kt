@@ -21,6 +21,8 @@ import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.HistoryEdu
 import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ShoppingCart
@@ -42,14 +44,17 @@ import com.example.ui.theme.ThemeOnPrimaryContainer
 import com.example.ui.theme.ThemeOutlineVariant
 import com.example.ui.theme.ThemePrimaryContainer
 
-enum class NavigationTab(val label: String, val icon: ImageVector, val tag: String) {
-    HOME("Home", Icons.Default.Dashboard, "tab_home"),
-    ORDERS("Ordini", Icons.Default.ShoppingCart, "tab_orders"),
-    CATALOG("Catalogo", Icons.Default.Layers, "tab_catalog"),
-    VISITORS("Traffic", Icons.Default.Sensors, "tab_visitors"),
-    AUDIT("Audit", Icons.Default.HistoryEdu, "tab_audit"),
-    CONFIG("Config", Icons.Default.Settings, "tab_config"),
-    LICENSE("Licenza", Icons.Default.Gavel, "tab_license")
+enum class NavigationTab(val label: String, val icon: ImageVector, val tag: String, val showInBottomBar: Boolean) {
+    HOME("Home", Icons.Default.Dashboard, "tab_home", true),
+    ORDERS("Vendite", Icons.Default.ShoppingCart, "tab_sales", true),
+    CATALOG("Catalogo", Icons.Default.Layers, "tab_catalog", true),
+    CUSTOMERS("Clienti", Icons.Default.People, "tab_customers", true),
+    MORE("Altro", Icons.Default.MoreHoriz, "tab_more", true),
+    VISITORS("Traffic", Icons.Default.Sensors, "tab_visitors", false),
+    CMS("CMS", Icons.Default.Layers, "tab_cms", false),
+    AUDIT("Audit", Icons.Default.HistoryEdu, "tab_audit", false),
+    CONFIG("Config", Icons.Default.Settings, "tab_config", false),
+    LICENSE("Licenza", Icons.Default.Gavel, "tab_license", false)
 }
 
 @Composable
@@ -57,7 +62,7 @@ fun BottomNavBar(
     selectedTab: NavigationTab,
     onTabSelected: (NavigationTab) -> Unit,
     modifier: Modifier = Modifier,
-    onOrdersTabMenuClick: (() -> Unit)? = null
+    onMenuTabClick: ((NavigationTab) -> Unit)? = null
 ) {
     // HTML: <nav class='h-20 bg-[#F3EDF7] flex justify-around items-center border-t border-[#CAC4D0]'>
     Box(
@@ -82,7 +87,7 @@ fun BottomNavBar(
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            NavigationTab.entries.forEach { tab ->
+            NavigationTab.entries.filter { it.showInBottomBar }.forEach { tab ->
                 val isSelected = tab == selectedTab
                 val interactionSource = remember { MutableInteractionSource() }
 
@@ -94,8 +99,8 @@ fun BottomNavBar(
                             indication = null,
                             onClick = {
                                 onTabSelected(tab)
-                                if (tab == NavigationTab.ORDERS && onOrdersTabMenuClick != null) {
-                                    onOrdersTabMenuClick()
+                                if (tab in setOf(NavigationTab.ORDERS, NavigationTab.CATALOG, NavigationTab.CUSTOMERS, NavigationTab.MORE)) {
+                                    onMenuTabClick?.invoke(tab)
                                 }
                             }
                         )
@@ -124,7 +129,7 @@ fun BottomNavBar(
                     }
 
                     Text(
-                        text = if (tab == NavigationTab.ORDERS) "Ordini ▾" else tab.label,
+                        text = if (tab in setOf(NavigationTab.ORDERS, NavigationTab.CATALOG, NavigationTab.CUSTOMERS)) "${tab.label} ▾" else tab.label,
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             fontSize = 10.sp

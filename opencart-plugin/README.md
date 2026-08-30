@@ -1,43 +1,36 @@
-# CartAdmin Bridge Plugin per OpenCart
+# CartAdmin Bridge per OpenCart 4.1
 
-Bridge HTTPS tra CartAdmin Android e OpenCart, sviluppato da SOLO SOLUZIONI per OpenCart ITALIA.
+Estensione HTTPS tra CartAdmin Android e OpenCart 4.1.x, sviluppata da OpenCart ITALIA by SOLOSOLUZIONI.
 
-## Requisiti di sicurezza
+## Installazione
 
-- Il negozio deve essere raggiungibile esclusivamente tramite HTTPS con certificato valido.
-- Per una nuova installazione, crea dal pannello OpenCart un utente API dedicato, attivo e con una chiave casuale univoca.
-- Non inserire mai chiavi API in URL, screenshot, ticket o log.
-- L'endpoint non espone e non genera chiavi tramite richieste pubbliche.
+1. Scarica `cartadmin.ocmod.zip` dalla release stabile GitHub.
+2. Nel pannello OpenCart apri **Estensioni > Installer**, carica lo ZIP e completa l'installazione.
+3. Apri **Estensioni > Estensioni**, seleziona **Moduli** e installa **CartAdmin Bridge**.
+4. Apri il modulo e premi **Genera token**.
+5. Copia subito il token nell'app CartAdmin: il valore completo non sarà più visualizzabile.
 
-Le chiavi bridge già configurate da versioni precedenti continuano a funzionare, ma è consigliata la loro rotazione dopo l'aggiornamento.
+Non creare né modificare manualmente file PHP. Il nome `cartadmin.ocmod.zip` è intenzionalmente stabile perché OpenCart usa il nome dello ZIP come codice e cartella dell'estensione.
 
-## Installazione OCMOD
+## Protezione del token
 
-1. Scarica `cartadmin-opencart-bridge-<versione>.ocmod.zip` dalla sezione Releases del repository.
-2. Nel pannello OpenCart apri **Estensioni > Programma di installazione** e carica il pacchetto.
-3. Apri **Estensioni > Modifiche** e aggiorna la cache delle modifiche.
-4. Verifica che nella root OpenCart siano presenti `cartadmin_api.php` e `cartadmin_auth.php`.
+- Il token è generato con 256 bit casuali usando `random_bytes()`.
+- Nel database viene memorizzato soltanto un hash non reversibile Argon2id, con fallback all'algoritmo sicuro predefinito di PHP.
+- Il token in chiaro è restituito soltanto nella risposta amministrativa che lo genera.
+- La rotazione invalida immediatamente il token precedente.
+- Un eventuale `api_key` in chiaro creato da una versione precedente viene convertito automaticamente in hash e poi eliminato.
+- Le credenziali sono accettate esclusivamente negli header HTTPS; URL e form body vengono ignorati.
 
-## Installazione manuale
+L'app Android conserva la propria copia del token tramite AES-256-GCM e Android Keystore hardware-backed.
 
-1. Copia `upload/cartadmin_api.php` e `upload/cartadmin_auth.php` nella root di OpenCart, accanto a `config.php`.
-2. Imposta permessi restrittivi compatibili con il web server; normalmente `0644` per entrambi i file.
-3. Crea o seleziona un utente API dedicato dal pannello amministrativo OpenCart.
+## Endpoint
 
-## Configurazione CartAdmin
+L'estensione espone:
 
-1. Apri **Impostazioni > Negozio** nell'app.
-2. Inserisci l'URL HTTPS dello store.
-3. Inserisci lo username e la chiave dell'utente API OpenCart dedicato.
-4. Tocca **Test API** e salva soltanto dopo una risposta valida.
+`https://negozio.example/extension/cartadmin/cartadmin_api.php`
 
-Le credenziali vengono inviate negli header `X-CartAdmin-User` e `X-CartAdmin-Key`; query string e form body non vengono accettati per l'autenticazione.
+Il negozio deve utilizzare HTTPS con certificato valido.
 
-## Aggiornamento di sicurezza
+## Compatibilità
 
-Le versioni fino alla 1.2.5 esponevano un endpoint di provisioning pubblico. Dopo l'aggiornamento:
-
-1. sostituisci entrambi i file PHP;
-2. ruota la chiave API usata precedentemente;
-3. controlla i log web per richieste a `action=get_key_setup`;
-4. verifica gli utenti API OpenCart e disabilita quelli non riconosciuti.
+Questo pacchetto è destinato a OpenCart 4.1.x. Non dichiara compatibilità con OpenCart 3.x: quel ramo usa un formato di installazione differente e dovrà essere distribuito come artefatto separato.

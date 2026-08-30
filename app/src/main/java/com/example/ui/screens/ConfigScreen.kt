@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import com.example.BuildConfig
+
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -34,7 +36,9 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.HelpOutline
+import androidx.compose.material.icons.filled.HistoryEdu
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Link
@@ -78,6 +82,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.Store
@@ -104,8 +109,11 @@ fun ConfigScreen(
     connectionResult: OpenCartConnectionResult?,
     onTestConnection: (url: String, username: String, key: String) -> Unit,
     onSaveStoreCredentials: (storeId: String, name: String, url: String, username: String, key: String, version: String) -> Unit,
+    onAddStore: (name: String, url: String, username: String, key: String, version: String) -> Unit,
     onTriggerSync: (url: String, key: String, username: String) -> Unit,
     onClearDummyData: () -> Unit = {},
+    onOpenAudit: () -> Unit = {},
+    onOpenLicense: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -113,7 +121,7 @@ fun ConfigScreen(
     var storeName by remember { mutableStateOf(currentStore?.name ?: "") }
     var storeUrl by remember { mutableStateOf(currentStore?.url ?: "") }
     var apiUsername by remember { mutableStateOf(currentStore?.apiUsername ?: "api_admin_sync") }
-    var apiKey by remember { mutableStateOf(currentStore?.apiKey ?: "") }
+    var apiKey by remember { mutableStateOf("") }
     var storeVersion by remember { mutableStateOf(currentStore?.version ?: "OpenCart 3.0.3.8") }
     var showGuide by remember { mutableStateOf(false) }
     var showModuleSheet by remember { mutableStateOf(false) }
@@ -131,13 +139,19 @@ fun ConfigScreen(
         fcmToken = FcmTokenManager.fetchCurrentToken(context)
     }
 
-    LaunchedEffect(currentStore) {
+    LaunchedEffect(currentStore?.id) {
         if (currentStore != null) {
             storeName = currentStore.name
             storeUrl = currentStore.url
             apiUsername = currentStore.apiUsername
-            apiKey = currentStore.apiKey
+            apiKey = ""
             storeVersion = currentStore.version
+        } else {
+            storeName = ""
+            storeUrl = ""
+            apiUsername = "api_admin_sync"
+            apiKey = ""
+            storeVersion = "OpenCart 4.1.x"
         }
     }
 
@@ -145,7 +159,8 @@ fun ConfigScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 16.dp)
+                .testTag("config_screen_list"),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
@@ -166,7 +181,7 @@ fun ConfigScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(22.dp))
-                        .background(if (isSuccess) ThemePrimaryContainer else AlertRedContainer)
+                        .background(if (isSuccess) TrendGreenLight else AlertRedContainer)
                         .padding(18.dp)
                         .testTag("opencart_status_card")
                 ) {
@@ -211,7 +226,7 @@ fun ConfigScreen(
                                         fontSize = 11.sp,
                                         letterSpacing = 1.1.sp
                                     ),
-                                    color = if (isSuccess) ThemeOnPrimaryContainer else AlertRed
+                                    color = if (isSuccess) TrendGreen else AlertRed
                                 )
                             }
 
@@ -221,12 +236,12 @@ fun ConfigScreen(
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 16.sp
                                 ),
-                                color = if (isSuccess) ThemeOnPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                color = if (isSuccess) TrendGreen else AlertRed
                             )
                             Text(
                                 text = "${currentStore?.url} • ${currentStore?.version}",
                                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                                color = if (isSuccess) ThemeOnPrimaryContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
+                                color = if (isSuccess) TrendGreen else AlertRed
                             )
                         }
                     }
@@ -240,7 +255,7 @@ fun ConfigScreen(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(22.dp))
                         .background(CardSurfacePure)
-                        .border(1.5.dp, ThemePrimary.copy(alpha = 0.4f), RoundedCornerShape(22.dp))
+                        .border(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.7f), RoundedCornerShape(22.dp))
                         .padding(18.dp)
                         .testTag("embedded_module_card")
                 ) {
@@ -264,18 +279,18 @@ fun ConfigScreen(
                                     Icon(
                                         imageVector = Icons.Default.DataObject,
                                         contentDescription = null,
-                                        tint = ThemePrimary,
+                                        tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(18.dp)
                                     )
                                 }
                                 Text(
-                                    text = "MODULO PHP INTEGRATO NELL'APP",
+                                    text = "ESTENSIONE OPENCART 4.1",
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 11.sp,
                                         letterSpacing = 1.1.sp
                                     ),
-                                    color = ThemePrimary
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
 
@@ -297,7 +312,7 @@ fun ConfigScreen(
                         }
 
                         Text(
-                            text = "Modulo Bridge 'cartadmin_api.php'",
+                            text = "CartAdmin Bridge",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp
@@ -306,7 +321,7 @@ fun ConfigScreen(
                         )
 
                         Text(
-                            text = "Questo modulo risolve i limiti delle API native di OpenCart: elimina il blocco dell'IP fisso e abilita la modifica immediata dello stato ordini e l'aggiornamento del magazzino da smartphone.",
+                            text = "Installa e configura il bridge dal pannello OpenCart. Il token viene mostrato una sola volta e nel database resta soltanto un hash non reversibile.",
                             style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, lineHeight = 17.sp),
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -319,14 +334,14 @@ fun ConfigScreen(
                                 .testTag("open_module_sheet_btn"),
                             shape = RoundedCornerShape(14.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = ThemePrimary,
+                                containerColor = MaterialTheme.colorScheme.primary,
                                 contentColor = MaterialTheme.colorScheme.onPrimary
                             )
                         ) {
                             Icon(Icons.Default.Code, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Visualizza, Copia & Scarica Modulo",
+                                text = "Installa e configura il bridge",
                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
                             )
                         }
@@ -495,7 +510,10 @@ fun ConfigScreen(
                             },
                             modifier = Modifier.weight(1f).height(44.dp).testTag("simulate_order_push_btn"),
                             shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = ThemePrimary)
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
+                            )
                         ) {
                             Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
@@ -525,7 +543,7 @@ fun ConfigScreen(
                                         fontSize = 10.sp,
                                         letterSpacing = 0.8.sp
                                     ),
-                                    color = ThemePrimary
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                                 Row(
                                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -535,7 +553,7 @@ fun ConfigScreen(
                                         text = "Copia Token",
                                         style = MaterialTheme.typography.labelSmall.copy(
                                             fontWeight = FontWeight.Bold,
-                                            color = ThemePrimary
+                                            color = MaterialTheme.colorScheme.primary
                                         ),
                                         modifier = Modifier
                                             .clickable {
@@ -573,6 +591,23 @@ fun ConfigScreen(
                         .padding(18.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
+                    if (currentStore == null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(ThemePrimaryContainer)
+                                .padding(12.dp)
+                                .testTag("first_store_help")
+                        ) {
+                            Text(
+                                text = "Nessun negozio configurato. Compila questi dati e premi Aggiungi negozio: il profilo verrà creato e salvato sul dispositivo.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -626,7 +661,7 @@ fun ConfigScreen(
                     OutlinedTextField(
                         value = apiUsername,
                         onValueChange = { apiUsername = it },
-                        label = { Text("Nome Utente API (OpenCart Admin > Users > API)") },
+                        label = { Text("Nome operatore (audit) / utente API nativa") },
                         leadingIcon = {
                             Icon(Icons.Default.Store, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         },
@@ -638,12 +673,23 @@ fun ConfigScreen(
                     OutlinedTextField(
                         value = apiKey,
                         onValueChange = { apiKey = it },
-                        label = { Text("Chiave Segreta API / Token OpenCart") },
+                        label = { Text("Token CartAdmin Bridge / chiave API nativa") },
                         leadingIcon = {
                             Icon(Icons.Default.Key, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         },
                         modifier = Modifier.fillMaxWidth().testTag("config_api_key_input"),
-                        shape = RoundedCornerShape(14.dp)
+                        shape = RoundedCornerShape(14.dp),
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        supportingText = {
+                            Text(
+                                if (currentStore == null) {
+                                    "Incolla il token generato nel pannello OpenCart. Non sarà più mostrato dopo il salvataggio."
+                                } else {
+                                    "Token già salvato e protetto. Lascia vuoto per mantenerlo oppure inseriscine uno nuovo per sostituirlo."
+                                }
+                            )
+                        }
                     )
 
                     OutlinedTextField(
@@ -662,9 +708,14 @@ fun ConfigScreen(
                     ) {
                         Button(
                             onClick = {
-                                onTestConnection(storeUrl, apiUsername, apiKey)
+                                onTestConnection(
+                                    storeUrl,
+                                    apiUsername,
+                                    apiKey.ifBlank { currentStore?.apiKey.orEmpty() }
+                                )
                             },
-                            enabled = !isTestingConnection && storeUrl.isNotBlank(),
+                            enabled = !isTestingConnection && storeUrl.isNotBlank() &&
+                                (apiKey.isNotBlank() || currentStore?.apiKey?.isNotBlank() == true),
                             modifier = Modifier
                                 .weight(1f)
                                 .height(48.dp)
@@ -679,7 +730,7 @@ fun ConfigScreen(
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(18.dp),
                                     strokeWidth = 2.dp,
-                                    color = ThemePrimary
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             } else {
                                 Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -690,52 +741,62 @@ fun ConfigScreen(
 
                         Button(
                             onClick = {
-                                val targetId = currentStore?.id ?: "store_${System.currentTimeMillis()}"
-                                onSaveStoreCredentials(targetId, storeName.ifBlank { "Mio Negozio OpenCart" }, storeUrl, apiUsername, apiKey, storeVersion)
-                                // Crittografa i parametri con il chip hardware (TEE / AndroidKeyStore)
-                                Toast.makeText(context, "Parametri salvati e sincronizzazione avviata!", Toast.LENGTH_SHORT).show()
+                                val safeName = storeName.ifBlank { "Mio Negozio OpenCart" }
+                                if (currentStore == null) {
+                                    onAddStore(safeName, storeUrl, apiUsername, apiKey, storeVersion)
+                                    Toast.makeText(context, "Negozio aggiunto e parametri protetti.", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    onSaveStoreCredentials(currentStore.id, safeName, storeUrl, apiUsername, apiKey, storeVersion)
+                                    Toast.makeText(context, "Parametri aggiornati e protetti.", Toast.LENGTH_SHORT).show()
+                                }
+                                apiKey = ""
                             },
+                            enabled = storeUrl.isNotBlank() &&
+                                (currentStore != null || apiKey.isNotBlank()),
                             modifier = Modifier
                                 .weight(1f)
                                 .height(48.dp)
                                 .testTag("save_opencart_credentials_btn"),
                             shape = RoundedCornerShape(14.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = ThemePrimary,
+                            containerColor = MaterialTheme.colorScheme.primary,
                                 contentColor = MaterialTheme.colorScheme.onPrimary
                             )
                         ) {
                             Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Salva")
+                            Text(if (currentStore == null) "Aggiungi" else "Salva")
                         }
                     }
 
                     // Direct Sync Button
                     Button(
                         onClick = {
-                            val targetId = currentStore?.id ?: "store_${System.currentTimeMillis()}"
-                            onSaveStoreCredentials(targetId, storeName.ifBlank { "Mio Negozio OpenCart" }, storeUrl, apiUsername, apiKey, storeVersion)
-                            onTriggerSync(storeUrl, apiKey, apiUsername)
+                            onTriggerSync(
+                                storeUrl,
+                                apiKey.ifBlank { currentStore?.apiKey.orEmpty() },
+                                apiUsername
+                            )
                             Toast.makeText(context, "Sincronizzazione avviata per $storeUrl...", Toast.LENGTH_SHORT).show()
                         },
-                        enabled = storeUrl.isNotBlank(),
+                        enabled = currentStore != null && storeUrl.isNotBlank() &&
+                            (apiKey.isNotBlank() || currentStore.apiKey.isNotBlank()),
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(48.dp)
                             .testTag("manual_sync_now_btn"),
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = ThemeSecondaryContainer,
-                            contentColor = ThemePrimary
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                         )
                     ) {
-                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp), tint = ThemePrimary)
+                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "Sincronizza Dati Adesso (Ordini & Catalogo)",
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                            color = ThemePrimary
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
                     }
 
@@ -772,7 +833,7 @@ fun ConfigScreen(
                                     Text(
                                         text = connectionResult.details,
                                         style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = if (connectionResult.isSuccess) TrendGreen else AlertRed
                                     )
                                 }
                             }
@@ -839,8 +900,8 @@ fun ConfigScreen(
 
                             GuideStepItem(
                                 stepNumber = "A",
-                                title = "Metodo Modulo Bridge (Consigliato al 100%)",
-                                description = "Clicca su 'Visualizza, Copia & Scarica Modulo' sopra, inserisci il file cartadmin_api.php nella cartella root del tuo sito OpenCart e inserisci qui la chiave segreta."
+                                title = "Metodo CartAdmin Bridge (consigliato)",
+                                description = "Installa cartadmin.ocmod.zip, apri CartAdmin Bridge nel pannello OpenCart e genera il token. Non modificare file PHP manualmente."
                             )
 
                             GuideStepItem(
@@ -958,15 +1019,23 @@ fun ConfigScreen(
                     }
 
                     Button(
-                        onClick = { onTriggerSync(storeUrl, apiKey, apiUsername) },
+                        onClick = {
+                            onTriggerSync(
+                                storeUrl,
+                                apiKey.ifBlank { currentStore?.apiKey.orEmpty() },
+                                apiUsername
+                            )
+                        },
+                        enabled = currentStore != null && storeUrl.isNotBlank() &&
+                            (apiKey.isNotBlank() || currentStore.apiKey.isNotBlank()),
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp)
                             .testTag("full_sync_button"),
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = ThemePrimaryContainer,
-                            contentColor = ThemeOnPrimaryContainer
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                     ) {
                         Icon(Icons.Default.CloudDone, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -1259,6 +1328,12 @@ fun ConfigScreen(
                                         fontSize = 12.sp
                                     )
                                 )
+                                Text(
+                                    text = "Versione installata ${BuildConfig.VERSION_NAME} • build ${BuildConfig.VERSION_CODE}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.testTag("installed_release_version")
+                                )
                             }
                         }
 
@@ -1270,6 +1345,30 @@ fun ConfigScreen(
                             ),
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = onOpenAudit,
+                                modifier = Modifier.weight(1f).height(46.dp).testTag("open_audit_from_config"),
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                Icon(Icons.Default.HistoryEdu, contentDescription = null, modifier = Modifier.size(17.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Audit", fontWeight = FontWeight.Bold)
+                            }
+                            OutlinedButton(
+                                onClick = onOpenLicense,
+                                modifier = Modifier.weight(1f).height(46.dp).testTag("open_license_from_credits"),
+                                shape = RoundedCornerShape(14.dp)
+                            ) {
+                                Icon(Icons.Default.Gavel, contentDescription = null, modifier = Modifier.size(17.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Licenza", fontWeight = FontWeight.Bold)
+                            }
+                        }
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -1316,13 +1415,7 @@ fun ConfigScreen(
 
         // OpenCart Module Viewer Modal Sheet
         if (showModuleSheet) {
-            OpenCartModuleSheet(
-                currentApiKey = apiKey,
-                onDismiss = { showModuleSheet = false },
-                onApiKeyGenerated = { newKey ->
-                    apiKey = newKey
-                }
-            )
+            OpenCartModuleSheet(onDismiss = { showModuleSheet = false })
         }
     }
 }

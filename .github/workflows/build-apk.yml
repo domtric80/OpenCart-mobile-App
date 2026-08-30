@@ -92,6 +92,9 @@ jobs:
         run: |
           touch .env
           echo "DUMMY_KEY=default" > .env
+          test -f ./gradlew
+          test -f gradle/wrapper/gradle-wrapper.jar
+          chmod +x ./gradlew
           mkdir -p ~/.android
           if [ ! -f "debug.keystore" ]; then
             keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" -noprompt
@@ -102,9 +105,6 @@ jobs:
         env:
           GRADLE_OPTS: "-Djava.awt.headless=true -Dorg.gradle.jvmargs=\"-Xmx4g -Dfile.encoding=UTF-8 -Djava.awt.headless=true\""
         run: |
-          test -f ./gradlew
-          test -f gradle/wrapper/gradle-wrapper.jar
-          chmod +x ./gradlew
           ./gradlew :app:assembleDebug --no-daemon --stacktrace
 
       - name: Run Android Verification Gates
@@ -139,9 +139,6 @@ jobs:
           export KEY_ALIAS="$RELEASE_KEY_ALIAS"
           export KEY_PASSWORD="$RELEASE_KEY_PASSWORD"
 
-          test -f ./gradlew
-          test -f gradle/wrapper/gradle-wrapper.jar
-          chmod +x ./gradlew
           ./gradlew :app:assembleRelease --no-daemon --stacktrace
 
       - name: Prepare Artifacts (APK & OpenCart Plugin)
@@ -171,13 +168,18 @@ jobs:
 
           (
             cd opencart-plugin
-            zip -q -r "../release-assets/cartadmin-opencart-bridge-v${VERSION}.ocmod.zip" install.xml upload/ README.md
+            zip -q -r "../release-assets/cartadmin.ocmod.zip" install.json admin/ README.md
+            cd upload
+            zip -q -j "../../release-assets/cartadmin.ocmod.zip" cartadmin_api.php cartadmin_auth.php
           )
 
-          unzip -t "release-assets/cartadmin-opencart-bridge-v${VERSION}.ocmod.zip"
-          entries="$(unzip -Z1 "release-assets/cartadmin-opencart-bridge-v${VERSION}.ocmod.zip")"
-          grep -Fxq 'upload/cartadmin_api.php' <<<"$entries"
-          grep -Fxq 'upload/cartadmin_auth.php' <<<"$entries"
+          unzip -t "release-assets/cartadmin.ocmod.zip"
+          entries="$(unzip -Z1 "release-assets/cartadmin.ocmod.zip")"
+          grep -Fxq 'install.json' <<<"$entries"
+          grep -Fxq 'cartadmin_api.php' <<<"$entries"
+          grep -Fxq 'cartadmin_auth.php' <<<"$entries"
+          grep -Fxq 'admin/controller/module/cartadmin.php' <<<"$entries"
+          grep -Fxq 'admin/model/module/cartadmin.php' <<<"$entries"
 
       - name: Upload Build Artifacts (CI)
         uses: actions/upload-artifact@v7
@@ -210,41 +212,87 @@ jobs:
         run: |
           set -euo pipefail
           APK_PATH="release-assets/CartAdmin-v${VERSION}.apk"
-          PLUGIN_PATH="release-assets/cartadmin-opencart-bridge-v${VERSION}.ocmod.zip"
+          PLUGIN_PATH="release-assets/cartadmin.ocmod.zip"
           RELEASE_TITLE="CartAdmin ${TAG_NAME} — OpenCart ITALIA by SOLO SOLUZIONI"
+          RELEASE_FLAGS=(--latest)
+
+          if [[ "$VERSION" == *-* ]]; then
+            RELEASE_FLAGS=(--prerelease)
+            RELEASE_TITLE="CartAdmin ${TAG_NAME} — Pre-release di test"
+          fi
 
           if gh release view "${TAG_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
             echo "::error::Release ${TAG_NAME} already exists and cannot be overwritten."
             exit 1
           fi
 
-          cat << 'EOF' > release_notes.md
-          ## 🛒 CartAdmin ${TAG_NAME} — App Ufficiale & Plugin OpenCart ITALIA
+          if [[ "$VERSION" == *-* ]]; then
+            cat << EOF > release_notes.md
+          ## CartAdmin ${TAG_NAME} — pre-release di test
 
-          **CartAdmin** è la piattaforma mobile e bridge ufficiale di **OpenCart ITALIA** ([www.opencartitalia.it](https://www.opencartitalia.it)) sviluppata da **SOLO SOLUZIONI** ([www.solosoluzioni.it](https://www.solosoluzioni.it)).
+          > **Non usare in produzione.** Questa build serve a verificare su dispositivi Android fisici la nuova protezione hardware delle credenziali.
 
-          ---
+          ### Modifiche di sicurezza da verificare
 
-          ### 📦 Download Disponibili in questa Release
+          - autenticazione del bridge OpenCart esclusivamente tramite header; rimosso il provisioning pubblico e l'invio di credenziali in URL o form;
+          - credenziali Android cifrate con AES-256-GCM e chiave hardware-backed di Android Keystore;
+          - StrongBox preferito quando disponibile e TEE hardware-backed obbligatorio; il salvataggio persistente fallisce in modo sicuro sui dispositivi privi di protezione hardware;
+          - migrazione dei dati Room precedentemente in chiaro e bonifica del database SQLite;
+          - migrazione delle password locali a PBKDF2;
+          - regole di backup Android aggiornate per escludere dati sensibili.
+          - pacchetto installabile da OpenCart 4.1.x con \`install.json\` e configurazione dal pannello amministrativo;
+          - token bridge mostrato una sola volta e memorizzato nel database esclusivamente come hash non reversibile Argon2id/bcrypt;
+          - rimosso dall'app il generatore PHP che incorporava il token in un file.
 
-          | Download | Descrizione | Come Installare |
-          | :--- | :--- | :--- |
-          | 📱 **[`CartAdmin-v${VERSION}.apk`](https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/CartAdmin-v${VERSION}.apk)** | Applicazione Android per smartphone e tablet | Scarica e apri sul dispositivo Android |
-          | 🔌 **[`cartadmin-opencart-bridge-v${VERSION}.ocmod.zip`](https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/cartadmin-opencart-bridge-v${VERSION}.ocmod.zip)** | Estensione OpenCart 2.x, 3.x e 4.x | Carica in *Estensioni > Programma di Installazione* (OCMOD) |
+          ### Artefatti
 
-          ---
+          - [CartAdmin-v${VERSION}.apk](https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/CartAdmin-v${VERSION}.apk) — APK release firmato dal workflow GitHub Actions;
+          - [cartadmin.ocmod.zip](https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/cartadmin.ocmod.zip) — estensione per OpenCart 4.1.x.
 
-          ### ✨ Novità & Note di Rilascio (${TAG_NAME})
-          - 🛡️ **Zero alert CodeQL aperti**: corretti gli alert Android rilevati nella precedente versione.
-          - 🔐 **Biometria protetta da Android Keystore**: lo sblocco richiede una prova crittografica AES-GCM con biometria forte.
-          - 🌐 **Pinning TLS per ogni negozio**: HTTPS obbligatorio e pin SPKI persistenti per gli host OpenCart configurati.
-          - 🔔 **Intent Android protetti**: PendingIntent immutabili ed espliciti e invio sicuro dei dati di contatto.
-          - 🔐 **APK release firmato**: artifact Android prodotto con la chiave di rilascio protetta nei GitHub Actions secrets.
-          - ⚡ **Build e packaging verificati**: Gradle 9.3.1 con checksum e pacchetto OCMOD validato.
+          ### Verifiche eseguite
+
+          - build release, test unitari e Android Lint nel workflow;
+          - contenuto del pacchetto OCMOD validato dal workflow.
+
+          Rimane obbligatoria la prova su dispositivo fisico con TEE o StrongBox. L'aggiornamento diretto funziona solo se l'app già installata è firmata con la stessa chiave di rilascio.
           EOF
+          else
+            cat << EOF > release_notes.md
+          ## CartAdmin ${TAG_NAME}
 
-          sed -i "s/\${TAG_NAME}/${TAG_NAME}/g" release_notes.md
-          sed -i "s/\${VERSION}/${VERSION}/g" release_notes.md
+          Release stabile 2.0 con navigazione riorganizzata e nuovi moduli amministrativi collegati ai dati reali di OpenCart 4.1.x.
+
+          ### Novità confermate
+
+          - barra inferiore ridotta a Home, Vendite, Catalogo, Clienti e Altro, con i moduli organizzati in sottomenu;
+          - Catalogo esteso con Prodotti, Categorie, Piani di abbonamento, Pagine e Recensioni;
+          - nuovi menu CMS (Articoli, Argomenti, Commenti e Antispam) e Clienti (Clienti, Approvazioni e GDPR);
+          - Traffic, CMS e Configurazione raggruppati sotto Altro; Audit e Licenza sono accessibili da Configurazione;
+          - elenchi amministrativi letti dalle tabelle native OpenCart, senza record dimostrativi;
+          - attivazione e disattivazione remota soltanto per i moduli che espongono uno stato semplice e verificabile;
+          - Antispam consente aggiunta ed eliminazione; Approvazioni clienti e GDPR restano esplicitamente in sola lettura;
+          - le funzioni non supportate dallo schema OpenCart installato vengono indicate come non disponibili, senza dati fittizi;
+          - telemetria reale basata sulla tabella nativa OpenCart \`customer_online\`, senza valori dimostrativi;
+          - modifica prodotto inviata al bridge e applicata localmente soltanto dopo conferma remota;
+          - rimossi dal runtime i dati dimostrativi di abbonamenti e resi; una risposta valida vuota azzera anche la cache locale;
+          - app Android e bridge riportano entrambi la versione 2.0.0 e devono essere aggiornati insieme;
+          - installazione del bridge dal pannello OpenCart tramite \`cartadmin.ocmod.zip\` e \`install.json\`;
+          - token generato e ruotato dal pannello, salvato su OpenCart soltanto come hash non reversibile;
+          - nell'app il token resta cifrato AES-256-GCM con chiave Android Keystore hardware-backed e non viene riproposto nell'interfaccia;
+          - credenziali trasmesse soltanto negli header su HTTPS, con migrazione sicura delle credenziali locali preesistenti.
+
+          ### Artefatti
+
+          - [CartAdmin-v${VERSION}.apk](https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/CartAdmin-v${VERSION}.apk) — APK release firmato dal workflow GitHub Actions;
+          - [cartadmin.ocmod.zip](https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/cartadmin.ocmod.zip) — estensione per OpenCart 4.1.x.
+
+          ### Verifiche automatiche
+
+          Build release firmata, test unitari, compilazione dei test strumentali, Android Lint e struttura del pacchetto OCMOD sono verificati dal workflow di pubblicazione. I workflow di sicurezza eseguono inoltre CodeQL, Semgrep, controllo sintattico PHP e test dell'autenticazione del bridge.
+
+          Compatibilità confermata: Android API 24–36 e OpenCart 4.1.x. Il bridge non dichiara compatibilità con OpenCart 3.x.
+          EOF
+          fi
 
           echo "Creating new release ${TAG_NAME}..."
           gh release create "${TAG_NAME}" \
@@ -254,6 +302,6 @@ jobs:
             --target "$GITHUB_SHA" \
             --title "$RELEASE_TITLE" \
             --notes-file release_notes.md \
-            --latest
+            "${RELEASE_FLAGS[@]}"
 
           echo "Release ${TAG_NAME} created successfully with signed APK and OCMOD plugin."

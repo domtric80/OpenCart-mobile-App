@@ -4,6 +4,14 @@ import android.content.Context
 import android.util.Log
 import com.example.BuildConfig
 import com.example.model.Category
+import com.example.model.ActivePageVisit
+import com.example.model.AdminModule
+import com.example.model.AdminModuleSnapshot
+import com.example.model.AdminRecord
+import com.example.model.DeviceBreakdown
+import com.example.model.GeoVisitor
+import com.example.model.LiveVisitorEvent
+import com.example.model.LiveVisitorPoint
 import com.example.model.Order
 import com.example.model.OrderDetail
 import com.example.model.OrderItem
@@ -14,6 +22,8 @@ import com.example.model.ReturnStatus
 import com.example.model.Store
 import com.example.model.Subscription
 import com.example.model.SubscriptionStatus
+import com.example.model.TrafficSource
+import com.example.model.VisitorRealtimeStats
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
@@ -41,9 +51,158 @@ class OpenCartApiClient(context: Context) {
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
+    /** Recupera un elenco amministrativo reale dal bridge senza persistenza locale. */
+    suspend fun fetchAdminModule(
+        baseUrl: String,
+        apiKey: String,
+        username: String,
+        module: AdminModule,
+        limit: Int = 100
+    ): Result<AdminModuleSnapshot> = withContext(Dispatchers.IO) {
+        try {
+            var cleanUrl = baseUrl.trim().removeSuffix("/")
+            if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
+                cleanUrl = "https://$cleanUrl"
+            }
+            val request = BridgeRequestFactory.authenticatedGet(
+                baseUrl = cleanUrl,
+                action = "management_list",
+                apiKey = apiKey,
+                username = username,
+                queryParameters = mapOf(
+                    "module" to module.apiKey,
+                    "limit" to limit.coerceIn(1, 200).toString()
+                )
+            )
+
+            tlsClient.execute(request).use { response ->
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    return@withContext Result.failure(Exception("HTTP ${response.code}: $body"))
+                }
+
+                val json = JSONObject(body)
+                if (!json.optBoolean("success", false)) {
+                    return@withContext Result.failure(
+                        Exception(json.optString("error", "Elenco ${module.label} non disponibile"))
+                    )
+                }
+                val items = json.optJSONArray("items") ?: JSONArray()
+                val records = buildList {
+                    for (index in 0 until items.length()) {
+                        val item = items.getJSONObject(index)
+                        add(
+                            AdminRecord(
+                                id = item.optString("id", index.toString()),
+                                title = item.optString("title", "#${item.optString("id", index.toString())}"),
+                                subtitle = item.optString("subtitle", ""),
+                                statusLabel = item.optString("status_label", ""),
+                                active = if (item.has("active") && !item.isNull("active")) {
+                                    item.optBoolean("active")
+                                } else null,
+                                date = item.optString("date", ""),
+                                detail = item.optString("detail", "")
+                            )
+                        )
+                    }
+                }
+                Result.success(
+                    AdminModuleSnapshot(
+                        module = module,
+                        supported = json.optBoolean("supported", true),
+                        records = records,
+                        message = json.optString("message", ""),
+                        lastUpdated = json.optString("generated_at", "")
+                    )
+                )
+            }
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
+    suspend fun updateAdminRecordStatus(
+        baseUrl: String,
+        apiKey: String,
+        username: String,
+        module: AdminModule,
+        recordId: String,
+        active: Boolean
+    ): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            var cleanUrl = baseUrl.trim().removeSuffix("/")
+            if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
+                cleanUrl = "https://$cleanUrl"
+            }
+            val request = BridgeRequestFactory.authenticatedFormPost(
+                baseUrl = cleanUrl,
+                action = "management_status",
+                apiKey = apiKey,
+                username = username,
+                fields = mapOf(
+                    "module" to module.apiKey,
+                    "id" to recordId,
+                    "active" to if (active) "1" else "0"
+                )
+            )
+            tlsClient.execute(request).use { response ->
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    Result.failure(Exception("HTTP ${response.code}: $body"))
+                } else {
+                    val json = JSONObject(body)
+                    if (json.optBoolean("success", false)) Result.success(true)
+                    else Result.failure(Exception(json.optString("error", "Aggiornamento rifiutato")))
+                }
+            }
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
+    suspend fun mutateAntispamKeyword(
+        baseUrl: String,
+        apiKey: String,
+        username: String,
+        operation: String,
+        keyword: String = "",
+        recordId: String = ""
+    ): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            var cleanUrl = baseUrl.trim().removeSuffix("/")
+            if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
+                cleanUrl = "https://$cleanUrl"
+            }
+            val fields = if (operation == "add") {
+                mapOf("operation" to "add", "keyword" to keyword.trim())
+            } else {
+                mapOf("operation" to "delete", "id" to recordId)
+            }
+            val request = BridgeRequestFactory.authenticatedFormPost(
+                baseUrl = cleanUrl,
+                action = "management_antispam",
+                apiKey = apiKey,
+                username = username,
+                fields = fields
+            )
+            tlsClient.execute(request).use { response ->
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    Result.failure(Exception("HTTP ${response.code}: $body"))
+                } else {
+                    val json = JSONObject(body)
+                    if (json.optBoolean("success", false)) Result.success(true)
+                    else Result.failure(Exception(json.optString("error", "Operazione Antispam rifiutata")))
+                }
+            }
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
     /**
      * Test connection to OpenCart store:
-     * 1. Checks for CartAdmin Bridge script (cartadmin_api.php?action=status)
+     * 1. Checks the CartAdmin Bridge extension endpoint.
      * 2. If not present, checks standard OpenCart API (index.php?route=api/login)
      */
     suspend fun testConnection(
@@ -156,7 +315,7 @@ class OpenCartApiClient(context: Context) {
                             statusCode = code,
                             responseTimeMs = duration,
                             message = "OpenCart API errore: $errorMsg",
-                            details = "Consiglio: Installa l'estensione cartadmin_api.php per bypassare il blocco IP dinamico di OpenCart."
+                            details = "Consiglio: installa e configura CartAdmin Bridge dal pannello OpenCart."
                         )
                     }
 
@@ -173,7 +332,7 @@ class OpenCartApiClient(context: Context) {
                         statusCode = code,
                         responseTimeMs = duration,
                         message = "Errore HTTP $code dal server OpenCart.",
-                        details = "Carica il file cartadmin_api.php nella cartella principale del tuo OpenCart oppure verifica i permessi API."
+                        details = "Installa cartadmin.ocmod.zip dal pannello OpenCart oppure verifica i permessi API."
                     )
                 }
             }
@@ -308,6 +467,7 @@ class OpenCartApiClient(context: Context) {
                     val sku = obj.optString("sku", model)
                     val qty = obj.optInt("quantity", 0)
                     val price = obj.optDouble("price", 0.0)
+                    val specialPrice = if (obj.isNull("special_price")) null else obj.optDouble("special_price")
                     val status = obj.optBoolean("status", true)
                     val category = obj.optString("category", "Catalogo OpenCart")
 
@@ -318,7 +478,7 @@ class OpenCartApiClient(context: Context) {
                             model = model,
                             sku = if (sku.isNotBlank()) sku else model,
                             price = price,
-                            specialPrice = null,
+                            specialPrice = specialPrice,
                             quantity = qty,
                             minQuantityAlert = 5,
                             category = category,
@@ -396,6 +556,167 @@ class OpenCartApiClient(context: Context) {
         }
     }
 
+    /** Aggiorna la scheda prodotto completa e verifica la risposta del bridge. */
+    suspend fun updateProduct(
+        baseUrl: String,
+        apiKey: String,
+        product: Product,
+        username: String = ""
+    ): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val request = BridgeRequestFactory.authenticatedFormPost(
+                baseUrl = baseUrl,
+                action = "update_product",
+                apiKey = apiKey,
+                username = username,
+                fields = mapOf(
+                    "product_id" to product.id.removePrefix("prod_").removePrefix("product_"),
+                    "name" to product.name,
+                    "model" to product.model,
+                    "sku" to product.sku,
+                    "price" to product.price.toString(),
+                    "quantity" to product.quantity.coerceAtLeast(0).toString(),
+                    "category" to product.category,
+                    "description" to product.description,
+                    "status" to if (product.status) "1" else "0"
+                )
+            )
+
+            tlsClient.execute(request).use { response ->
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    return@use Result.failure(Exception("HTTP ${response.code}: $body"))
+                }
+                val json = JSONObject(body)
+                if (json.optBoolean("success", false)) {
+                    Result.success(true)
+                } else {
+                    Result.failure(Exception(json.optString("error", "Aggiornamento prodotto rifiutato")))
+                }
+            }
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
+    /** Recupera soltanto la telemetria realmente registrata da OpenCart. */
+    suspend fun fetchVisitorTelemetry(
+        baseUrl: String,
+        apiKey: String,
+        username: String = ""
+    ): Result<VisitorRealtimeStats> = withContext(Dispatchers.IO) {
+        try {
+            val request = BridgeRequestFactory.authenticatedGet(
+                baseUrl = baseUrl,
+                action = "visitor_telemetry",
+                apiKey = apiKey,
+                username = username
+            )
+
+            tlsClient.execute(request).use { response ->
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    return@use Result.failure(Exception("HTTP ${response.code}: $body"))
+                }
+
+                val json = JSONObject(body)
+                if (!json.optBoolean("success", false)) {
+                    return@use Result.failure(Exception(json.optString("error", "Telemetria non disponibile")))
+                }
+
+                val history = json.optJSONArray("traffic_history") ?: JSONArray()
+                val pages = json.optJSONArray("top_pages") ?: JSONArray()
+                val countries = json.optJSONArray("top_countries") ?: JSONArray()
+                val sources = json.optJSONArray("traffic_sources") ?: JSONArray()
+                val devices = json.optJSONArray("device_stats") ?: JSONArray()
+                val events = json.optJSONArray("live_events") ?: JSONArray()
+
+                Result.success(
+                    VisitorRealtimeStats(
+                        trackingEnabled = json.optBoolean("tracking_enabled", false),
+                        dataAvailable = json.optBoolean("data_available", false),
+                        activeVisitorsNow = json.optInt("active_visitors_now", 0),
+                        pageViewsPerMin = json.optInt("page_updates_per_min", 0),
+                        activeCartsCount = json.optInt("active_carts_count", 0),
+                        activeCheckoutsCount = json.optInt("active_checkouts_count", 0),
+                        avgDurationSeconds = json.optInt("avg_duration_seconds", 0),
+                        bounceRate = json.optDouble("bounce_rate", 0.0),
+                        trafficHistory = (0 until history.length()).map { index ->
+                            history.getJSONObject(index).let { item ->
+                                LiveVisitorPoint(
+                                    timeLabel = item.optString("time_label"),
+                                    activeUsers = item.optInt("active_users", 0),
+                                    pageViews = item.optInt("page_views", 0)
+                                )
+                            }
+                        },
+                        topPages = (0 until pages.length()).map { index ->
+                            pages.getJSONObject(index).let { item ->
+                                ActivePageVisit(
+                                    path = item.optString("path", "/"),
+                                    title = item.optString("title", "Pagina OpenCart"),
+                                    activeUsers = item.optInt("active_users", 0),
+                                    percentage = item.optDouble("percentage", 0.0),
+                                    category = item.optString("category", "OpenCart")
+                                )
+                            }
+                        },
+                        topCountries = (0 until countries.length()).map { index ->
+                            countries.getJSONObject(index).let { item ->
+                                GeoVisitor(
+                                    country = item.optString("country"),
+                                    countryCode = item.optString("country_code"),
+                                    flagEmoji = item.optString("flag_emoji"),
+                                    topCities = item.optString("top_cities"),
+                                    visitorsCount = item.optInt("visitors_count", 0),
+                                    percentage = item.optDouble("percentage", 0.0)
+                                )
+                            }
+                        },
+                        trafficSources = (0 until sources.length()).map { index ->
+                            sources.getJSONObject(index).let { item ->
+                                TrafficSource(
+                                    source = item.optString("source", "Accesso diretto"),
+                                    type = item.optString("type", "Direct"),
+                                    visitorsCount = item.optInt("visitors_count", 0),
+                                    percentage = item.optDouble("percentage", 0.0),
+                                    conversionRate = item.optDouble("conversion_rate", 0.0)
+                                )
+                            }
+                        },
+                        deviceStats = (0 until devices.length()).map { index ->
+                            devices.getJSONObject(index).let { item ->
+                                DeviceBreakdown(
+                                    deviceType = item.optString("device_type"),
+                                    count = item.optInt("count", 0),
+                                    percentage = item.optDouble("percentage", 0.0),
+                                    iconName = item.optString("icon_name")
+                                )
+                            }
+                        },
+                        liveEvents = (0 until events.length()).map { index ->
+                            events.getJSONObject(index).let { item ->
+                                LiveVisitorEvent(
+                                    id = item.optString("id", "event_$index"),
+                                    timestamp = item.optString("timestamp"),
+                                    eventType = item.optString("event_type", "PAGE_VIEW"),
+                                    description = item.optString("description"),
+                                    location = item.optString("location"),
+                                    iconType = item.optString("icon_type", "page")
+                                )
+                            }
+                        },
+                        source = json.optString("source"),
+                        lastUpdated = json.optString("last_updated"),
+                        limitations = json.optString("limitations")
+                    )
+                )
+            }
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
     /**
      * Aggiorna la giacenza di un prodotto direttamente su OpenCart.
      */
@@ -414,7 +735,14 @@ class OpenCartApiClient(context: Context) {
             )
 
             tlsClient.execute(request).use { response ->
-                Result.success(response.isSuccessful)
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    Result.failure(Exception("HTTP ${response.code}: $body"))
+                } else {
+                    val json = JSONObject(body)
+                    if (json.optBoolean("success", false)) Result.success(true)
+                    else Result.failure(Exception(json.optString("error", "Aggiornamento quantità rifiutato")))
+                }
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -443,7 +771,14 @@ class OpenCartApiClient(context: Context) {
             )
 
             tlsClient.execute(request).use { response ->
-                Result.success(response.isSuccessful)
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    Result.failure(Exception("HTTP ${response.code}: $body"))
+                } else {
+                    val json = JSONObject(body)
+                    if (json.optBoolean("success", false)) Result.success(true)
+                    else Result.failure(Exception(json.optString("error", "Aggiornamento ordine rifiutato")))
+                }
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -590,7 +925,14 @@ class OpenCartApiClient(context: Context) {
             )
 
             tlsClient.execute(request).use { response ->
-                Result.success(response.isSuccessful)
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    Result.failure(Exception("HTTP ${response.code}: $body"))
+                } else {
+                    val json = JSONObject(body)
+                    if (json.optBoolean("success", false)) Result.success(true)
+                    else Result.failure(Exception(json.optString("error", "Aggiornamento abbonamento rifiutato")))
+                }
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -621,7 +963,14 @@ class OpenCartApiClient(context: Context) {
             )
 
             tlsClient.execute(request).use { response ->
-                Result.success(response.isSuccessful)
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    Result.failure(Exception("HTTP ${response.code}: $body"))
+                } else {
+                    val json = JSONObject(body)
+                    if (json.optBoolean("success", false)) Result.success(true)
+                    else Result.failure(Exception(json.optString("error", "Aggiornamento reso rifiutato")))
+                }
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -646,7 +995,7 @@ class OpenCartApiClient(context: Context) {
             cleanUrl = "https://$cleanUrl"
         }
 
-        val bridgeUrl = "$cleanUrl/cartadmin_api.php?action=audit_log"
+        val bridgeUrl = "$cleanUrl/extension/cartadmin/cartadmin_api.php?action=audit_log"
         val payload = JSONObject().apply {
             put("action_type", actionType)
             put("description", description)

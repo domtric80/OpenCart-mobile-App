@@ -181,7 +181,9 @@ fun AuthLockScreen(
                         onValueChange = { usernameInput = it },
                         label = { Text("Nome Operatore") },
                         leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("first_auth_username_input"),
                         singleLine = true
                     )
 
@@ -199,7 +201,9 @@ fun AuthLockScreen(
                             }
                         },
                         visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("first_auth_password_input"),
                         singleLine = true
                     )
 
@@ -209,7 +213,9 @@ fun AuthLockScreen(
                         label = { Text("Conferma Password") },
                         leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
                         visualTransformation = PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("first_auth_password_confirm_input"),
                         singleLine = true
                     )
 

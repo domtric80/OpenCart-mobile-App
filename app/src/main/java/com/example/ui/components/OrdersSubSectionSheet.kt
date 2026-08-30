@@ -176,11 +176,11 @@ private fun SubSectionOptionCard(
             .testTag(testTag),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) ThemePrimaryContainer else CardSurfacePure
+            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else CardSurfacePure
         ),
         border = androidx.compose.foundation.BorderStroke(
             1.5.dp,
-            if (isSelected) ThemePrimary else ThemeOutlineVariant.copy(alpha = 0.6f)
+            if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
         )
     ) {
         Row(
@@ -191,14 +191,14 @@ private fun SubSectionOptionCard(
         ) {
             Surface(
                 shape = CircleShape,
-                color = if (isSelected) ThemePrimary else CardSurfaceLight,
+                color = if (isSelected) MaterialTheme.colorScheme.primary else CardSurfaceLight,
                 modifier = Modifier.size(48.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = icon,
                         contentDescription = null,
-                        tint = if (isSelected) Color.White else ThemePrimary,
+                        tint = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(24.dp)
                     )
                 }
@@ -215,7 +215,11 @@ private fun SubSectionOptionCard(
                         text = title,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = if (isSelected) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        }
                     )
 
                     Surface(
@@ -238,7 +242,11 @@ private fun SubSectionOptionCard(
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (isSelected) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
                 )
             }
 
@@ -246,14 +254,14 @@ private fun SubSectionOptionCard(
                 Spacer(modifier = Modifier.width(8.dp))
                 Surface(
                     shape = CircleShape,
-                    color = ThemePrimary,
+                    color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(26.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = Icons.Default.Check,
                             contentDescription = "Selezionato",
-                            tint = Color.White,
+                            tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(16.dp)
                         )
                     }
