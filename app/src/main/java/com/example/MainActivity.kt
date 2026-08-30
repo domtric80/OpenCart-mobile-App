@@ -281,7 +281,7 @@ fun MainAppContent(
                             viewModel.setDirectProductStock(productId, newQty)
                         },
                         onAddNewProduct = { name, model, sku, price, special, qty, minAlert, category, desc, status ->
-                            viewModel.addNewProduct(name, model, sku, price, special, qty, category, desc)
+                            viewModel.addNewProduct(name, model, sku, price, special, qty, minAlert, category, desc, status)
                         },
                         onUpdateProduct = { product ->
                             viewModel.updateProduct(product)

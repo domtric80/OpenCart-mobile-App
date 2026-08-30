@@ -118,6 +118,29 @@ class BridgeRequestFactoryTest {
     }
 
     @Test
+    fun catalogCrudMutationsKeepCredentialsInHeadersOnly() {
+        val actions = listOf("create_product", "delete_product", "create_category", "update_category", "delete_category")
+
+        actions.forEach { action ->
+            val request = BridgeRequestFactory.authenticatedFormPost(
+                baseUrl = "https://shop.example",
+                action = action,
+                apiKey = "catalog-secret",
+                username = "operator",
+                fields = mapOf("id" to "42")
+            )
+            val body = request.body as FormBody
+            val names = (0 until body.size).map(body::name)
+
+            assertEquals(action, body.value(0))
+            assertFalse(names.contains("api_key"))
+            assertFalse(names.contains("username"))
+            assertEquals("catalog-secret", request.header("X-CartAdmin-Key"))
+            assertEquals("operator", request.header("X-CartAdmin-User"))
+        }
+    }
+
+    @Test
     fun managementListUsesAllowlistedModuleQueryAndHeaderOnlyCredentials() {
         val request = BridgeRequestFactory.authenticatedGet(
             baseUrl = "https://shop.example",
