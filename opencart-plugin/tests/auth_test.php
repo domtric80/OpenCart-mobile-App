@@ -80,5 +80,7 @@ assertSourceContains($bridgeSource, '$statusTargets = [', 'Management mutations 
 assertSourceContains($bridgeSource, 'mb_substr($keyword, 0, 64)', 'Antispam keywords must respect the native OpenCart field length.');
 assertSourceContains($bridgeSource, 'function cartadminInvalidateFileCache', 'Native file-cache invalidation must be present.');
 assertSourceContains($bridgeSource, "'reviews' => ['product']", 'Review mutations must invalidate the product cache.');
+assertSourceContains($bridgeSource, "preg_match('/^[a-zA-Z0-9_]{1,32}$/', \$rawPrefix)", 'Database prefixes used in identifiers must be allowlisted.');
+assertSameValue(12, substr_count($bridgeSource, 'nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string'), 'SQL suppressions must remain limited to reviewed allowlisted identifiers.');
 
 fwrite(STDOUT, "CartAdmin bridge authentication tests passed.\n");

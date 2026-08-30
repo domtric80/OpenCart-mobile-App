@@ -349,43 +349,43 @@ try {
             $moduleQueries = [
                 'subscription_plans' => [
                     'tables' => ['subscription_plan', 'subscription_plan_description'],
-                    'sql' => "SELECT sp.subscription_plan_id AS id, spd.name AS title, CONCAT(sp.frequency, ' • ', sp.cycle, ' ciclo/i') AS subtitle, sp.status AS active, '' AS date_value, CONCAT('Durata: ', sp.duration) AS detail, sp.status AS status_code FROM `{$db_prefix}subscription_plan` sp LEFT JOIN `{$db_prefix}subscription_plan_description` spd ON (sp.subscription_plan_id = spd.subscription_plan_id AND spd.language_id = {$languageId}) ORDER BY sp.sort_order ASC, sp.subscription_plan_id DESC LIMIT {$limit}"
+                    'sql' => "SELECT sp.subscription_plan_id AS id, spd.name AS title, CONCAT(sp.frequency, ' • ', sp.cycle, ' ciclo/i') AS subtitle, sp.status AS active, '' AS date_value, CONCAT('Durata: ', sp.duration) AS detail, sp.status AS status_code FROM `{$db_prefix}subscription_plan` sp LEFT JOIN `{$db_prefix}subscription_plan_description` spd ON (sp.subscription_plan_id = spd.subscription_plan_id AND spd.language_id = {$languageId}) ORDER BY sp.sort_order ASC, sp.subscription_plan_id DESC LIMIT {$limit}" // nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string
                 ],
                 'pages' => [
                     'tables' => ['information', 'information_description'],
-                    'sql' => "SELECT i.information_id AS id, id.title AS title, CONCAT('Ordinamento: ', i.sort_order) AS subtitle, i.status AS active, '' AS date_value, '' AS detail, i.status AS status_code FROM `{$db_prefix}information` i LEFT JOIN `{$db_prefix}information_description` id ON (i.information_id = id.information_id AND id.language_id = {$languageId}) ORDER BY i.sort_order ASC, i.information_id DESC LIMIT {$limit}"
+                    'sql' => "SELECT i.information_id AS id, id.title AS title, CONCAT('Ordinamento: ', i.sort_order) AS subtitle, i.status AS active, '' AS date_value, '' AS detail, i.status AS status_code FROM `{$db_prefix}information` i LEFT JOIN `{$db_prefix}information_description` id ON (i.information_id = id.information_id AND id.language_id = {$languageId}) ORDER BY i.sort_order ASC, i.information_id DESC LIMIT {$limit}" // nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string
                 ],
                 'reviews' => [
                     'tables' => ['review', 'product_description'],
-                    'sql' => "SELECT r.review_id AS id, pd.name AS title, r.author AS subtitle, r.status AS active, r.date_added AS date_value, CONCAT(r.rating, '/5 • ', LEFT(r.text, 180)) AS detail, r.status AS status_code FROM `{$db_prefix}review` r LEFT JOIN `{$db_prefix}product_description` pd ON (r.product_id = pd.product_id AND pd.language_id = {$languageId}) ORDER BY r.date_added DESC, r.review_id DESC LIMIT {$limit}"
+                    'sql' => "SELECT r.review_id AS id, pd.name AS title, r.author AS subtitle, r.status AS active, r.date_added AS date_value, CONCAT(r.rating, '/5 • ', LEFT(r.text, 180)) AS detail, r.status AS status_code FROM `{$db_prefix}review` r LEFT JOIN `{$db_prefix}product_description` pd ON (r.product_id = pd.product_id AND pd.language_id = {$languageId}) ORDER BY r.date_added DESC, r.review_id DESC LIMIT {$limit}" // nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string
                 ],
                 'articles' => [
                     'tables' => ['article', 'article_description'],
-                    'sql' => "SELECT a.article_id AS id, ad.name AS title, a.author AS subtitle, a.status AS active, a.date_added AS date_value, CONCAT('Argomento #', a.topic_id) AS detail, a.status AS status_code FROM `{$db_prefix}article` a LEFT JOIN `{$db_prefix}article_description` ad ON (a.article_id = ad.article_id AND ad.language_id = {$languageId}) ORDER BY a.date_added DESC, a.article_id DESC LIMIT {$limit}"
+                    'sql' => "SELECT a.article_id AS id, ad.name AS title, a.author AS subtitle, a.status AS active, a.date_added AS date_value, CONCAT('Argomento #', a.topic_id) AS detail, a.status AS status_code FROM `{$db_prefix}article` a LEFT JOIN `{$db_prefix}article_description` ad ON (a.article_id = ad.article_id AND ad.language_id = {$languageId}) ORDER BY a.date_added DESC, a.article_id DESC LIMIT {$limit}" // nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string
                 ],
                 'topics' => [
                     'tables' => ['topic', 'topic_description'],
-                    'sql' => "SELECT t.topic_id AS id, td.name AS title, CONCAT('Ordinamento: ', t.sort_order) AS subtitle, t.status AS active, '' AS date_value, '' AS detail, t.status AS status_code FROM `{$db_prefix}topic` t LEFT JOIN `{$db_prefix}topic_description` td ON (t.topic_id = td.topic_id AND td.language_id = {$languageId}) ORDER BY t.sort_order ASC, t.topic_id DESC LIMIT {$limit}"
+                    'sql' => "SELECT t.topic_id AS id, td.name AS title, CONCAT('Ordinamento: ', t.sort_order) AS subtitle, t.status AS active, '' AS date_value, '' AS detail, t.status AS status_code FROM `{$db_prefix}topic` t LEFT JOIN `{$db_prefix}topic_description` td ON (t.topic_id = td.topic_id AND td.language_id = {$languageId}) ORDER BY t.sort_order ASC, t.topic_id DESC LIMIT {$limit}" // nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string
                 ],
                 'comments' => [
                     'tables' => ['article_comment', 'article_description'],
-                    'sql' => "SELECT ac.article_comment_id AS id, ad.name AS title, ac.author AS subtitle, ac.status AS active, ac.date_added AS date_value, CONCAT(ac.rating, '/5 • ', LEFT(ac.comment, 180)) AS detail, ac.status AS status_code FROM `{$db_prefix}article_comment` ac LEFT JOIN `{$db_prefix}article_description` ad ON (ac.article_id = ad.article_id AND ad.language_id = {$languageId}) ORDER BY ac.date_added DESC, ac.article_comment_id DESC LIMIT {$limit}"
+                    'sql' => "SELECT ac.article_comment_id AS id, ad.name AS title, ac.author AS subtitle, ac.status AS active, ac.date_added AS date_value, CONCAT(ac.rating, '/5 • ', LEFT(ac.comment, 180)) AS detail, ac.status AS status_code FROM `{$db_prefix}article_comment` ac LEFT JOIN `{$db_prefix}article_description` ad ON (ac.article_id = ad.article_id AND ad.language_id = {$languageId}) ORDER BY ac.date_added DESC, ac.article_comment_id DESC LIMIT {$limit}" // nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string
                 ],
                 'antispam' => [
                     'tables' => ['antispam'],
-                    'sql' => "SELECT antispam_id AS id, keyword AS title, 'Parola bloccata' AS subtitle, NULL AS active, '' AS date_value, '' AS detail, NULL AS status_code FROM `{$db_prefix}antispam` ORDER BY keyword ASC LIMIT {$limit}"
+                    'sql' => "SELECT antispam_id AS id, keyword AS title, 'Parola bloccata' AS subtitle, NULL AS active, '' AS date_value, '' AS detail, NULL AS status_code FROM `{$db_prefix}antispam` ORDER BY keyword ASC LIMIT {$limit}" // nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string
                 ],
                 'customers' => [
                     'tables' => ['customer'],
-                    'sql' => "SELECT customer_id AS id, CONCAT(firstname, ' ', lastname) AS title, email AS subtitle, status AS active, date_added AS date_value, telephone AS detail, status AS status_code FROM `{$db_prefix}customer` ORDER BY date_added DESC, customer_id DESC LIMIT {$limit}"
+                    'sql' => "SELECT customer_id AS id, CONCAT(firstname, ' ', lastname) AS title, email AS subtitle, status AS active, date_added AS date_value, telephone AS detail, status AS status_code FROM `{$db_prefix}customer` ORDER BY date_added DESC, customer_id DESC LIMIT {$limit}" // nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string
                 ],
                 'customer_approvals' => [
                     'tables' => ['customer_approval', 'customer'],
-                    'sql' => "SELECT ca.customer_approval_id AS id, CONCAT(c.firstname, ' ', c.lastname) AS title, c.email AS subtitle, NULL AS active, ca.date_added AS date_value, ca.type AS detail, ca.type AS status_code FROM `{$db_prefix}customer_approval` ca LEFT JOIN `{$db_prefix}customer` c ON (ca.customer_id = c.customer_id) ORDER BY ca.date_added DESC, ca.customer_approval_id DESC LIMIT {$limit}"
+                    'sql' => "SELECT ca.customer_approval_id AS id, CONCAT(c.firstname, ' ', c.lastname) AS title, c.email AS subtitle, NULL AS active, ca.date_added AS date_value, ca.type AS detail, ca.type AS status_code FROM `{$db_prefix}customer_approval` ca LEFT JOIN `{$db_prefix}customer` c ON (ca.customer_id = c.customer_id) ORDER BY ca.date_added DESC, ca.customer_approval_id DESC LIMIT {$limit}" // nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string
                 ],
                 'gdpr' => [
                     'tables' => ['gdpr'],
-                    'sql' => "SELECT gdpr_id AS id, email AS title, action AS subtitle, NULL AS active, date_added AS date_value, '' AS detail, status AS status_code FROM `{$db_prefix}gdpr` ORDER BY date_added DESC, gdpr_id DESC LIMIT {$limit}"
+                    'sql' => "SELECT gdpr_id AS id, email AS title, action AS subtitle, NULL AS active, date_added AS date_value, '' AS detail, status AS status_code FROM `{$db_prefix}gdpr` ORDER BY date_added DESC, gdpr_id DESC LIMIT {$limit}" // nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string
                 ]
             ];
 
@@ -539,7 +539,7 @@ try {
             $idColumn = $target['id'];
             $mysqli->begin_transaction();
             try {
-                $checkStmt = $mysqli->prepare("SELECT `{$idColumn}` FROM `{$tableName}` WHERE `{$idColumn}` = ? LIMIT 1 FOR UPDATE");
+                $checkStmt = $mysqli->prepare("SELECT `{$idColumn}` FROM `{$tableName}` WHERE `{$idColumn}` = ? LIMIT 1 FOR UPDATE"); // nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string
                 if (!$checkStmt) {
                     throw new RuntimeException('Target non disponibile');
                 }
@@ -552,7 +552,7 @@ try {
                     throw new OutOfBoundsException('Elemento non trovato');
                 }
 
-                $updateStmt = $mysqli->prepare("UPDATE `{$tableName}` SET `status` = ? WHERE `{$idColumn}` = ?");
+                $updateStmt = $mysqli->prepare("UPDATE `{$tableName}` SET `status` = ? WHERE `{$idColumn}` = ?"); // nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string
                 if (!$updateStmt) {
                     throw new RuntimeException('Aggiornamento non disponibile');
                 }
