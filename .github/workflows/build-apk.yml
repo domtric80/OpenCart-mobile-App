@@ -234,6 +234,9 @@ jobs:
 
           ### Correzioni di ${TAG_NAME}
 
+          - ripristinato il caricamento delle categorie reali nella schermata Nuovo prodotto, con aggiornamento mirato quando la pagina viene aperta e selezione sicura dopo risposte asincrone;
+          - editor visuale ridisegnato a schermo intero con area di scrittura estesa, comandi rappresentati da icone e barra fissa sopra tastiera e barre di sistema;
+          - aggiunti test strumentali per caricamento tardivo delle categorie e permanenza della toolbar prima e dopo l'apertura della tastiera;
           - “Nuovo prodotto” e “Nuovo articolo” ora usano schermate dedicate a pagina intera, più leggibili e adatte alla compilazione da smartphone;
           - descrizioni prodotto e contenuti articolo dispongono di un editor visuale con P/H1/H2/H3, colore testo, grassetto, corsivo, sottolineato ed elenco puntato;
           - la barra dell'editor si adatta all'apertura della tastiera e il markup viene sanificato sia sul dispositivo sia dal bridge OpenCart prima del salvataggio;

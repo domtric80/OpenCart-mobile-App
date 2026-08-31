@@ -7,6 +7,7 @@ import org.junit.Test
 
 class RichHtmlEditorSecurityTest {
     private val source = File("src/main/java/com/example/ui/components/RichHtmlEditor.kt").readText()
+    private val manifest = File("src/main/AndroidManifest.xml").readText()
 
     @Test
     fun sanitizerRemovesActiveContentAndEventHandlers() {
@@ -35,6 +36,12 @@ class RichHtmlEditorSecurityTest {
             .forEach { feature -> assertTrue("Missing editor feature $feature", source.contains(feature)) }
         listOf("Paragrafo", "Titolo H1", "Titolo H2", "Titolo H3")
             .forEach { style -> assertTrue("Missing block style $style", source.contains(style)) }
-        assertTrue(source.contains("Modifier.fillMaxWidth().imePadding()"))
+        listOf("FormatBold", "FormatItalic", "FormatUnderlined", "FormatListBulleted", "FormatColorText", "Icons.Default.Title")
+            .forEach { icon -> assertTrue("Missing toolbar icon $icon", source.contains(icon)) }
+        assertTrue(source.contains("DialogProperties(usePlatformDefaultWidth = false"))
+        assertTrue(source.contains("SOFT_INPUT_ADJUST_RESIZE"))
+        assertFalse(source.contains(".imePadding()"))
+        assertTrue(source.indexOf("testTag(\"rich_html_editor\")") < source.indexOf("testTag(\"rich_editor_toolbar\")"))
+        assertTrue(manifest.contains("android:windowSoftInputMode=\"adjustResize\""))
     }
 }

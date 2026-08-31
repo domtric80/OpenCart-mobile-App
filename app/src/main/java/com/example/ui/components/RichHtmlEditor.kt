@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import android.graphics.Typeface
+import android.graphics.Rect
 import android.text.Editable
 import android.text.Html
 import android.text.Spanned
@@ -14,6 +15,8 @@ import android.text.style.ParagraphStyle
 import android.text.style.RelativeSizeSpan
 import android.text.style.StyleSpan
 import android.text.style.UnderlineSpan
+import android.view.WindowManager
+import android.view.ViewTreeObserver
 import android.widget.EditText
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,24 +25,38 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FormatBold
+import androidx.compose.material.icons.filled.FormatColorText
+import androidx.compose.material.icons.filled.FormatItalic
+import androidx.compose.material.icons.filled.FormatListBulleted
+import androidx.compose.material.icons.filled.FormatUnderlined
+import androidx.compose.material.icons.filled.Title
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -47,9 +64,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 import kotlin.math.max
 import kotlin.math.min
 
@@ -61,6 +85,54 @@ fun RichHtmlEditor(
     label: String = "Descrizione"
 ) {
     val latestChange by rememberUpdatedState(onHtmlChange)
+    var expanded by remember { mutableStateOf(false) }
+    val preview = remember(html) {
+        Html.fromHtml(sanitizeEditorHtml(html), Html.FROM_HTML_MODE_COMPACT).toString().trim()
+    }
+
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(label, style = MaterialTheme.typography.labelLarge)
+        Surface(
+            onClick = { expanded = true },
+            shape = RoundedCornerShape(14.dp),
+            tonalElevation = 1.dp,
+            modifier = Modifier.fillMaxWidth().testTag("open_rich_html_editor")
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        if (preview.isBlank()) "Tocca per scrivere a schermo intero" else preview,
+                        maxLines = 3,
+                        color = if (preview.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
+                    )
+                    Text("Editor visuale a schermo intero", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
+    }
+
+    if (expanded) {
+        FullScreenRichTextDialog(
+            initialHtml = html,
+            label = label,
+            onHtmlChange = latestChange,
+            onDismiss = { expanded = false }
+        )
+    }
+}
+
+@Composable
+private fun FullScreenRichTextDialog(
+    initialHtml: String,
+    label: String,
+    onHtmlChange: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
     var editor by remember { mutableStateOf<EditText?>(null) }
     var blockMenuOpen by remember { mutableStateOf(false) }
     var colorMenuOpen by remember { mutableStateOf(false) }
@@ -68,7 +140,7 @@ fun RichHtmlEditor(
     val surface = MaterialTheme.colorScheme.surface.toArgb()
 
     fun publishFormattingChange() {
-        editor?.text?.let { latestChange(serializeRichText(it)) }
+        editor?.text?.let { onHtmlChange(serializeRichText(it)) }
     }
 
     fun inline(span: Any) {
@@ -81,88 +153,154 @@ fun RichHtmlEditor(
         publishFormattingChange()
     }
 
-    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(label, style = MaterialTheme.typography.labelLarge)
-        Surface(shape = RoundedCornerShape(14.dp), tonalElevation = 1.dp, modifier = Modifier.fillMaxWidth()) {
-            AndroidView(
-                modifier = Modifier.fillMaxWidth().height(260.dp).testTag("rich_html_editor"),
-                factory = { context ->
-                    EditText(context).apply {
-                        setTextColor(foreground)
-                        setBackgroundColor(surface)
-                        gravity = android.view.Gravity.TOP or android.view.Gravity.START
-                        setPadding(28, 24, 28, 24)
-                        setText(Html.fromHtml(sanitizeEditorHtml(html), Html.FROM_HTML_MODE_COMPACT))
-                        addTextChangedListener(object : TextWatcher {
-                            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
-                            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
-                            override fun afterTextChanged(s: Editable?) {
-                                s?.let { latestChange(serializeRichText(it)) }
-                            }
-                        })
-                        editor = this
-                    }
-                }
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = true)
+    ) {
+        val dialogView = LocalView.current
+        val density = LocalDensity.current
+        var bottomOcclusionPx by remember { mutableIntStateOf(0) }
+        DisposableEffect(dialogView) {
+            val listener = ViewTreeObserver.OnGlobalLayoutListener {
+                val visibleFrame = Rect()
+                dialogView.rootView.getWindowVisibleDisplayFrame(visibleFrame)
+                bottomOcclusionPx = (dialogView.rootView.height - visibleFrame.bottom).coerceAtLeast(0)
+            }
+            dialogView.viewTreeObserver.addOnGlobalLayoutListener(listener)
+            onDispose { dialogView.viewTreeObserver.removeOnGlobalLayoutListener(listener) }
+        }
+        SideEffect {
+            (dialogView.parent as? DialogWindowProvider)?.window?.setSoftInputMode(
+                WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
             )
         }
-
-        Surface(
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            shape = RoundedCornerShape(14.dp),
-            modifier = Modifier.fillMaxWidth().imePadding().testTag("rich_editor_toolbar")
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(6.dp),
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box {
-                    EditorToolButton("P/H", "Stile paragrafo") { blockMenuOpen = true }
-                    DropdownMenu(expanded = blockMenuOpen, onDismissRequest = { blockMenuOpen = false }) {
-                        listOf(0 to "Paragrafo", 1 to "Titolo H1", 2 to "Titolo H2", 3 to "Titolo H3").forEach { (level, title) ->
-                            DropdownMenuItem(text = { Text(title) }, onClick = {
-                                block(level)
-                                blockMenuOpen = false
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Scaffold(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = with(density) { bottomOcclusionPx.toDp() })
+                    .testTag("rich_editor_fullscreen"),
+                containerColor = MaterialTheme.colorScheme.background,
+                bottomBar = {
+                    EditorToolbar(
+                        editor = editor,
+                        blockMenuOpen = blockMenuOpen,
+                        onBlockMenuOpenChange = { blockMenuOpen = it },
+                        colorMenuOpen = colorMenuOpen,
+                        onColorMenuOpenChange = { colorMenuOpen = it },
+                        onInline = ::inline,
+                        onBlock = ::block,
+                        onPublishFormattingChange = ::publishFormattingChange
+                    )
+                }
+            ) { contentPadding ->
+                Column(modifier = Modifier.fillMaxSize().padding(contentPadding)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, contentDescription = "Chiudi editor") }
+                    Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    IconButton(onClick = onDismiss, modifier = Modifier.testTag("rich_editor_done")) {
+                        Icon(Icons.Default.Check, contentDescription = "Conferma testo")
+                    }
+                }
+                AndroidView(
+                    modifier = Modifier.fillMaxWidth().weight(1f).testTag("rich_html_editor"),
+                    factory = { context ->
+                        EditText(context).apply {
+                            setTextColor(foreground)
+                            setBackgroundColor(surface)
+                            gravity = android.view.Gravity.TOP or android.view.Gravity.START
+                            setPadding(28, 24, 28, 24)
+                            setText(Html.fromHtml(sanitizeEditorHtml(initialHtml), Html.FROM_HTML_MODE_COMPACT))
+                            addTextChangedListener(object : TextWatcher {
+                                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+                                override fun afterTextChanged(s: Editable?) {
+                                    s?.let { onHtmlChange(serializeRichText(it)) }
+                                }
                             })
+                            editor = this
+                        }
+                    }
+                )
+            }
+        }
+    }
+}
+}
+
+@Composable
+private fun EditorToolbar(
+    editor: EditText?,
+    blockMenuOpen: Boolean,
+    onBlockMenuOpenChange: (Boolean) -> Unit,
+    colorMenuOpen: Boolean,
+    onColorMenuOpenChange: (Boolean) -> Unit,
+    onInline: (Any) -> Unit,
+    onBlock: (Int) -> Unit,
+    onPublishFormattingChange: () -> Unit
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        tonalElevation = 6.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .zIndex(2f)
+            .testTag("rich_editor_toolbar")
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box {
+                EditorToolButton(Icons.Default.Title, "Stile paragrafo") { onBlockMenuOpenChange(true) }
+                DropdownMenu(expanded = blockMenuOpen, onDismissRequest = { onBlockMenuOpenChange(false) }) {
+                    listOf(0 to "Paragrafo", 1 to "Titolo H1", 2 to "Titolo H2", 3 to "Titolo H3").forEach { (level, title) ->
+                        DropdownMenuItem(text = { Text(title) }, onClick = {
+                            onBlock(level)
+                            onBlockMenuOpenChange(false)
+                        })
+                    }
+                }
+            }
+            Box {
+                EditorToolButton(Icons.Default.FormatColorText, "Colore testo") { onColorMenuOpenChange(true) }
+                DropdownMenu(expanded = colorMenuOpen, onDismissRequest = { onColorMenuOpenChange(false) }) {
+                    val colors = listOf("#111827", "#DC2626", "#EA580C", "#16A34A", "#2563EB", "#7C3AED")
+                    Row(modifier = Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        colors.forEach { hex ->
+                            val color = android.graphics.Color.parseColor(hex)
+                            Box(
+                                Modifier.size(30.dp).background(Color(color), CircleShape).clickable {
+                                    onInline(ForegroundColorSpan(color))
+                                    onColorMenuOpenChange(false)
+                                }
+                            )
                         }
                     }
                 }
-                Box {
-                    EditorToolButton("●", "Colore testo") { colorMenuOpen = true }
-                    DropdownMenu(expanded = colorMenuOpen, onDismissRequest = { colorMenuOpen = false }) {
-                        val colors = listOf("#111827", "#DC2626", "#EA580C", "#16A34A", "#2563EB", "#7C3AED")
-                        Row(modifier = Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            colors.forEach { hex ->
-                                val color = android.graphics.Color.parseColor(hex)
-                                Box(
-                                    Modifier.size(30.dp).background(Color(color), CircleShape).clickable {
-                                        inline(ForegroundColorSpan(color))
-                                        colorMenuOpen = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-                EditorToolButton("B", "Grassetto") { inline(StyleSpan(Typeface.BOLD)) }
-                EditorToolButton("I", "Corsivo") { inline(StyleSpan(Typeface.ITALIC)) }
-                EditorToolButton("U", "Sottolineato") { inline(UnderlineSpan()) }
-                EditorToolButton("• Lista", "Elenco puntato") {
-                    editor?.let(::applyBullet)
-                    publishFormattingChange()
-                }
+            }
+            EditorToolButton(Icons.Default.FormatBold, "Grassetto") { onInline(StyleSpan(Typeface.BOLD)) }
+            EditorToolButton(Icons.Default.FormatItalic, "Corsivo") { onInline(StyleSpan(Typeface.ITALIC)) }
+            EditorToolButton(Icons.Default.FormatUnderlined, "Sottolineato") { onInline(UnderlineSpan()) }
+            EditorToolButton(Icons.Default.FormatListBulleted, "Elenco puntato") {
+                editor?.let(::applyBullet)
+                onPublishFormattingChange()
             }
         }
     }
 }
 
 @Composable
-private fun EditorToolButton(text: String, description: String, onClick: () -> Unit) {
-    OutlinedButton(
+private fun EditorToolButton(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, onClick: () -> Unit) {
+    IconButton(
         onClick = onClick,
-        contentPadding = ButtonDefaults.ContentPadding,
-        modifier = Modifier.height(42.dp).testTag("editor_${description.lowercase().replace(' ', '_')}")
-    ) { Text(text) }
+        modifier = Modifier.size(48.dp).testTag("editor_${description.lowercase().replace(' ', '_')}")
+    ) { Icon(icon, contentDescription = description) }
 }
 
 private class HeadingSpan(val level: Int) : MetricAffectingSpan(), ParagraphStyle {

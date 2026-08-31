@@ -521,6 +521,40 @@ class MainViewModel(
         }
     }
 
+    /** Aggiorna esclusivamente le categorie richieste dal form prodotto. */
+    fun refreshCatalogCategories() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val store = uiState.value.currentStore
+            if (store == null || store.url.isBlank()) {
+                showOperationMessage("Impossibile caricare le categorie: nessuno store configurato.")
+                return@launch
+            }
+
+            val result = apiClient.fetchCategories(store.url, store.apiKey, store.apiUsername, limit = 200)
+            result.onSuccess { liveCategories ->
+                repository.setCategories(liveCategories)
+                db.categoryDao().clearAllCategories()
+                liveCategories.forEach { category ->
+                    db.categoryDao().insertCategory(
+                        com.example.data.local.entity.CategoryEntity(
+                            id = category.id,
+                            storeId = store.id,
+                            name = category.name,
+                            description = category.description,
+                            sortOrder = category.sortOrder,
+                            status = category.status
+                        )
+                    )
+                }
+                if (liveCategories.isEmpty()) {
+                    showOperationMessage("OpenCart non ha restituito categorie del catalogo.")
+                }
+            }.onFailure { error ->
+                showOperationMessage("Categorie non caricate: ${error.message ?: "errore del bridge"}.")
+            }
+        }
+    }
+
     private suspend fun syncDataFromOpenCartDetailed(url: String, apiKey: String, username: String = ""): String {
         return try {
             val ordersRes = apiClient.fetchOrders(url, apiKey, username, limit = 50)
