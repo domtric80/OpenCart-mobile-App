@@ -1,7 +1,9 @@
 package com.example.ui.components
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.net.Uri
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -52,12 +54,58 @@ fun SecureImagePicker(
         }
     }
 
+    fun importCameraPreview(bitmap: Bitmap) {
+        scope.launch {
+            runCatching {
+                withContext(Dispatchers.Default) {
+                    val output = ByteArrayOutputStream()
+                    check(bitmap.compress(Bitmap.CompressFormat.JPEG, 90, output)) {
+                        "Impossibile convertire la foto"
+                    }
+                    ProductImageUpload(output.toByteArray(), "image/jpeg", "camera-preview.jpg")
+                }
+            }.onSuccess(onImageSelected)
+                .onFailure { onError(it.message ?: "Foto non valida") }
+        }
+    }
+
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         uri?.let { importImage(it, "gallery-image") }
+    }
+    val documentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let { importImage(it, "document-image") }
     }
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
         val uri = cameraUri
         if (saved && uri != null) importImage(uri, "camera-photo.jpg")
+    }
+    val cameraPreviewLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
+        bitmap?.let(::importCameraPreview)
+    }
+
+    fun launchGallery() {
+        runCatching {
+            galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+        }.onFailure { primaryError ->
+            Log.w("CartAdminMedia", "Photo Picker unavailable; trying OpenDocument", primaryError)
+            runCatching { documentLauncher.launch(arrayOf("image/*")) }
+                .onFailure { fallbackError ->
+                    Log.e("CartAdminMedia", "No image picker available", fallbackError)
+                    onError("Impossibile aprire la galleria (${fallbackError.javaClass.simpleName})")
+                }
+        }
+    }
+
+    fun launchCamera(uri: Uri) {
+        runCatching { cameraLauncher.launch(uri) }
+            .onFailure { primaryError ->
+                Log.w("CartAdminMedia", "Full-size camera unavailable; trying preview", primaryError)
+                runCatching { cameraPreviewLauncher.launch(null) }
+                    .onFailure { fallbackError ->
+                        Log.e("CartAdminMedia", "No camera handler available", fallbackError)
+                        onError("Impossibile aprire la fotocamera (${fallbackError.javaClass.simpleName})")
+                    }
+            }
     }
 
     Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -68,8 +116,7 @@ fun SecureImagePicker(
                     FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
                 }.onSuccess { uri ->
                     cameraUri = uri
-                    runCatching { cameraLauncher.launch(uri) }
-                        .onFailure { onError("Fotocamera non disponibile su questo dispositivo") }
+                    launchCamera(uri)
                 }.onFailure { onError("Impossibile preparare la fotocamera") }
             },
             modifier = Modifier.weight(1f).testTag("${tagPrefix}_camera")
@@ -79,9 +126,7 @@ fun SecureImagePicker(
         }
         OutlinedButton(
             onClick = {
-                runCatching {
-                    galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                }.onFailure { onError("Galleria immagini non disponibile su questo dispositivo") }
+                launchGallery()
             },
             modifier = Modifier.weight(1f).testTag("${tagPrefix}_gallery")
         ) {
