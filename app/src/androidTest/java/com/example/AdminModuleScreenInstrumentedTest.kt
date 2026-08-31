@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.model.AdminModule
@@ -157,10 +158,12 @@ class AdminModuleScreenInstrumentedTest {
         composeRule.onNodeWithTag("create_content_title").performTextInput("Guida acquisto")
         composeRule.onNodeWithTag("create_article_author").performTextInput("Redazione")
         composeRule.onNodeWithTag("create_article_meta_title").performTextInput("Guida acquisto online")
+        composeRule.onNodeWithTag("open_rich_html_editor").performScrollTo().performClick()
+        composeRule.onNodeWithTag("rich_editor_fullscreen").assertExists()
         composeRule.onNodeWithTag("rich_html_editor").assertExists()
         composeRule.onNodeWithTag("rich_editor_toolbar").assertExists()
+        composeRule.onNodeWithTag("rich_editor_done").performClick()
         composeRule.onNodeWithTag("article_camera").assertExists()
         composeRule.onNodeWithTag("article_gallery").assertExists()
-        composeRule.onNodeWithTag("save_content_create").assertExists()
     }
 }

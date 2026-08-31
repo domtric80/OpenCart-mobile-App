@@ -308,6 +308,7 @@ fun MainAppContent(
                         onToggleCategoryStatus = { categoryId ->
                             viewModel.toggleCategoryStatus(categoryId)
                         },
+                        onRefreshCategories = viewModel::refreshCatalogCategories,
                         requestedTab = catalogTab,
                         operationMessage = uiState.syncSuccessMessage
                     )

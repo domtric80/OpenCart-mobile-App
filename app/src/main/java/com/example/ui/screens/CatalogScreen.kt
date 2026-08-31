@@ -148,6 +148,7 @@ fun CatalogScreen(
     onUpdateCategory: (categoryId: String, name: String, description: String, sortOrder: Int, status: Boolean) -> Unit,
     onDeleteCategory: (categoryId: String) -> Unit,
     onToggleCategoryStatus: (categoryId: String) -> Unit,
+    onRefreshCategories: () -> Unit = {},
     requestedTab: CatalogTab = CatalogTab.PRODUCTS,
     operationMessage: String? = null,
     modifier: Modifier = Modifier
@@ -180,6 +181,7 @@ fun CatalogScreen(
     if (showAddProductDialog) {
         ProductCreatePage(
             categories = categories,
+            onRefreshCategories = onRefreshCategories,
             onBack = { showAddProductDialog = false },
             onSave = { name, model, sku, price, specialPrice, qty, minAlert, category, desc, status, image ->
                 onAddNewProduct(name, model, sku, price, specialPrice, qty, minAlert, category, desc, status, image)
@@ -960,6 +962,7 @@ private fun CategoryManagementCard(
 @Composable
 private fun ProductCreatePage(
     categories: List<Category>,
+    onRefreshCategories: () -> Unit,
     onBack: () -> Unit,
     onSave: (
         String, String, String, Double, Double?, Int, Int, String, String, Boolean, ProductImageUpload?
@@ -971,13 +974,23 @@ private fun ProductCreatePage(
     var priceText by remember { mutableStateOf("") }
     var quantityText by remember { mutableStateOf("10") }
     var minAlertText by remember { mutableStateOf("5") }
-    var selectedCategory by remember { mutableStateOf(categories.firstOrNull()?.name ?: "Generale") }
+    var selectedCategory by remember { mutableStateOf<String?>(null) }
     var description by remember { mutableStateOf("") }
     var status by remember { mutableStateOf(true) }
     var selectedImage by remember { mutableStateOf<ProductImageUpload?>(null) }
     var imageError by remember { mutableStateOf<String?>(null) }
     var categoryExpanded by remember { mutableStateOf(false) }
-    val valid = name.isNotBlank() && model.isNotBlank() && (priceText.toDoubleOrNull() ?: 0.0) > 0
+    val valid = name.isNotBlank() && model.isNotBlank() && selectedCategory != null &&
+        (priceText.toDoubleOrNull() ?: 0.0) > 0
+
+    LaunchedEffect(Unit) {
+        onRefreshCategories()
+    }
+    LaunchedEffect(categories) {
+        if (selectedCategory == null || categories.none { it.name == selectedCategory }) {
+            selectedCategory = categories.firstOrNull()?.name
+        }
+    }
 
     Column(
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).testTag("product_create_page")
@@ -1023,16 +1036,19 @@ private fun ProductCreatePage(
             }
             ExposedDropdownMenuBox(
                 expanded = categoryExpanded,
-                onExpandedChange = { categoryExpanded = !categoryExpanded },
+                onExpandedChange = {
+                    if (categories.isNotEmpty()) categoryExpanded = !categoryExpanded
+                },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 OutlinedTextField(
-                    selectedCategory,
+                    selectedCategory.orEmpty(),
                     {},
                     readOnly = true,
-                    label = { Text("Categoria *") },
+                    enabled = categories.isNotEmpty(),
+                    label = { Text(if (categories.isEmpty()) "Categorie non ancora caricate" else "Categoria *") },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(categoryExpanded) },
-                    modifier = Modifier.fillMaxWidth().menuAnchor()
+                    modifier = Modifier.fillMaxWidth().menuAnchor().testTag("create_product_category")
                 )
                 ExposedDropdownMenu(expanded = categoryExpanded, onDismissRequest = { categoryExpanded = false }) {
                     categories.forEach { category ->
@@ -1040,6 +1056,23 @@ private fun ProductCreatePage(
                             selectedCategory = category.name
                             categoryExpanded = false
                         })
+                    }
+                }
+            }
+            if (categories.isEmpty()) {
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().testTag("product_categories_empty")
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text("Nessuna categoria ricevuta dallo store.", modifier = Modifier.weight(1f))
+                        TextButton(onClick = onRefreshCategories) { Text("Ricarica") }
                     }
                 }
             }
@@ -1096,7 +1129,7 @@ private fun ProductCreatePage(
                         onSave(
                             name.trim(), model.trim(), sku.trim(), priceText.toDoubleOrNull() ?: 0.0, null,
                             quantityText.toIntOrNull() ?: 0, minAlertText.toIntOrNull() ?: 5,
-                            selectedCategory, description, status, selectedImage
+                            selectedCategory.orEmpty(), description, status, selectedImage
                         )
                     }
                 ) { Text("Pubblica") }

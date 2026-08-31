@@ -1,7 +1,10 @@
 package com.example
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -25,8 +28,12 @@ class CatalogMediaPickerInstrumentedTest {
         composeRule.onNodeWithTag("product_create_page").assertExists()
         composeRule.onNodeWithTag("product_camera").assertExists()
         composeRule.onNodeWithTag("product_gallery").assertExists()
-        composeRule.onNodeWithTag("rich_html_editor").assertExists()
-        composeRule.onNodeWithTag("rich_editor_toolbar").assertExists()
+        composeRule.onNodeWithTag("open_rich_html_editor").performClick()
+        composeRule.onNodeWithTag("rich_editor_fullscreen").assertExists()
+        composeRule.onNodeWithTag("rich_editor_toolbar").assertIsDisplayed()
+        composeRule.onNodeWithTag("rich_html_editor").assertExists().performClick()
+        composeRule.onNodeWithTag("rich_editor_toolbar").assertIsDisplayed()
+        composeRule.onNodeWithTag("editor_grassetto").assertExists()
     }
 
     @Test
@@ -51,6 +58,39 @@ class CatalogMediaPickerInstrumentedTest {
             .executeShellCommand("input keyevent KEYCODE_BACK").close()
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("product_camera").assertExists()
+    }
+
+    @Test
+    fun categoriesLoadedAfterOpeningReplaceTheEmptyFallback() {
+        val categories = mutableStateOf<List<Category>>(emptyList())
+        var refreshRequests = 0
+        composeRule.setContent {
+            MaterialTheme {
+                CatalogScreen(
+                    products = emptyList(),
+                    categories = categories.value,
+                    onUpdateStock = { _, _ -> },
+                    onSetDirectStock = { _, _ -> },
+                    onAddNewProduct = { _, _, _, _, _, _, _, _, _, _, _ -> },
+                    onUpdateProduct = { _, _ -> },
+                    onDeleteProduct = {},
+                    onToggleProductStatus = {},
+                    onAddNewCategory = { _, _, _, _ -> },
+                    onUpdateCategory = { _, _, _, _, _ -> },
+                    onDeleteCategory = {},
+                    onToggleCategoryStatus = {},
+                    onRefreshCategories = { refreshRequests++ }
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("add_item_top_btn").performClick()
+        composeRule.onNodeWithTag("product_categories_empty").assertExists()
+        composeRule.runOnIdle {
+            categories.value = listOf(Category(id = "7", name = "Scarpe"))
+        }
+        composeRule.onNodeWithTag("create_product_category").assertTextContains("Scarpe")
+        composeRule.runOnIdle { org.junit.Assert.assertEquals(1, refreshRequests) }
     }
 
     private fun showNewProductDialog() {
