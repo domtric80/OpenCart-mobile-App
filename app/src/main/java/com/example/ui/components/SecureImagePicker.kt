@@ -1,12 +1,8 @@
 package com.example.ui.components
 
-import android.app.Activity
-import android.content.ClipData
 import android.content.Context
-import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
-import android.provider.MediaStore
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -20,24 +16,18 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import androidx.core.content.FileProvider
 import com.example.model.ProductImageUpload
 import java.io.ByteArrayOutputStream
-import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Selettore Photo Picker/fotocamera che converte gli errori dei provider esterni in messaggi UI. */
+/** Selettore minimo basato sulle app di sistema, senza permessi o URI condivisi. */
 @Composable
 fun SecureImagePicker(
     tagPrefix: String,
@@ -47,8 +37,6 @@ fun SecureImagePicker(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var cameraUri by remember { mutableStateOf<Uri?>(null) }
-
     fun importImage(uri: Uri, fallbackName: String) {
         scope.launch {
             runCatching { readValidatedImage(context, uri, fallbackName) }
@@ -72,79 +60,21 @@ fun SecureImagePicker(
         }
     }
 
-    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            result.data?.data?.let { importImage(it, "gallery-image") }
-        }
+    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { importImage(it, "gallery-image") }
     }
-    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val uri = cameraUri
-            if (uri != null) {
-                importImage(uri, "camera-photo.jpg")
-            } else {
-                @Suppress("DEPRECATION")
-                val bitmap = result.data?.extras?.get("data") as? Bitmap
-                bitmap?.let(::importCameraPreview)
-            }
-        }
-    }
-
-    fun launchGallery() {
-        // GET_CONTENT è gestito anche dai file manager OEM che rifiutano Photo Picker.
-        // Il contenuto viene copiato subito nell'app: non serve un permesso persistente.
-        val primaryIntent = Intent(Intent.ACTION_GET_CONTENT)
-            .addCategory(Intent.CATEGORY_OPENABLE)
-            .setType("image/*")
-        runCatching { galleryLauncher.launch(primaryIntent) }
-            .onFailure { primaryError ->
-            Log.w("CartAdminMedia", "GET_CONTENT unavailable; trying OPEN_DOCUMENT", primaryError)
-            val fallbackIntent = Intent(Intent.ACTION_OPEN_DOCUMENT)
-                .addCategory(Intent.CATEGORY_OPENABLE)
-                .setType("image/*")
-            runCatching { galleryLauncher.launch(fallbackIntent) }
-                .onFailure { fallbackError ->
-                    Log.e("CartAdminMedia", "No image picker available", fallbackError)
-                    onError("Impossibile aprire la galleria (${fallbackError.javaClass.simpleName})")
-                }
-        }
-    }
-
-    fun launchCamera(uri: Uri) {
-        val fullSizeIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
-            putExtra(MediaStore.EXTRA_OUTPUT, uri)
-            clipData = ClipData.newRawUri("CartAdmin photo", uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-        }
-        context.packageManager.queryIntentActivities(fullSizeIntent, 0).forEach { handler ->
-            context.grantUriPermission(
-                handler.activityInfo.packageName,
-                uri,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-            )
-        }
-        runCatching { cameraLauncher.launch(fullSizeIntent) }
-            .onFailure { primaryError ->
-                Log.w("CartAdminMedia", "Full-size camera unavailable; trying preview", primaryError)
-                cameraUri = null
-                runCatching { cameraLauncher.launch(Intent(MediaStore.ACTION_IMAGE_CAPTURE)) }
-                    .onFailure { fallbackError ->
-                        Log.e("CartAdminMedia", "No camera handler available", fallbackError)
-                        onError("Impossibile aprire la fotocamera (${fallbackError.javaClass.simpleName})")
-                    }
-            }
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
+        bitmap?.let(::importCameraPreview)
     }
 
     Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton(
             onClick = {
-                runCatching {
-                    val file = File.createTempFile("cartadmin-camera-", ".jpg", context.cacheDir)
-                    FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                }.onSuccess { uri ->
-                    cameraUri = uri
-                    launchCamera(uri)
-                }.onFailure { onError("Impossibile preparare la fotocamera") }
+                runCatching { cameraLauncher.launch(null) }
+                    .onFailure { error ->
+                        Log.e("CartAdminMedia", "Cannot launch system camera", error)
+                        onError(mediaLaunchError("fotocamera", error))
+                    }
             },
             modifier = Modifier.weight(1f).testTag("${tagPrefix}_camera")
         ) {
@@ -153,7 +83,11 @@ fun SecureImagePicker(
         }
         OutlinedButton(
             onClick = {
-                launchGallery()
+                runCatching { galleryLauncher.launch("image/*") }
+                    .onFailure { error ->
+                        Log.e("CartAdminMedia", "Cannot launch system gallery", error)
+                        onError(mediaLaunchError("galleria", error))
+                    }
             },
             modifier = Modifier.weight(1f).testTag("${tagPrefix}_gallery")
         ) {
@@ -161,6 +95,11 @@ fun SecureImagePicker(
             Text(" Galleria")
         }
     }
+}
+
+private fun mediaLaunchError(target: String, error: Throwable): String {
+    val detail = error.message?.replace(Regex("[\\r\\n]+"), " ")?.take(160).orEmpty()
+    return "Impossibile aprire la $target (${error.javaClass.simpleName}${if (detail.isBlank()) "" else ": $detail"})"
 }
 
 private suspend fun readValidatedImage(context: Context, uri: Uri, fallbackName: String): ProductImageUpload =
