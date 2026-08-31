@@ -38,6 +38,14 @@ Il bridge 2.1 consente all'app di modificare soltanto campi esplicitamente autor
 - titolo e ordinamento degli argomenti;
 - autore, testo e valutazione delle recensioni.
 
+Consente inoltre di creare articoli e categorie CMS. La creazione richiede titolo e contenuto; un articolo deve indicare autore e categoria CMS esistente. Il bridge inizializza le descrizioni per tutte le lingue attive, associa il record allo store principale e inserisce l'audit di successo nella stessa transazione. Se uno dei passaggi fallisce, l'intera creazione viene annullata.
+
+## Immagini prodotto e telemetria guest
+
+L'app può inviare una nuova immagine prodotto dalla fotocamera o dalla galleria. Il file viaggia in multipart mentre il token resta nell'header HTTPS. Il bridge accetta soltanto JPEG, PNG e WebP fino a 5 MB, verifica il MIME dal contenuto e le dimensioni, ignora il nome originale e salva con nome casuale sotto `image/catalog/cartadmin/`.
+
+La telemetria legge sia i guest (`customer_id = 0`) sia i clienti registrati (`customer_id > 0`) dalla tabella nativa `customer_online`. L'API restituisce conteggi separati e percorsi aggregati, ma non espone IP, nome, email o ID cliente.
+
 Per Pagine, Articoli e Argomenti viene aggiornata esclusivamente la lingua principale attiva. Il contenuto HTML, i metadati SEO e le altre traduzioni non vengono riscritti dall'app. Recensioni e commenti possono inoltre essere attivati o disattivati; la valutazione aggregata del prodotto viene ricalcolata dopo ogni modifica a una recensione.
 
 Ogni modulo e tabella è definito in un'allowlist lato server. Le modifiche usano query preparate, transazioni e invalidazione mirata della cache; se lo schema richiesto non è disponibile, l'operazione fallisce senza aggiornamenti parziali. Per le modifiche editoriali, aggiornamento e audit di successo sono atomici. Il registro salva soltanto metadati e digest HMAC dello stato precedente e successivo; dopo un rollback registra un evento di fallimento separato senza contenuti in chiaro.

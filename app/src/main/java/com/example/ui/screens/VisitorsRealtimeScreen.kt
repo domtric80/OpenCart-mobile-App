@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Pageview
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -377,6 +378,25 @@ private fun HeroActiveVisitorsCard(
             }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TelemetryMiniPill(
+                    icon = Icons.Default.Public,
+                    value = "${visitorStats.guestVisitorsNow}",
+                    label = "Guest online",
+                    color = ThemePrimary,
+                    bgColor = ThemePrimary.copy(alpha = 0.1f),
+                    modifier = Modifier.weight(1f)
+                )
+                TelemetryMiniPill(
+                    icon = Icons.Default.Person,
+                    value = "${visitorStats.registeredVisitorsNow}",
+                    label = "Clienti online",
+                    color = ThemeSecondary,
+                    bgColor = ThemeSecondary.copy(alpha = 0.1f),
+                    modifier = Modifier.weight(1f)
+                )
+            }
 
             // 4 Telemetry Quick Counter Grid
             Row(

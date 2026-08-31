@@ -18,6 +18,7 @@ import com.example.model.OrderItem
 import com.example.model.OrderReturn
 import com.example.model.OrderStatus
 import com.example.model.Product
+import com.example.model.ProductImageUpload
 import com.example.model.ReturnStatus
 import com.example.model.Store
 import com.example.model.Subscription
@@ -108,6 +109,7 @@ class OpenCartApiClient(context: Context) {
                                 content = item.optString("content", ""),
                                 rating = if (item.has("rating") && !item.isNull("rating")) item.optInt("rating") else null,
                                 sortOrder = if (item.has("sort_order") && !item.isNull("sort_order")) item.optInt("sort_order") else null,
+                                parentId = if (item.has("parent_id") && !item.isNull("parent_id")) item.optInt("parent_id") else null,
                                 editable = item.optBoolean("editable", false)
                             )
                         )
@@ -568,27 +570,12 @@ class OpenCartApiClient(context: Context) {
         baseUrl: String,
         apiKey: String,
         product: Product,
+        image: ProductImageUpload? = null,
         username: String = ""
     ): Result<Boolean> = withContext(Dispatchers.IO) {
         try {
-            val request = BridgeRequestFactory.authenticatedFormPost(
-                baseUrl = baseUrl,
-                action = "update_product",
-                apiKey = apiKey,
-                username = username,
-                fields = mapOf(
-                    "product_id" to product.id.removePrefix("prod_").removePrefix("product_"),
-                    "name" to product.name,
-                    "model" to product.model,
-                    "sku" to product.sku,
-                    "price" to product.price.toString(),
-                    "quantity" to product.quantity.coerceAtLeast(0).toString(),
-                    "minimum" to product.minQuantityAlert.coerceAtLeast(1).toString(),
-                    "category" to product.category,
-                    "description" to product.description,
-                    "status" to if (product.status) "1" else "0"
-                )
-            )
+            val fields = productFields(product) + ("product_id" to product.id.removePrefix("prod_").removePrefix("product_"))
+            val request = productMutationRequest(baseUrl, "update_product", apiKey, username, fields, image)
 
             tlsClient.execute(request).use { response ->
                 val body = response.body?.string().orEmpty()
@@ -650,6 +637,43 @@ class OpenCartApiClient(context: Context) {
         }
     }
 
+    suspend fun createAdminContent(
+        baseUrl: String,
+        apiKey: String,
+        username: String,
+        module: AdminModule,
+        record: AdminRecord
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            require(module == AdminModule.ARTICLES || module == AdminModule.TOPICS) { "Modulo CMS non creabile" }
+            val request = BridgeRequestFactory.authenticatedFormPost(
+                baseUrl = baseUrl,
+                action = "management_create",
+                apiKey = apiKey,
+                username = username,
+                fields = mapOf(
+                    "module" to module.apiKey,
+                    "title" to record.title,
+                    "secondary" to record.subtitle,
+                    "content" to record.content,
+                    "parent_id" to (record.parentId?.toString() ?: ""),
+                    "sort_order" to (record.sortOrder?.toString() ?: "0"),
+                    "active" to if (record.active == true) "1" else "0"
+                )
+            )
+            tlsClient.execute(request).use { response ->
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) Result.failure(Exception("HTTP ${response.code}: $body"))
+                else JSONObject(body).let { json ->
+                    if (json.optBoolean("success", false)) Result.success(json.optString("id"))
+                    else Result.failure(Exception(json.optString("error", "Creazione CMS rifiutata")))
+                }
+            }
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
     suspend fun enqueueAdminCommand(
         baseUrl: String,
         apiKey: String,
@@ -693,26 +717,11 @@ class OpenCartApiClient(context: Context) {
         baseUrl: String,
         apiKey: String,
         product: Product,
+        image: ProductImageUpload? = null,
         username: String = ""
     ): Result<Product> = withContext(Dispatchers.IO) {
         try {
-            val request = BridgeRequestFactory.authenticatedFormPost(
-                baseUrl = baseUrl,
-                action = "create_product",
-                apiKey = apiKey,
-                username = username,
-                fields = mapOf(
-                    "name" to product.name,
-                    "model" to product.model,
-                    "sku" to product.sku,
-                    "price" to product.price.toString(),
-                    "quantity" to product.quantity.coerceAtLeast(0).toString(),
-                    "minimum" to product.minQuantityAlert.coerceAtLeast(1).toString(),
-                    "category" to product.category,
-                    "description" to product.description,
-                    "status" to if (product.status) "1" else "0"
-                )
-            )
+            val request = productMutationRequest(baseUrl, "create_product", apiKey, username, productFields(product), image)
 
             tlsClient.execute(request).use { response ->
                 val body = response.body?.string().orEmpty()
@@ -742,6 +751,34 @@ class OpenCartApiClient(context: Context) {
         } catch (error: Exception) {
             Result.failure(error)
         }
+    }
+
+    private fun productFields(product: Product): Map<String, String> = mapOf(
+        "name" to product.name,
+        "model" to product.model,
+        "sku" to product.sku,
+        "price" to product.price.toString(),
+        "quantity" to product.quantity.coerceAtLeast(0).toString(),
+        "minimum" to product.minQuantityAlert.coerceAtLeast(1).toString(),
+        "category" to product.category,
+        "description" to product.description,
+        "status" to if (product.status) "1" else "0"
+    )
+
+    private fun productMutationRequest(
+        baseUrl: String,
+        action: String,
+        apiKey: String,
+        username: String,
+        fields: Map<String, String>,
+        image: ProductImageUpload?
+    ): Request = if (image == null) {
+        BridgeRequestFactory.authenticatedFormPost(baseUrl, action, apiKey, username, fields)
+    } else {
+        BridgeRequestFactory.authenticatedMultipartPost(
+            baseUrl, action, apiKey, username, fields,
+            image.bytes, image.mimeType, image.fileName
+        )
     }
 
     suspend fun deleteProduct(
@@ -901,6 +938,8 @@ class OpenCartApiClient(context: Context) {
                         trackingEnabled = json.optBoolean("tracking_enabled", false),
                         dataAvailable = json.optBoolean("data_available", false),
                         activeVisitorsNow = json.optInt("active_visitors_now", 0),
+                        guestVisitorsNow = json.optInt("guest_visitors_now", 0),
+                        registeredVisitorsNow = json.optInt("registered_visitors_now", 0),
                         pageViewsPerMin = json.optInt("page_updates_per_min", 0),
                         activeCartsCount = json.optInt("active_carts_count", 0),
                         activeCheckoutsCount = json.optInt("active_checkouts_count", 0),

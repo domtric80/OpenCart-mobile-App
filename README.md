@@ -46,8 +46,11 @@ Nel ramo di sviluppo 2.1, approvazioni clienti e richieste GDPR possono essere i
 - contenuti HTML, SEO e traduzioni secondarie deliberatamente preservati e non sovrascritti dall'editor mobile.
 - token distinti e revocabili, ciascuno associato a operatore, dispositivo e permessi minimi;
 - audit server-side delle modifiche editoriali con identità verificata e digest HMAC, senza copiare i contenuti nel registro.
+- acquisizione dell'immagine di un prodotto dalla fotocamera o dalla galleria, con upload multipart autenticato, limite di 5 MB e validazione JPEG/PNG/WebP sia nell'app sia nel bridge;
+- telemetria distinta tra visitatori guest e clienti registrati, senza esporre indirizzi IP o identità;
+- creazione di articoli e categorie CMS direttamente dall'app, con associazione allo store, replica sulle lingue attive e audit atomico.
 
-Queste funzioni richiedono app e bridge `2.1.0-dev.4` e non fanno ancora parte della release stabile v2.0.1.
+Queste funzioni richiedono app e bridge `2.1.0-dev.5` e non fanno ancora parte della release stabile v2.0.1.
 
 Nel pannello 2.1, prima di generare un token occorre indicare un'etichetta, selezionare un utente amministrativo OpenCart attivo e scegliere gli scope necessari. Il token conserva `user_id` e username verificati lato server e si associa alla prima installazione Android che lo usa; per un secondo dispositivo va creato un token separato. La revoca è individuale e non interrompe gli altri dispositivi. Il nome operatore eventualmente conservato nell'app non può sostituire quello assegnato dal pannello.
 
@@ -137,6 +140,16 @@ Se compare `401 Non autorizzato`, verificare che il valore incollato non sia vuo
 3. Installa il bridge della stessa release dell'app e riapri **Traffic**.
 
 OpenCart registra soltanto visitatori attivi, URL, provenienza e ultimo aggiornamento. Non registra nella tabella `customer_online` user agent, geolocalizzazione, durata completa della sessione o bounce rate; CartAdmin lascia queste metriche non disponibili invece di generare valori dimostrativi.
+
+CartAdmin mostra separatamente **Guest online** (`customer_id = 0`) e **Clienti online** (`customer_id > 0`). Gli eventi indicano soltanto il tipo di visitatore e il percorso richiesto: IP, nome, email e ID cliente non vengono inviati all'app.
+
+### 7. Foto prodotto e nuovi contenuti CMS (sviluppo 2.1)
+
+- In **Catalogo > Prodotti > Nuovo prodotto** scegli **Fotocamera** oppure **Galleria**. Android affida lo scatto all'app fotocamera installata e condivide soltanto un file temporaneo privato; CartAdmin non richiede accesso generale alle foto.
+- Sono accettate immagini JPEG, PNG e WebP fino a 5 MB. Il bridge ricontrolla tipo reale e dimensioni, genera un nome casuale e salva il file in `image/catalog/cartadmin/`.
+- In **Altro > CMS > Argomenti** usa **Nuova categoria CMS**. Inserisci titolo, descrizione, ordinamento e stato.
+- In **Altro > CMS > Articoli** usa **Nuovo articolo**, scegli una categoria CMS esistente, quindi inserisci titolo, autore, contenuto e stato.
+- I nuovi contenuti vengono associati allo store principale e inizializzati in tutte le lingue attive. Traduzioni differenziate, immagini editoriali e SEO avanzata restano gestibili dal pannello OpenCart.
 
 ## Come viene protetto il token
 

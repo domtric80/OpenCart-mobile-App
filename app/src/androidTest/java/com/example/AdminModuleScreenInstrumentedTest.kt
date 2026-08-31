@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.model.AdminModule
 import com.example.model.AdminModuleSnapshot
@@ -106,5 +107,58 @@ class AdminModuleScreenInstrumentedTest {
         composeRule.onNodeWithTag("save_content_edit").assertExists().performClick()
 
         composeRule.runOnIdle { assertEquals(record, submitted) }
+    }
+
+    @Test
+    fun newTopicCollectsRealCmsFieldsBeforeSubmitting() {
+        var submitted: AdminRecord? = null
+        val module = AdminModule.TOPICS
+        composeRule.setContent {
+            MaterialTheme {
+                AdminModuleScreen(
+                    module = module,
+                    snapshot = AdminModuleSnapshot(module = module),
+                    onRefresh = {},
+                    onContentCreate = { submitted = it }
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("create_topics").performClick()
+        composeRule.onNodeWithTag("create_content_title").performTextInput("Novità")
+        composeRule.onNodeWithTag("create_content_body").performTextInput("Notizie dal negozio")
+        composeRule.onNodeWithTag("save_content_create").performClick()
+
+        composeRule.runOnIdle {
+            assertEquals("Novità", submitted?.title)
+            assertEquals("Notizie dal negozio", submitted?.content)
+            assertEquals(0, submitted?.sortOrder)
+        }
+    }
+
+    @Test
+    fun newArticleRequiresAndReturnsAnExistingTopic() {
+        var submitted: AdminRecord? = null
+        val module = AdminModule.ARTICLES
+        val topic = AdminRecord(id = "12", title = "Guide", active = true)
+        composeRule.setContent {
+            MaterialTheme {
+                AdminModuleScreen(
+                    module = module,
+                    snapshot = AdminModuleSnapshot(module = module),
+                    onRefresh = {},
+                    onContentCreate = { submitted = it },
+                    availableTopics = listOf(topic)
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("create_articles").performClick()
+        composeRule.onNodeWithTag("create_content_title").performTextInput("Guida acquisto")
+        composeRule.onNodeWithTag("create_article_author").performTextInput("Redazione")
+        composeRule.onNodeWithTag("create_content_body").performTextInput("Contenuto verificato")
+        composeRule.onNodeWithTag("save_content_create").performClick()
+
+        composeRule.runOnIdle { assertEquals(12, submitted?.parentId) }
     }
 }

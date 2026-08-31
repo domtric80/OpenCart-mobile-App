@@ -21,6 +21,7 @@ import com.example.model.OrderReturn
 import com.example.model.OrderStatus
 import com.example.model.OrdersSubSection
 import com.example.model.Product
+import com.example.model.ProductImageUpload
 import com.example.model.ReturnStatus
 import com.example.model.SalesMetrics
 import com.example.model.Store
@@ -297,6 +298,9 @@ class MainViewModel(
 
     /** Carica sempre dati reali dal bridge; nessun elenco amministrativo demo viene mantenuto. */
     fun loadAdminModule(module: AdminModule, forceRefresh: Boolean = false) {
+        if (module == AdminModule.ARTICLES && _adminModules.value[AdminModule.TOPICS]?.records.isNullOrEmpty()) {
+            loadAdminModule(AdminModule.TOPICS, forceRefresh)
+        }
         val existing = _adminModules.value[module]
         if (existing?.isLoading == true) return
         if (!forceRefresh && existing != null && (existing.records.isNotEmpty() || !existing.supported)) return
@@ -419,6 +423,24 @@ class MainViewModel(
                     module to current.copy(message = error.localizedMessage ?: "Modifica editoriale non riuscita.")
                 )
             }
+        }
+    }
+
+    fun createAdminContent(module: AdminModule, record: com.example.model.AdminRecord) {
+        val store = uiState.value.currentStore ?: return
+        if (module != AdminModule.ARTICLES && module != AdminModule.TOPICS) return
+        viewModelScope.launch(Dispatchers.IO) {
+            apiClient.createAdminContent(store.url, store.apiKey, store.apiUsername, module, record)
+                .onSuccess {
+                    loadAdminModule(module, forceRefresh = true)
+                    if (module == AdminModule.TOPICS) loadAdminModule(AdminModule.ARTICLES, forceRefresh = true)
+                }
+                .onFailure { error ->
+                    val current = _adminModules.value[module] ?: AdminModuleSnapshot(module = module)
+                    _adminModules.value = _adminModules.value + (
+                        module to current.copy(message = error.localizedMessage ?: "Creazione CMS non riuscita.")
+                    )
+                }
         }
     }
 
@@ -964,7 +986,8 @@ class MainViewModel(
         minQuantityAlert: Int,
         category: String,
         description: String = "",
-        status: Boolean = true
+        status: Boolean = true,
+        image: ProductImageUpload? = null
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             val store = uiState.value.currentStore
@@ -985,7 +1008,7 @@ class MainViewModel(
                 description = description.trim(),
                 status = status
             )
-            val result = apiClient.createProduct(store.url, store.apiKey, draft, store.apiUsername)
+            val result = apiClient.createProduct(store.url, store.apiKey, draft, image, store.apiUsername)
             val created = result.getOrNull()
             if (created != null) {
                 repository.insertProduct(created)
@@ -997,14 +1020,14 @@ class MainViewModel(
         }
     }
 
-    fun updateProduct(product: Product) {
+    fun updateProduct(product: Product, image: ProductImageUpload? = null) {
         viewModelScope.launch(Dispatchers.IO) {
             val store = uiState.value.currentStore
             if (store == null || store.url.isBlank()) {
                 showOperationMessage("Prodotto non aggiornato: nessun negozio configurato.")
                 return@launch
             }
-            val result = apiClient.updateProduct(store.url, store.apiKey, product, store.apiUsername)
+            val result = apiClient.updateProduct(store.url, store.apiKey, product, image, store.apiUsername)
             if (result.getOrDefault(false)) {
                 repository.updateProduct(product)
                 offlineCatalogRepository.saveProduct(product, store.id)

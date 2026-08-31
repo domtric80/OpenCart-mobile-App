@@ -118,6 +118,13 @@ data class Product(
     val status: Boolean = true
 )
 
+/** Immagine selezionata localmente; non viene mai salvata nel database dell'app. */
+data class ProductImageUpload(
+    val bytes: ByteArray,
+    val mimeType: String,
+    val fileName: String
+)
+
 data class HourlySalesPoint(
     val hourLabel: String,
     val revenue: Double,
@@ -191,6 +198,8 @@ data class VisitorRealtimeStats(
     val trackingEnabled: Boolean = false,
     val dataAvailable: Boolean = false,
     val activeVisitorsNow: Int = 0,
+    val guestVisitorsNow: Int = 0,
+    val registeredVisitorsNow: Int = 0,
     val pageViewsPerMin: Int = 0,
     val activeCartsCount: Int = 0,
     val activeCheckoutsCount: Int = 0,
@@ -291,6 +300,7 @@ data class AdminRecord(
     val content: String = "",
     val rating: Int? = null,
     val sortOrder: Int? = null,
+    val parentId: Int? = null,
     val editable: Boolean = false
 )
 

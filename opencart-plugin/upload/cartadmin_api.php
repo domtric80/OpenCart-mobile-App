@@ -112,7 +112,7 @@ function cartadminRequiredScope(string $action, string $module = ''): string {
     if (in_array($action, $catalogWrites, true)) {
         return 'catalog.write';
     }
-    if (in_array($action, ['management_content', 'management_antispam'], true)) {
+    if (in_array($action, ['management_content', 'management_create', 'management_antispam'], true)) {
         return 'content.write';
     }
     if ($action === 'management_command') {
@@ -175,6 +175,52 @@ function cartadminStateDigest(array $state, string $auditSalt): string {
     }
 
     return hash_hmac('sha256', $encoded, $auditSalt);
+}
+
+/** Salva un upload immagine validato in catalog/cartadmin senza usare il nome client. */
+function cartadminStoreProductImage(array $upload): string {
+    if (!defined('DIR_IMAGE') || !is_dir(DIR_IMAGE)) {
+        throw new RuntimeException('Directory immagini OpenCart non disponibile.');
+    }
+    $error = isset($upload['error']) ? (int)$upload['error'] : UPLOAD_ERR_NO_FILE;
+    $size = isset($upload['size']) ? (int)$upload['size'] : 0;
+    $tmpName = isset($upload['tmp_name']) && is_string($upload['tmp_name']) ? $upload['tmp_name'] : '';
+    if ($error !== UPLOAD_ERR_OK || $size < 1 || $size > 5 * 1024 * 1024 || !is_uploaded_file($tmpName)) {
+        throw new InvalidArgumentException('Upload immagine non valido o superiore a 5 MB.');
+    }
+
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $mime = (string)$finfo->file($tmpName);
+    $extensions = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
+    if (!isset($extensions[$mime])) {
+        throw new InvalidArgumentException('Formato immagine non supportato.');
+    }
+    $dimensions = @getimagesize($tmpName);
+    $width = is_array($dimensions) ? (int)($dimensions[0] ?? 0) : 0;
+    $height = is_array($dimensions) ? (int)($dimensions[1] ?? 0) : 0;
+    if ($width < 1 || $height < 1 || $width > 8000 || $height > 8000 || ($width * $height) > 40000000) {
+        throw new InvalidArgumentException('Dimensioni immagine non valide.');
+    }
+
+    $imageRoot = realpath(DIR_IMAGE);
+    if ($imageRoot === false) {
+        throw new RuntimeException('Directory immagini OpenCart non risolvibile.');
+    }
+    $relativeDirectory = 'catalog/cartadmin/' . date('Y/m');
+    $targetDirectory = $imageRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relativeDirectory);
+    if (!is_dir($targetDirectory) && !mkdir($targetDirectory, 0755, true) && !is_dir($targetDirectory)) {
+        throw new RuntimeException('Impossibile creare la directory immagini CartAdmin.');
+    }
+    $resolvedDirectory = realpath($targetDirectory);
+    if ($resolvedDirectory === false || !str_starts_with($resolvedDirectory . DIRECTORY_SEPARATOR, $imageRoot . DIRECTORY_SEPARATOR)) {
+        throw new RuntimeException('Percorso immagine non sicuro.');
+    }
+    $relativePath = $relativeDirectory . '/' . bin2hex(random_bytes(16)) . '.' . $extensions[$mime];
+    $targetPath = $imageRoot . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relativePath);
+    if (!move_uploaded_file($tmpName, $targetPath)) {
+        throw new RuntimeException('Salvataggio immagine non riuscito.');
+    }
+    return $relativePath;
 }
 
 // 2. Localizzazione del file config.php di OpenCart
@@ -464,7 +510,7 @@ try {
             sendJson([
                 'success' => true,
                 'status' => 'online',
-                'bridge_version' => '2.1.0-dev.4',
+                'bridge_version' => '2.1.0-dev.5',
                 'author' => 'SOLO SOLUZIONI (OpenCart ITALIA)',
                 'store_name' => $storeName,
                 'authenticated_operator' => $authenticatedOperator,
@@ -650,11 +696,11 @@ try {
                 ],
                 'articles' => [
                     'tables' => ['article', 'article_description'],
-                    'sql' => "SELECT a.article_id AS id, ad.name AS title, a.author AS subtitle, a.status AS active, a.date_added AS date_value, CONCAT('Argomento #', a.topic_id) AS detail, a.status AS status_code, '' AS content_value, NULL AS rating_value, NULL AS sort_order_value FROM `{$db_prefix}article` a LEFT JOIN `{$db_prefix}article_description` ad ON (a.article_id = ad.article_id AND ad.language_id = {$languageId}) ORDER BY a.date_added DESC, a.article_id DESC LIMIT {$limit}" // nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string
+                    'sql' => "SELECT a.article_id AS id, ad.name AS title, a.author AS subtitle, a.status AS active, a.date_added AS date_value, CONCAT('Argomento #', a.topic_id) AS detail, a.status AS status_code, ad.description AS content_value, NULL AS rating_value, NULL AS sort_order_value, a.topic_id AS parent_id_value FROM `{$db_prefix}article` a LEFT JOIN `{$db_prefix}article_description` ad ON (a.article_id = ad.article_id AND ad.language_id = {$languageId}) ORDER BY a.date_added DESC, a.article_id DESC LIMIT {$limit}" // nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string
                 ],
                 'topics' => [
                     'tables' => ['topic', 'topic_description'],
-                    'sql' => "SELECT t.topic_id AS id, td.name AS title, CONCAT('Ordinamento: ', t.sort_order) AS subtitle, t.status AS active, '' AS date_value, '' AS detail, t.status AS status_code, '' AS content_value, NULL AS rating_value, t.sort_order AS sort_order_value FROM `{$db_prefix}topic` t LEFT JOIN `{$db_prefix}topic_description` td ON (t.topic_id = td.topic_id AND td.language_id = {$languageId}) ORDER BY t.sort_order ASC, t.topic_id DESC LIMIT {$limit}" // nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string
+                    'sql' => "SELECT t.topic_id AS id, td.name AS title, CONCAT('Ordinamento: ', t.sort_order) AS subtitle, t.status AS active, '' AS date_value, '' AS detail, t.status AS status_code, td.description AS content_value, NULL AS rating_value, t.sort_order AS sort_order_value, NULL AS parent_id_value FROM `{$db_prefix}topic` t LEFT JOIN `{$db_prefix}topic_description` td ON (t.topic_id = td.topic_id AND td.language_id = {$languageId}) ORDER BY t.sort_order ASC, t.topic_id DESC LIMIT {$limit}" // nosemgrep: php.lang.security.injection.tainted-sql-string.tainted-sql-string
                 ],
                 'comments' => [
                     'tables' => ['article_comment', 'article_description'],
@@ -755,6 +801,7 @@ try {
                     'content' => mb_substr($content, 0, 2000),
                     'rating' => isset($row['rating_value']) ? (int)$row['rating_value'] : null,
                     'sort_order' => isset($row['sort_order_value']) ? (int)$row['sort_order_value'] : null,
+                    'parent_id' => isset($row['parent_id_value']) ? (int)$row['parent_id_value'] : null,
                     'editable' => in_array($rawModule, ['pages', 'reviews', 'articles', 'topics'], true)
                 ];
             }
@@ -881,6 +928,98 @@ try {
             }
 
             sendJson(['success' => false, 'error' => 'Operazione Antispam non valida.'], 400);
+            break;
+
+        case 'management_create':
+            $rawModule = isset($_POST['module']) && is_string($_POST['module']) ? strtolower(trim($_POST['module'])) : '';
+            $title = isset($_POST['title']) && is_string($_POST['title']) ? trim(strip_tags($_POST['title'])) : '';
+            $secondary = isset($_POST['secondary']) && is_string($_POST['secondary']) ? trim(strip_tags($_POST['secondary'])) : '';
+            $content = isset($_POST['content']) && is_string($_POST['content']) ? trim(strip_tags($_POST['content'])) : '';
+            $parentId = isset($_POST['parent_id']) ? (int)$_POST['parent_id'] : 0;
+            $sortOrder = isset($_POST['sort_order']) ? (int)$_POST['sort_order'] : 0;
+            $active = isset($_POST['active']) && (string)$_POST['active'] === '1' ? 1 : 0;
+
+            if (!in_array($rawModule, ['articles', 'topics'], true)
+                || $title === '' || mb_strlen($title) > 255
+                || $content === '' || mb_strlen($content) > 20000
+                || ($rawModule === 'articles' && ($secondary === '' || mb_strlen($secondary) > 64 || $parentId < 1))
+                || ($rawModule === 'topics' && ($sortOrder < 0 || $sortOrder > 999999))) {
+                cartadminInsertSecurityAudit($mysqli, $db_prefix, $authContext, 'management_create', $rawModule, 0, 'failed', '', '', 'Validazione creazione CMS non superata');
+                sendJson(['success' => false, 'error' => 'I dati del nuovo contenuto CMS non sono validi.'], 400);
+            }
+
+            $languageIds = cartadminActiveLanguageIds($mysqli, $db_prefix);
+            if ($languageIds === []) {
+                sendJson(['success' => false, 'error' => 'Nessuna lingua OpenCart configurata.'], 409);
+            }
+            if ($rawModule === 'articles') {
+                $topicCheck = $mysqli->prepare("SELECT `topic_id` FROM `{$db_prefix}topic` WHERE `topic_id` = ? LIMIT 1");
+                if (!$topicCheck) {
+                    sendJson(['success' => false, 'error' => 'Modulo categorie CMS non disponibile.'], 409);
+                }
+                $topicCheck->bind_param('i', $parentId);
+                $topicCheck->execute();
+                $topicResult = $topicCheck->get_result();
+                $topicExists = $topicResult && $topicResult->num_rows === 1;
+                $topicCheck->close();
+                if (!$topicExists) {
+                    sendJson(['success' => false, 'error' => 'Seleziona una categoria CMS esistente.'], 409);
+                }
+            }
+
+            $mysqli->begin_transaction();
+            try {
+                if ($rawModule === 'articles') {
+                    $baseStmt = $mysqli->prepare("INSERT INTO `{$db_prefix}article` (`topic_id`, `author`, `status`, `date_added`, `date_modified`) VALUES (?, ?, ?, NOW(), NOW())");
+                    if (!$baseStmt) throw new RuntimeException('Tabella articoli non disponibile');
+                    $baseStmt->bind_param('isi', $parentId, $secondary, $active);
+                    $baseStmt->execute();
+                    $recordId = (int)$mysqli->insert_id;
+                    $baseStmt->close();
+                    $descriptionStmt = $mysqli->prepare("INSERT INTO `{$db_prefix}article_description` (`article_id`, `language_id`, `image`, `name`, `description`, `tag`, `meta_title`, `meta_description`, `meta_keyword`) VALUES (?, ?, '', ?, ?, '', ?, '', '')");
+                    $storeStmt = $mysqli->prepare("INSERT INTO `{$db_prefix}article_to_store` (`article_id`, `store_id`) VALUES (?, 0)");
+                } else {
+                    $baseStmt = $mysqli->prepare("INSERT INTO `{$db_prefix}topic` (`sort_order`, `status`) VALUES (?, ?)");
+                    if (!$baseStmt) throw new RuntimeException('Tabella categorie CMS non disponibile');
+                    $baseStmt->bind_param('ii', $sortOrder, $active);
+                    $baseStmt->execute();
+                    $recordId = (int)$mysqli->insert_id;
+                    $baseStmt->close();
+                    $descriptionStmt = $mysqli->prepare("INSERT INTO `{$db_prefix}topic_description` (`topic_id`, `language_id`, `image`, `name`, `description`, `meta_title`, `meta_description`, `meta_keyword`) VALUES (?, ?, '', ?, ?, ?, '', '')");
+                    $storeStmt = $mysqli->prepare("INSERT INTO `{$db_prefix}topic_to_store` (`topic_id`, `store_id`) VALUES (?, 0)");
+                }
+                if ($recordId < 1 || !$descriptionStmt || !$storeStmt) {
+                    throw new RuntimeException('Preparazione contenuto CMS non riuscita');
+                }
+                foreach ($languageIds as $languageId) {
+                    $descriptionStmt->bind_param('iisss', $recordId, $languageId, $title, $content, $title);
+                    if (!$descriptionStmt->execute()) throw new RuntimeException('Descrizione CMS non creata');
+                }
+                $descriptionStmt->close();
+                $storeStmt->bind_param('i', $recordId);
+                if (!$storeStmt->execute()) throw new RuntimeException('Associazione store CMS non creata');
+                $storeStmt->close();
+
+                $afterState = ['title' => $title, 'content_digest' => hash_hmac('sha256', $content, $auditSalt), 'active' => $active];
+                if ($rawModule === 'articles') {
+                    $afterState['author'] = $secondary;
+                    $afterState['topic_id'] = $parentId;
+                } else {
+                    $afterState['sort_order'] = $sortOrder;
+                }
+                $afterDigest = cartadminStateDigest($afterState, $auditSalt);
+                if (!cartadminInsertSecurityAudit($mysqli, $db_prefix, $authContext, 'management_create', $rawModule, $recordId, 'success', '', $afterDigest, 'Nuovo contenuto CMS')) {
+                    throw new RuntimeException('Audit atomico non disponibile');
+                }
+                $mysqli->commit();
+            } catch (Throwable $createError) {
+                $mysqli->rollback();
+                cartadminInsertSecurityAudit($mysqli, $db_prefix, $authContext, 'management_create', $rawModule, 0, 'failed', '', '', 'Rollback creazione CMS');
+                sendJson(['success' => false, 'error' => 'Creazione CMS non riuscita. Verifica la compatibilità del bridge con OpenCart.'], 409);
+            }
+
+            cartadminInvalidateFileCache([$rawModule === 'articles' ? 'article' : 'topic']);
+            sendJson(['success' => true, 'module' => $rawModule, 'id' => (string)$recordId], 201);
             break;
 
         case 'management_content':
@@ -1192,6 +1331,8 @@ try {
             }
 
             $activeVisitors = 0;
+            $guestVisitors = 0;
+            $registeredVisitors = 0;
             $pageUpdatesPerMinute = 0;
             $activeCarts = 0;
             $activeCheckouts = 0;
@@ -1211,12 +1352,14 @@ try {
                 $minuteSince = date('Y-m-d H:i:s', strtotime('-1 minute'));
                 $historySince = date('Y-m-d H:i:s', strtotime('-30 minutes'));
 
-                $stmtCount = $mysqli->prepare("SELECT COUNT(*) AS total FROM `{$db_prefix}customer_online` WHERE `date_added` >= ?");
+                $stmtCount = $mysqli->prepare("SELECT COUNT(*) AS total, SUM(CASE WHEN `customer_id` = 0 THEN 1 ELSE 0 END) AS guests, SUM(CASE WHEN `customer_id` > 0 THEN 1 ELSE 0 END) AS registered FROM `{$db_prefix}customer_online` WHERE `date_added` >= ?");
                 if ($stmtCount) {
                     $stmtCount->bind_param('s', $activeSince);
                     $stmtCount->execute();
                     $res = $stmtCount->get_result();
                     $activeVisitors = ($res && $row = $res->fetch_assoc()) ? (int)$row['total'] : 0;
+                    $guestVisitors = isset($row) ? (int)($row['guests'] ?? 0) : 0;
+                    $registeredVisitors = isset($row) ? (int)($row['registered'] ?? 0) : 0;
                     $stmtCount->close();
                 }
 
@@ -1246,7 +1389,7 @@ try {
                     $stmtHistory->close();
                 }
 
-                $stmtOnline = $mysqli->prepare("SELECT `url`, `referer`, `date_added` FROM `{$db_prefix}customer_online` WHERE `date_added` >= ? ORDER BY `date_added` DESC LIMIT 200");
+                $stmtOnline = $mysqli->prepare("SELECT `customer_id`, `url`, `referer`, `date_added` FROM `{$db_prefix}customer_online` WHERE `date_added` >= ? ORDER BY `date_added` DESC LIMIT 200");
                 if ($stmtOnline) {
                     $stmtOnline->bind_param('s', $activeSince);
                     $stmtOnline->execute();
@@ -1270,11 +1413,12 @@ try {
                             $sourceCounts[$source] = ($sourceCounts[$source] ?? 0) + 1;
 
                             if (count($liveEvents) < 20) {
+                                $visitorType = (int)$row['customer_id'] > 0 ? 'Cliente registrato' : 'Visitatore guest';
                                 $liveEvents[] = [
-                                    'id' => hash('sha256', $safePath . '|' . (string)$row['date_added']),
+                                    'id' => hash('sha256', $visitorType . '|' . $safePath . '|' . (string)$row['date_added']),
                                     'timestamp' => (string)$row['date_added'],
                                     'event_type' => 'PAGE_VIEW',
-                                    'description' => 'Visita su ' . $safePath,
+                                    'description' => $visitorType . ' • ' . $safePath,
                                     'location' => '',
                                     'icon_type' => 'page'
                                 ];
@@ -1324,6 +1468,8 @@ try {
                 'tracking_enabled' => $trackingEnabled,
                 'data_available' => $onlineTableExists,
                 'active_visitors_now' => $activeVisitors,
+                'guest_visitors_now' => $guestVisitors,
+                'registered_visitors_now' => $registeredVisitors,
                 'page_updates_per_min' => $pageUpdatesPerMinute,
                 'active_carts_count' => $activeCarts,
                 'active_checkouts_count' => $activeCheckouts,
@@ -1337,7 +1483,7 @@ try {
                 'live_events' => $liveEvents,
                 'source' => 'OpenCart customer_online',
                 'last_updated' => date('c'),
-                'limitations' => 'OpenCart non registra user agent, geolocalizzazione, durata sessione o bounce rate nella tabella customer_online.'
+                'limitations' => 'Guest e clienti registrati sono distinti senza esporre IP o identità. OpenCart non registra user agent, geolocalizzazione, durata sessione o bounce rate nella tabella customer_online.'
             ]);
             break;
 
@@ -1351,6 +1497,7 @@ try {
             $quantity = isset($_POST['quantity']) ? max(0, (int)$_POST['quantity']) : -1;
             $minimum = isset($_POST['minimum']) ? max(1, (int)$_POST['minimum']) : 1;
             $status = isset($_POST['status']) && (string)$_POST['status'] === '1' ? 1 : 0;
+            $imagePath = '';
 
             if ($name === '' || mb_strlen($name) > 255 || $model === '' || mb_strlen($model) > 64 || mb_strlen($sku) > 64 || $price < 0 || $quantity < 0 || mb_strlen($description) > 65535 || $category === '' || mb_strlen($category) > 255) {
                 sendJson(['success' => false, 'error' => 'Dati prodotto non validi. Nome, modello e categoria sono obbligatori.'], 400);
@@ -1385,13 +1532,21 @@ try {
                 sendJson(['success' => false, 'error' => 'Nessuno stato magazzino OpenCart configurato.'], 409);
             }
 
+            if (isset($_FILES['image']) && is_array($_FILES['image'])) {
+                try {
+                    $imagePath = cartadminStoreProductImage($_FILES['image']);
+                } catch (Throwable $imageError) {
+                    sendJson(['success' => false, 'error' => $imageError instanceof InvalidArgumentException ? $imageError->getMessage() : 'Impossibile salvare l’immagine prodotto.'], 400);
+                }
+            }
+
             $mysqli->begin_transaction();
             try {
-                $stmtProduct = $mysqli->prepare("INSERT INTO `{$db_prefix}product` (`master_id`, `model`, `sku`, `upc`, `ean`, `jan`, `isbn`, `mpn`, `location`, `variant`, `override`, `quantity`, `stock_status_id`, `image`, `manufacturer_id`, `shipping`, `price`, `points`, `tax_class_id`, `date_available`, `weight`, `weight_class_id`, `length`, `width`, `height`, `length_class_id`, `subtract`, `minimum`, `rating`, `sort_order`, `status`, `date_added`, `date_modified`) VALUES (0, ?, ?, '', '', '', '', '', '', '', '', ?, ?, '', 0, 1, ?, 0, 0, CURDATE(), 0, 0, 0, 0, 0, 0, 1, ?, 0, 0, ?, NOW(), NOW())");
+                $stmtProduct = $mysqli->prepare("INSERT INTO `{$db_prefix}product` (`master_id`, `model`, `sku`, `upc`, `ean`, `jan`, `isbn`, `mpn`, `location`, `variant`, `override`, `quantity`, `stock_status_id`, `image`, `manufacturer_id`, `shipping`, `price`, `points`, `tax_class_id`, `date_available`, `weight`, `weight_class_id`, `length`, `width`, `height`, `length_class_id`, `subtract`, `minimum`, `rating`, `sort_order`, `status`, `date_added`, `date_modified`) VALUES (0, ?, ?, '', '', '', '', '', '', '', '', ?, ?, ?, 0, 1, ?, 0, 0, CURDATE(), 0, 0, 0, 0, 0, 0, 1, ?, 0, 0, ?, NOW(), NOW())");
                 if (!$stmtProduct) {
                     throw new RuntimeException('Preparazione creazione prodotto fallita.');
                 }
-                $stmtProduct->bind_param('ssiidii', $model, $sku, $quantity, $stockStatusId, $price, $minimum, $status);
+                $stmtProduct->bind_param('ssiisdii', $model, $sku, $quantity, $stockStatusId, $imagePath, $price, $minimum, $status);
                 $stmtProduct->execute();
                 $productId = (int)$mysqli->insert_id;
                 $stmtProduct->close();
@@ -1423,6 +1578,9 @@ try {
                 $mysqli->commit();
             } catch (Throwable $error) {
                 $mysqli->rollback();
+                if ($imagePath !== '' && defined('DIR_IMAGE')) {
+                    @unlink(rtrim(DIR_IMAGE, '/\\') . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $imagePath));
+                }
                 sendJson(['success' => false, 'error' => 'Creazione prodotto non riuscita.'], 500);
             }
 
@@ -1439,6 +1597,7 @@ try {
                     'minimum' => $minimum,
                     'category' => $category,
                     'description' => $description,
+                    'image' => $imagePath,
                     'status' => (bool)$status
                 ]
             ], 201);
@@ -1747,6 +1906,7 @@ try {
             $quantity = isset($_POST['quantity']) ? max(0, (int)$_POST['quantity']) : -1;
             $minimum = isset($_POST['minimum']) ? max(1, (int)$_POST['minimum']) : 1;
             $status = isset($_POST['status']) && (string)$_POST['status'] === '1' ? 1 : 0;
+            $imagePath = '';
 
             if ($productId <= 0 || $name === '' || mb_strlen($name) > 255 || $model === '' || mb_strlen($model) > 64 || mb_strlen($sku) > 64 || $price < 0 || $quantity < 0 || mb_strlen($description) > 65535 || mb_strlen($category) > 255) {
                 sendJson(['success' => false, 'error' => 'Dati prodotto non validi.'], 400);
@@ -1771,13 +1931,27 @@ try {
             }
             $primaryLanguageId = $languageIds[0];
 
+            if (isset($_FILES['image']) && is_array($_FILES['image'])) {
+                try {
+                    $imagePath = cartadminStoreProductImage($_FILES['image']);
+                } catch (Throwable $imageError) {
+                    sendJson(['success' => false, 'error' => $imageError instanceof InvalidArgumentException ? $imageError->getMessage() : 'Impossibile salvare l’immagine prodotto.'], 400);
+                }
+            }
+
             $mysqli->begin_transaction();
             try {
-                $stmtProduct = $mysqli->prepare("UPDATE `{$db_prefix}product` SET `model` = ?, `sku` = ?, `quantity` = ?, `minimum` = ?, `price` = ?, `status` = ?, `date_modified` = NOW() WHERE `product_id` = ?");
+                $stmtProduct = $imagePath === ''
+                    ? $mysqli->prepare("UPDATE `{$db_prefix}product` SET `model` = ?, `sku` = ?, `quantity` = ?, `minimum` = ?, `price` = ?, `status` = ?, `date_modified` = NOW() WHERE `product_id` = ?")
+                    : $mysqli->prepare("UPDATE `{$db_prefix}product` SET `model` = ?, `sku` = ?, `quantity` = ?, `minimum` = ?, `price` = ?, `status` = ?, `image` = ?, `date_modified` = NOW() WHERE `product_id` = ?");
                 if (!$stmtProduct) {
                     throw new RuntimeException('Preparazione aggiornamento prodotto fallita.');
                 }
-                $stmtProduct->bind_param('ssiidii', $model, $sku, $quantity, $minimum, $price, $status, $productId);
+                if ($imagePath === '') {
+                    $stmtProduct->bind_param('ssiidii', $model, $sku, $quantity, $minimum, $price, $status, $productId);
+                } else {
+                    $stmtProduct->bind_param('ssiidisi', $model, $sku, $quantity, $minimum, $price, $status, $imagePath, $productId);
+                }
                 $stmtProduct->execute();
                 $stmtProduct->close();
 
@@ -1821,6 +1995,9 @@ try {
                 $mysqli->commit();
             } catch (Throwable $error) {
                 $mysqli->rollback();
+                if ($imagePath !== '' && defined('DIR_IMAGE')) {
+                    @unlink(rtrim(DIR_IMAGE, '/\\') . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $imagePath));
+                }
                 sendJson(['success' => false, 'error' => 'Aggiornamento prodotto non riuscito.'], 500);
             }
 

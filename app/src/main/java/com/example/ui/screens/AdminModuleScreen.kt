@@ -14,9 +14,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Delete
@@ -25,12 +28,15 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,6 +61,8 @@ fun AdminModuleScreen(
     onAddAntispam: (keyword: String) -> Unit = {},
     onDeleteAntispam: (recordId: String) -> Unit = {},
     onContentUpdate: (record: AdminRecord) -> Unit = {},
+    onContentCreate: (record: AdminRecord) -> Unit = {},
+    availableTopics: List<AdminRecord> = emptyList(),
     onSensitiveAction: (recordId: String, operation: String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
@@ -62,6 +70,7 @@ fun AdminModuleScreen(
     var antispamKeyword by remember(module) { mutableStateOf("") }
     var pendingSensitiveAction by remember(module) { mutableStateOf<Pair<String, String>?>(null) }
     var recordBeingEdited by remember(module) { mutableStateOf<AdminRecord?>(null) }
+    var showCreateDialog by remember(module) { mutableStateOf(false) }
 
     LazyColumn(
         modifier = modifier
@@ -133,6 +142,26 @@ fun AdminModuleScreen(
                     ) {
                         Text("Aggiungi")
                     }
+                }
+            }
+        }
+
+        if (module == AdminModule.ARTICLES || module == AdminModule.TOPICS) {
+            item {
+                Button(
+                    onClick = { showCreateDialog = true },
+                    enabled = !state.isLoading && (module == AdminModule.TOPICS || availableTopics.isNotEmpty()),
+                    modifier = Modifier.fillMaxWidth().testTag("create_${module.apiKey}")
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Text(if (module == AdminModule.ARTICLES) " Nuovo articolo" else " Nuova categoria CMS")
+                }
+                if (module == AdminModule.ARTICLES && availableTopics.isEmpty()) {
+                    Text(
+                        "Crea prima una categoria CMS nella sezione Argomenti.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
@@ -321,6 +350,112 @@ fun AdminModuleScreen(
             }
         )
     }
+
+
+    if (showCreateDialog) {
+        AdminContentCreateDialog(
+            module = module,
+            topics = availableTopics,
+            onDismiss = { showCreateDialog = false },
+            onSave = { record ->
+                onContentCreate(record)
+                showCreateDialog = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun AdminContentCreateDialog(
+    module: AdminModule,
+    topics: List<AdminRecord>,
+    onDismiss: () -> Unit,
+    onSave: (AdminRecord) -> Unit
+) {
+    var title by remember { mutableStateOf("") }
+    var author by remember { mutableStateOf("") }
+    var content by remember { mutableStateOf("") }
+    var sortOrder by remember { mutableStateOf("0") }
+    var active by remember { mutableStateOf(true) }
+    var selectedTopic by remember(topics) { mutableStateOf(topics.firstOrNull()) }
+    var topicsExpanded by remember { mutableStateOf(false) }
+    val isArticle = module == AdminModule.ARTICLES
+    val valid = title.isNotBlank() && content.isNotBlank() &&
+        (!isArticle || (author.isNotBlank() && selectedTopic != null)) &&
+        (isArticle || sortOrder.toIntOrNull() != null)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (isArticle) "Nuovo articolo" else "Nuova categoria CMS") },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedTextField(title, { title = it.take(255) }, label = { Text("Titolo") }, modifier = Modifier.fillMaxWidth().testTag("create_content_title"))
+                if (isArticle) {
+                    OutlinedTextField(author, { author = it.take(64) }, label = { Text("Autore") }, modifier = Modifier.fillMaxWidth().testTag("create_article_author"))
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(onClick = { topicsExpanded = true }, modifier = Modifier.fillMaxWidth().testTag("create_article_topic")) {
+                            Text(selectedTopic?.title ?: "Seleziona categoria CMS")
+                        }
+                        DropdownMenu(expanded = topicsExpanded, onDismissRequest = { topicsExpanded = false }) {
+                            topics.forEach { topic ->
+                                DropdownMenuItem(
+                                    text = { Text(topic.title) },
+                                    onClick = { selectedTopic = topic; topicsExpanded = false }
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    OutlinedTextField(
+                        sortOrder,
+                        { sortOrder = it.filter(Char::isDigit).take(6) },
+                        label = { Text("Ordinamento") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                OutlinedTextField(
+                    content,
+                    { content = it.take(20000) },
+                    label = { Text(if (isArticle) "Contenuto articolo" else "Descrizione categoria") },
+                    minLines = 5,
+                    modifier = Modifier.fillMaxWidth().testTag("create_content_body")
+                )
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (active) "Pubblicato" else "Bozza")
+                    Switch(checked = active, onCheckedChange = { active = it })
+                }
+                Text(
+                    "Il contenuto viene creato in tutte le lingue attive e associato allo store principale. Potrai rifinire traduzioni e SEO dal pannello OpenCart.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = valid,
+                onClick = {
+                    onSave(
+                        AdminRecord(
+                            id = "",
+                            title = title.trim(),
+                            subtitle = author.trim(),
+                            content = content.trim(),
+                            active = active,
+                            sortOrder = if (isArticle) null else sortOrder.toIntOrNull(),
+                            parentId = selectedTopic?.id?.toIntOrNull(),
+                            editable = true
+                        )
+                    )
+                },
+                modifier = Modifier.testTag("save_content_create")
+            ) { Text("Crea sullo store") }
+        },
+        dismissButton = { OutlinedButton(onClick = onDismiss) { Text("Annulla") } }
+    )
 }
 
 @Composable

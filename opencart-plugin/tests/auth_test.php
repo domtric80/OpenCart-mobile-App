@@ -91,8 +91,8 @@ $contentSource = ($contentCaseStart !== false && $contentCaseEnd !== false)
     ? substr($bridgeSource, $contentCaseStart, $contentCaseEnd - $contentCaseStart)
     : '';
 
-assertSameValue('2.1.0-dev.4', $manifest['version'] ?? '', 'The OpenCart manifest version must match the development release.');
-assertSourceContains($bridgeSource, "'bridge_version' => '2.1.0-dev.4'", 'The status endpoint must report the same development release.');
+assertSameValue('2.1.0-dev.5', $manifest['version'] ?? '', 'The OpenCart manifest version must match the development release.');
+assertSourceContains($bridgeSource, "'bridge_version' => '2.1.0-dev.5'", 'The status endpoint must report the same development release.');
 assertSourceOmits($bridgeSource, 'get_key_setup', 'The bridge must not expose public token setup.');
 assertSourceOmits($bridgeSource, "\$_REQUEST['api_key']", 'The bridge must ignore URL/form credentials.');
 assertSourceOmits($bridgeSource, '`username` = ? AND `key` = ?', 'The bridge must not authenticate against plaintext native API keys.');
@@ -135,8 +135,13 @@ assertSourceOrder($contentSource, [
     "'failed'"
 ], 'A failure event must be inserted only after the failed editorial transaction rolls back.');
 assertSourceContains($bridgeSource, "case 'visitor_telemetry':", 'The bridge must expose authenticated OpenCart visitor telemetry.');
+assertSourceContains($bridgeSource, 'SUM(CASE WHEN `customer_id` = 0 THEN 1 ELSE 0 END) AS guests', 'Visitor telemetry must count OpenCart guest sessions explicitly.');
+assertSourceContains($bridgeSource, "'guest_visitors_now' => \$guestVisitors", 'Guest totals must be exposed without returning IP addresses.');
 assertSourceContains($bridgeSource, "case 'update_product':", 'The bridge must expose verified product updates.');
 assertSourceContains($bridgeSource, "case 'create_product':", 'The bridge must expose authenticated product creation.');
+assertSourceContains($bridgeSource, 'function cartadminStoreProductImage', 'Product images must pass through the bounded server-side validator.');
+assertSourceContains($bridgeSource, "['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp']", 'Only reviewed image formats may be stored.');
+assertSourceContains($bridgeSource, 'move_uploaded_file($tmpName, $targetPath)', 'Validated images must be moved using the PHP upload primitive.');
 assertSourceContains($bridgeSource, "case 'delete_product':", 'The bridge must expose authenticated product deletion.');
 assertSourceContains($bridgeSource, "case 'create_category':", 'The bridge must expose authenticated category creation.');
 assertSourceContains($bridgeSource, "case 'update_category':", 'The bridge must expose authenticated category updates.');
@@ -152,6 +157,8 @@ assertSourceContains($bridgeSource, "case 'management_list':", 'The bridge must 
 assertSourceContains($bridgeSource, "case 'management_status':", 'The bridge must verify management status changes remotely.');
 assertSourceContains($bridgeSource, "case 'management_antispam':", 'The bridge must expose verified Antispam mutations.');
 assertSourceContains($bridgeSource, "case 'management_content':", 'The bridge must expose allowlisted editorial mutations.');
+assertSourceContains($bridgeSource, "case 'management_create':", 'The bridge must expose audited CMS creation.');
+assertSourceContains($bridgeSource, "'management_create', \$rawModule, \$recordId, 'success'", 'CMS creation and its success audit must share one transaction.');
 assertSourceContains($bridgeSource, "\$editableModules = ['pages', 'reviews', 'articles', 'topics'];", 'Editorial mutations must use an explicit module allowlist.');
 assertSourceContains($bridgeSource, 'UPDATE `{$db_prefix}review` SET `author` = ?, `text` = ?, `rating` = ?', 'Review edits must use prepared values.');
 assertSourceContains($bridgeSource, 'INNER JOIN `{$db_prefix}information_description`', 'Page edits must verify the primary-language record before mutation.');
