@@ -1,8 +1,9 @@
 package com.example
 
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -15,7 +16,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class CatalogMediaPickerInstrumentedTest {
     @get:Rule
-    val composeRule = createComposeRule()
+    val composeRule = createAndroidComposeRule<MediaPickerHostActivity>()
 
     @Test
     fun newProductOffersCameraAndGallerySources() {
@@ -30,6 +31,7 @@ class CatalogMediaPickerInstrumentedTest {
         showNewProductDialog()
         composeRule.onNodeWithTag("product_gallery").performClick()
         Thread.sleep(1_000)
+        composeRule.onNodeWithText("Can only use lower 16 bits", substring = true).assertDoesNotExist()
         InstrumentationRegistry.getInstrumentation().uiAutomation
             .executeShellCommand("input keyevent KEYCODE_BACK").close()
         composeRule.waitForIdle()
@@ -41,6 +43,7 @@ class CatalogMediaPickerInstrumentedTest {
         showNewProductDialog()
         composeRule.onNodeWithTag("product_camera").performClick()
         Thread.sleep(1_000)
+        composeRule.onNodeWithText("Can only use lower 16 bits", substring = true).assertDoesNotExist()
         InstrumentationRegistry.getInstrumentation().uiAutomation
             .executeShellCommand("input keyevent KEYCODE_BACK").close()
         composeRule.waitForIdle()

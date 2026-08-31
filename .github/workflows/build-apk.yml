@@ -236,6 +236,7 @@ jobs:
 
           - flusso multimediale ridotto ai contratti di sistema \`TakePicturePreview\` e \`GetContent\`, eliminando FileProvider, URI condivisi, Photo Picker e grant OEM;
           - fotocamera e galleria senza permessi generali; in caso di errore viene mostrato anche il dettaglio tecnico restituito dal dispositivo;
+          - AndroidX Fragment aggiornato e allineato ad Activity per eliminare l'errore \`Can only use lower 16 bits for requestCode\`;
           - conteggio dei guest e dei clienti registrati dalle sessioni che OpenCart mantiene nella tabella nativa \`customer_online\`, senza un secondo filtro soggetto a differenze tra orologio PHP e MySQL;
           - diagnostica nell'app con numero di record, ultima visita e indicazioni quando OpenCart non sta popolando \`customer_online\`.
 
