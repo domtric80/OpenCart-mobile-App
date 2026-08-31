@@ -197,6 +197,8 @@ data class LiveVisitorEvent(
 data class VisitorRealtimeStats(
     val trackingEnabled: Boolean = false,
     val dataAvailable: Boolean = false,
+    val recordsTotal: Int = 0,
+    val latestRecordAt: String = "",
     val activeVisitorsNow: Int = 0,
     val guestVisitorsNow: Int = 0,
     val registeredVisitorsNow: Int = 0,

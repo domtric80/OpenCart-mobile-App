@@ -91,8 +91,8 @@ $contentSource = ($contentCaseStart !== false && $contentCaseEnd !== false)
     ? substr($bridgeSource, $contentCaseStart, $contentCaseEnd - $contentCaseStart)
     : '';
 
-assertSameValue('2.1.0-dev.7', $manifest['version'] ?? '', 'The OpenCart manifest version must match the development release.');
-assertSourceContains($bridgeSource, "'bridge_version' => '2.1.0-dev.7'", 'The status endpoint must report the same development release.');
+assertSameValue('2.1.0-dev.8', $manifest['version'] ?? '', 'The OpenCart manifest version must match the development release.');
+assertSourceContains($bridgeSource, "'bridge_version' => '2.1.0-dev.8'", 'The status endpoint must report the same development release.');
 assertSourceOmits($bridgeSource, 'get_key_setup', 'The bridge must not expose public token setup.');
 assertSourceOmits($bridgeSource, "\$_REQUEST['api_key']", 'The bridge must ignore URL/form credentials.');
 assertSourceOmits($bridgeSource, '`username` = ? AND `key` = ?', 'The bridge must not authenticate against plaintext native API keys.');
@@ -139,7 +139,9 @@ assertSourceContains($bridgeSource, 'SUM(CASE WHEN `customer_id` = 0 THEN 1 ELSE
 assertSourceContains($bridgeSource, "'guest_visitors_now' => \$guestVisitors", 'Guest totals must be exposed without returning IP addresses.');
 assertSourceContains($bridgeSource, 'if ($onlineTableExists) {', 'Existing telemetry rows must remain readable independently from an ambiguous multi-store setting.');
 assertSourceContains($bridgeSource, "MAX(CASE WHEN `value` = '1' THEN 1 ELSE 0 END)", 'Telemetry enablement must account for every configured OpenCart store.');
-assertSourceContains($bridgeSource, 'DATE_SUB(NOW(), INTERVAL ? HOUR)', 'Telemetry windows must use the same MySQL clock that writes customer_online rows.');
+assertSourceContains($bridgeSource, 'MAX(`date_added`) AS latest_record_at', 'Telemetry must expose the latest native OpenCart online record for diagnostics.');
+assertSourceContains($bridgeSource, "'records_total' => \$recordsTotal", 'Telemetry must expose the number of rows OpenCart considers active.');
+assertSourceContains($bridgeSource, "\$oneMinuteAgo = date('Y-m-d H:i:s', time() - 60);", 'Minute telemetry must use the PHP clock used by OpenCart online tracking.');
 assertSourceContains($bridgeSource, "case 'update_product':", 'The bridge must expose verified product updates.');
 assertSourceContains($bridgeSource, "case 'create_product':", 'The bridge must expose authenticated product creation.');
 assertSourceContains($bridgeSource, 'function cartadminStoreProductImage', 'Product images must pass through the bounded server-side validator.');

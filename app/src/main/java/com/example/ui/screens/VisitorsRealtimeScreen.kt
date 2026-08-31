@@ -259,18 +259,19 @@ private fun TelemetryStatusCard(stats: VisitorRealtimeStats) {
     val isReady = stats.dataAvailable
     val container = when {
         !stats.dataAvailable -> MaterialTheme.colorScheme.errorContainer
-        !stats.trackingEnabled -> StatusPendingGoldBg
+        !stats.trackingEnabled || stats.recordsTotal == 0 -> StatusPendingGoldBg
         else -> StatusShippedGreenBg
     }
     val foreground = when {
         !stats.dataAvailable -> MaterialTheme.colorScheme.onErrorContainer
-        !stats.trackingEnabled -> StatusPendingGold
+        !stats.trackingEnabled || stats.recordsTotal == 0 -> StatusPendingGold
         else -> StatusShippedGreen
     }
     val message = when {
         !stats.dataAvailable -> "Il bridge installato non espone ancora la telemetria. Aggiorna il plugin CartAdmin alla stessa versione dell’app."
         !stats.trackingEnabled -> "La tabella OpenCart è disponibile, ma il tracciamento risulta disattivato. I dati già presenti vengono comunque mostrati; abilita “Clienti online” per ricevere nuovi accessi."
-        else -> "Dati reali da ${stats.source.ifBlank { "OpenCart customer_online" }}${stats.lastUpdated.takeIf { it.isNotBlank() }?.let { " • $it" }.orEmpty()}"
+        stats.recordsTotal == 0 -> "OpenCart non ha scritto visite in customer_online. Abilita “Clienti online”, visita il negozio in incognito e verifica che il tema esegua il footer comune."
+        else -> "${stats.recordsTotal} sessioni reali da ${stats.source.ifBlank { "OpenCart customer_online" }}${stats.latestRecordAt.takeIf { it.isNotBlank() }?.let { " • ultima visita $it" }.orEmpty()}"
     }
 
     Card(
@@ -285,7 +286,7 @@ private fun TelemetryStatusCard(stats: VisitorRealtimeStats) {
             Text(
                 text = when {
                     !stats.dataAvailable -> "Telemetria non disponibile"
-                    stats.trackingEnabled -> "Telemetria OpenCart attiva"
+                    stats.trackingEnabled && stats.recordsTotal > 0 -> "Telemetria OpenCart attiva"
                     else -> "Telemetria OpenCart parzialmente attiva"
                 },
                 color = foreground,
