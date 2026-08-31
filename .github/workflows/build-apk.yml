@@ -234,9 +234,8 @@ jobs:
 
           ### Correzioni di ${TAG_NAME}
 
-          - fotocamera e galleria avviate mediante intent Android diretti per evitare \`IllegalArgumentException\` sui firmware che rifiutano i contratti AndroidX;
-          - galleria tramite \`GET_CONTENT\` con fallback \`OPEN_DOCUMENT\`, senza permessi generali sull'archivio;
-          - fotocamera con accesso limitato al solo URI temporaneo, grant esplicito ai gestori OEM e fallback alla cattura anteprima;
+          - flusso multimediale ridotto ai contratti di sistema \`TakePicturePreview\` e \`GetContent\`, eliminando FileProvider, URI condivisi, Photo Picker e grant OEM;
+          - fotocamera e galleria senza permessi generali; in caso di errore viene mostrato anche il dettaglio tecnico restituito dal dispositivo;
           - conteggio dei guest e dei clienti registrati dalle sessioni che OpenCart mantiene nella tabella nativa \`customer_online\`, senza un secondo filtro soggetto a differenze tra orologio PHP e MySQL;
           - diagnostica nell'app con numero di record, ultima visita e indicazioni quando OpenCart non sta popolando \`customer_online\`.
 
