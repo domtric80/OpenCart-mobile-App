@@ -10,16 +10,19 @@ class MediaPickerCompatibilityRegressionTest {
 
     @Test
     fun galleryHasDocumentProviderFallback() {
-        assertTrue(pickerSource.contains("ActivityResultContracts.PickVisualMedia()"))
-        assertTrue(pickerSource.contains("ActivityResultContracts.OpenDocument()"))
-        assertTrue(pickerSource.contains("documentLauncher.launch(arrayOf(\"image/*\"))"))
+        assertTrue(pickerSource.contains("ActivityResultContracts.StartActivityForResult()"))
+        assertTrue(pickerSource.contains("Intent.ACTION_OPEN_DOCUMENT"))
+        assertTrue(pickerSource.contains("Intent.ACTION_GET_CONTENT"))
+        assertTrue(pickerSource.indexOf("Intent.ACTION_GET_CONTENT") < pickerSource.indexOf("Intent.ACTION_OPEN_DOCUMENT"))
     }
 
     @Test
     fun cameraHasPreviewFallback() {
-        assertTrue(pickerSource.contains("ActivityResultContracts.TakePicture()"))
-        assertTrue(pickerSource.contains("ActivityResultContracts.TakePicturePreview()"))
-        assertTrue(pickerSource.contains("cameraPreviewLauncher.launch(null)"))
+        assertTrue(pickerSource.contains("MediaStore.ACTION_IMAGE_CAPTURE"))
+        assertTrue(pickerSource.contains("MediaStore.EXTRA_OUTPUT"))
+        assertTrue(pickerSource.contains("Intent.FLAG_GRANT_WRITE_URI_PERMISSION"))
+        assertTrue(pickerSource.contains("context.grantUriPermission("))
+        assertTrue(pickerSource.contains("cameraLauncher.launch(Intent(MediaStore.ACTION_IMAGE_CAPTURE))"))
     }
 
     @Test

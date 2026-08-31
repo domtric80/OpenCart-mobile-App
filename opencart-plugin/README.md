@@ -44,7 +44,7 @@ Consente inoltre di creare articoli e categorie CMS. La creazione richiede titol
 
 L'app può inviare una nuova immagine prodotto dalla fotocamera o dalla galleria. Il file viaggia in multipart mentre il token resta nell'header HTTPS. Il bridge accetta soltanto JPEG, PNG e WebP fino a 5 MB, verifica il MIME dal contenuto e le dimensioni, ignora il nome originale e salva con nome casuale sotto `image/catalog/cartadmin/`.
 
-La telemetria legge sia i guest (`customer_id = 0`) sia i clienti registrati (`customer_id > 0`) dalla tabella nativa `customer_online`. L'API restituisce conteggi separati e percorsi aggregati, ma non espone IP, nome, email o ID cliente.
+La telemetria legge sia i guest (`customer_id = 0`) sia i clienti registrati (`customer_id > 0`) dalla tabella nativa `customer_online`. Poiché il modello OpenCart elimina già le sessioni scadute, il bridge usa le righe rimaste senza confrontarle con l'orologio MySQL; restituisce inoltre numero di record e data dell'ultima visita per la diagnosi. L'API espone conteggi separati e percorsi aggregati, ma non IP, nome, email o ID cliente.
 
 Per Pagine, Articoli e Argomenti viene aggiornata esclusivamente la lingua principale attiva. Il contenuto HTML, i metadati SEO e le altre traduzioni non vengono riscritti dall'app. Recensioni e commenti possono inoltre essere attivati o disattivati; la valutazione aggregata del prodotto viene ricalcolata dopo ogni modifica a una recensione.
 

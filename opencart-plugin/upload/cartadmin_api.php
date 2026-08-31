@@ -510,7 +510,7 @@ try {
             sendJson([
                 'success' => true,
                 'status' => 'online',
-                'bridge_version' => '2.1.0-dev.7',
+                'bridge_version' => '2.1.0-dev.8',
                 'author' => 'SOLO SOLUZIONI (OpenCart ITALIA)',
                 'store_name' => $storeName,
                 'authenticated_operator' => $authenticatedOperator,
@@ -1361,6 +1361,8 @@ try {
             $topPages = [];
             $trafficSources = [];
             $liveEvents = [];
+            $recordsTotal = 0;
+            $latestRecordAt = '';
 
             // La tabella resta la fonte autorevole: può contenere sessioni anche quando una
             // configurazione multi-store viene letta come disattivata o è stata appena cambiata.
@@ -1371,36 +1373,48 @@ try {
                     $expiryHours = max(1, min(24, (int)($row['expiry_hours'] ?? 1)));
                 }
 
-                $stmtCount = $mysqli->prepare("SELECT COUNT(*) AS total, SUM(CASE WHEN `customer_id` = 0 THEN 1 ELSE 0 END) AS guests, SUM(CASE WHEN `customer_id` > 0 THEN 1 ELSE 0 END) AS registered FROM `{$db_prefix}customer_online` WHERE `date_added` >= DATE_SUB(NOW(), INTERVAL ? HOUR)");
-                if ($stmtCount) {
-                    $stmtCount->bind_param('i', $expiryHours);
-                    $stmtCount->execute();
-                    $res = $stmtCount->get_result();
-                    $activeVisitors = ($res && $row = $res->fetch_assoc()) ? (int)$row['total'] : 0;
-                    $guestVisitors = isset($row) ? (int)($row['guests'] ?? 0) : 0;
-                    $registeredVisitors = isset($row) ? (int)($row['registered'] ?? 0) : 0;
-                    $stmtCount->close();
+                // OpenCart rimuove le righe scadute prima di ogni REPLACE in model/tool/online.
+                // Non confrontare date PHP con NOW() MySQL: i due server possono avere timezone
+                // differenti e farebbero sparire dall'app sessioni che OpenCart considera attive.
+                $res = $mysqli->query("SELECT COUNT(*) AS total, SUM(CASE WHEN `customer_id` = 0 THEN 1 ELSE 0 END) AS guests, SUM(CASE WHEN `customer_id` > 0 THEN 1 ELSE 0 END) AS registered, MAX(`date_added`) AS latest_record_at FROM `{$db_prefix}customer_online`");
+                if ($res && $row = $res->fetch_assoc()) {
+                    $activeVisitors = (int)($row['total'] ?? 0);
+                    $recordsTotal = $activeVisitors;
+                    $guestVisitors = (int)($row['guests'] ?? 0);
+                    $registeredVisitors = (int)($row['registered'] ?? 0);
+                    $latestRecordAt = (string)($row['latest_record_at'] ?? '');
                 }
 
-                $res = $mysqli->query("SELECT COUNT(*) AS total FROM `{$db_prefix}customer_online` WHERE `date_added` >= DATE_SUB(NOW(), INTERVAL 1 MINUTE)");
-                if ($res) {
+                $oneMinuteAgo = date('Y-m-d H:i:s', time() - 60);
+                $stmtMinute = $mysqli->prepare("SELECT COUNT(*) AS total FROM `{$db_prefix}customer_online` WHERE `date_added` >= ?");
+                if ($stmtMinute) {
+                    $stmtMinute->bind_param('s', $oneMinuteAgo);
+                    $stmtMinute->execute();
+                    $res = $stmtMinute->get_result();
                     $pageUpdatesPerMinute = ($res && $row = $res->fetch_assoc()) ? (int)$row['total'] : 0;
+                    $stmtMinute->close();
                 }
 
-                $res = $mysqli->query("SELECT DATE_FORMAT(`date_added`, '%H:%i') AS minute_label, COUNT(*) AS active_users FROM `{$db_prefix}customer_online` WHERE `date_added` >= DATE_SUB(NOW(), INTERVAL 30 MINUTE) GROUP BY minute_label ORDER BY minute_label ASC");
-                if ($res) {
-                    while ($row = $res->fetch_assoc()) {
-                        $history[] = [
-                            'time_label' => (string)$row['minute_label'],
-                            'active_users' => (int)$row['active_users'],
-                            'page_views' => (int)$row['active_users']
-                        ];
+                $thirtyMinutesAgo = date('Y-m-d H:i:s', time() - 1800);
+                $stmtHistory = $mysqli->prepare("SELECT DATE_FORMAT(`date_added`, '%H:%i') AS minute_label, COUNT(*) AS active_users FROM `{$db_prefix}customer_online` WHERE `date_added` >= ? GROUP BY minute_label ORDER BY minute_label ASC");
+                if ($stmtHistory) {
+                    $stmtHistory->bind_param('s', $thirtyMinutesAgo);
+                    $stmtHistory->execute();
+                    $res = $stmtHistory->get_result();
+                    if ($res) {
+                        while ($row = $res->fetch_assoc()) {
+                            $history[] = [
+                                'time_label' => (string)$row['minute_label'],
+                                'active_users' => (int)$row['active_users'],
+                                'page_views' => (int)$row['active_users']
+                            ];
+                        }
                     }
+                    $stmtHistory->close();
                 }
 
-                $stmtOnline = $mysqli->prepare("SELECT `customer_id`, `url`, `referer`, `date_added` FROM `{$db_prefix}customer_online` WHERE `date_added` >= DATE_SUB(NOW(), INTERVAL ? HOUR) ORDER BY `date_added` DESC LIMIT 200");
+                $stmtOnline = $mysqli->prepare("SELECT `customer_id`, `url`, `referer`, `date_added` FROM `{$db_prefix}customer_online` ORDER BY `date_added` DESC LIMIT 200");
                 if ($stmtOnline) {
-                    $stmtOnline->bind_param('i', $expiryHours);
                     $stmtOnline->execute();
                     $res = $stmtOnline->get_result();
                     $pageCounts = [];
@@ -1476,6 +1490,8 @@ try {
                 'success' => true,
                 'tracking_enabled' => $trackingEnabled,
                 'data_available' => $onlineTableExists,
+                'records_total' => $recordsTotal,
+                'latest_record_at' => $latestRecordAt,
                 'active_visitors_now' => $activeVisitors,
                 'guest_visitors_now' => $guestVisitors,
                 'registered_visitors_now' => $registeredVisitors,

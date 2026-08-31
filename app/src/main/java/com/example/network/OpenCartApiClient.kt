@@ -952,6 +952,8 @@ class OpenCartApiClient(context: Context) {
                     VisitorRealtimeStats(
                         trackingEnabled = json.optBoolean("tracking_enabled", false),
                         dataAvailable = json.optBoolean("data_available", false),
+                        recordsTotal = json.optInt("records_total", 0),
+                        latestRecordAt = json.optString("latest_record_at"),
                         activeVisitorsNow = json.optInt("active_visitors_now", 0),
                         guestVisitorsNow = json.optInt("guest_visitors_now", 0),
                         registeredVisitorsNow = json.optInt("registered_visitors_now", 0),

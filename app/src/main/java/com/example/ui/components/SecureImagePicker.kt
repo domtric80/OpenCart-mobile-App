@@ -1,11 +1,14 @@
 package com.example.ui.components
 
+import android.app.Activity
+import android.content.ClipData
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import android.provider.MediaStore
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -69,26 +72,37 @@ fun SecureImagePicker(
         }
     }
 
-    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        uri?.let { importImage(it, "gallery-image") }
+    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            result.data?.data?.let { importImage(it, "gallery-image") }
+        }
     }
-    val documentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri?.let { importImage(it, "document-image") }
-    }
-    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
-        val uri = cameraUri
-        if (saved && uri != null) importImage(uri, "camera-photo.jpg")
-    }
-    val cameraPreviewLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
-        bitmap?.let(::importCameraPreview)
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val uri = cameraUri
+            if (uri != null) {
+                importImage(uri, "camera-photo.jpg")
+            } else {
+                @Suppress("DEPRECATION")
+                val bitmap = result.data?.extras?.get("data") as? Bitmap
+                bitmap?.let(::importCameraPreview)
+            }
+        }
     }
 
     fun launchGallery() {
-        runCatching {
-            galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-        }.onFailure { primaryError ->
-            Log.w("CartAdminMedia", "Photo Picker unavailable; trying OpenDocument", primaryError)
-            runCatching { documentLauncher.launch(arrayOf("image/*")) }
+        // GET_CONTENT è gestito anche dai file manager OEM che rifiutano Photo Picker.
+        // Il contenuto viene copiato subito nell'app: non serve un permesso persistente.
+        val primaryIntent = Intent(Intent.ACTION_GET_CONTENT)
+            .addCategory(Intent.CATEGORY_OPENABLE)
+            .setType("image/*")
+        runCatching { galleryLauncher.launch(primaryIntent) }
+            .onFailure { primaryError ->
+            Log.w("CartAdminMedia", "GET_CONTENT unavailable; trying OPEN_DOCUMENT", primaryError)
+            val fallbackIntent = Intent(Intent.ACTION_OPEN_DOCUMENT)
+                .addCategory(Intent.CATEGORY_OPENABLE)
+                .setType("image/*")
+            runCatching { galleryLauncher.launch(fallbackIntent) }
                 .onFailure { fallbackError ->
                     Log.e("CartAdminMedia", "No image picker available", fallbackError)
                     onError("Impossibile aprire la galleria (${fallbackError.javaClass.simpleName})")
@@ -97,10 +111,23 @@ fun SecureImagePicker(
     }
 
     fun launchCamera(uri: Uri) {
-        runCatching { cameraLauncher.launch(uri) }
+        val fullSizeIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
+            putExtra(MediaStore.EXTRA_OUTPUT, uri)
+            clipData = ClipData.newRawUri("CartAdmin photo", uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+        }
+        context.packageManager.queryIntentActivities(fullSizeIntent, 0).forEach { handler ->
+            context.grantUriPermission(
+                handler.activityInfo.packageName,
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            )
+        }
+        runCatching { cameraLauncher.launch(fullSizeIntent) }
             .onFailure { primaryError ->
                 Log.w("CartAdminMedia", "Full-size camera unavailable; trying preview", primaryError)
-                runCatching { cameraPreviewLauncher.launch(null) }
+                cameraUri = null
+                runCatching { cameraLauncher.launch(Intent(MediaStore.ACTION_IMAGE_CAPTURE)) }
                     .onFailure { fallbackError ->
                         Log.e("CartAdminMedia", "No camera handler available", fallbackError)
                         onError("Impossibile aprire la fotocamera (${fallbackError.javaClass.simpleName})")
