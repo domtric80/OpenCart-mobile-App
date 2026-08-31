@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Delete
@@ -31,6 +32,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -53,6 +55,7 @@ import com.example.model.AdminRecord
 import com.example.model.AdminModuleSnapshot
 import com.example.model.ProductImageUpload
 import com.example.ui.components.SecureImagePicker
+import com.example.ui.components.RichHtmlEditor
 
 @Composable
 fun AdminModuleScreen(
@@ -73,6 +76,18 @@ fun AdminModuleScreen(
     var pendingSensitiveAction by remember(module) { mutableStateOf<Pair<String, String>?>(null) }
     var recordBeingEdited by remember(module) { mutableStateOf<AdminRecord?>(null) }
     var showCreateDialog by remember(module) { mutableStateOf(false) }
+
+    if (showCreateDialog && module == AdminModule.ARTICLES) {
+        ArticleCreatePage(
+            topics = availableTopics,
+            onBack = { showCreateDialog = false },
+            onSave = { record ->
+                onContentCreate(record)
+                showCreateDialog = false
+            }
+        )
+        return
+    }
 
     LazyColumn(
         modifier = modifier
@@ -354,7 +369,7 @@ fun AdminModuleScreen(
     }
 
 
-    if (showCreateDialog) {
+    if (showCreateDialog && module != AdminModule.ARTICLES) {
         AdminContentCreateDialog(
             module = module,
             topics = availableTopics,
@@ -364,6 +379,126 @@ fun AdminModuleScreen(
                 showCreateDialog = false
             }
         )
+    }
+}
+
+@Composable
+private fun ArticleCreatePage(
+    topics: List<AdminRecord>,
+    onBack: () -> Unit,
+    onSave: (AdminRecord) -> Unit
+) {
+    var title by remember { mutableStateOf("") }
+    var author by remember { mutableStateOf("") }
+    var content by remember { mutableStateOf("") }
+    var metaTitle by remember { mutableStateOf("") }
+    var metaDescription by remember { mutableStateOf("") }
+    var metaKeyword by remember { mutableStateOf("") }
+    var selectedImage by remember { mutableStateOf<ProductImageUpload?>(null) }
+    var imageError by remember { mutableStateOf<String?>(null) }
+    var active by remember { mutableStateOf(true) }
+    var selectedTopic by remember(topics) { mutableStateOf(topics.firstOrNull()) }
+    var topicsExpanded by remember { mutableStateOf(false) }
+    val valid = title.isNotBlank() && author.isNotBlank() && metaTitle.isNotBlank() &&
+        content.isNotBlank() && selectedTopic != null
+
+    Column(
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).testTag("article_create_page")
+    ) {
+        Surface(tonalElevation = 3.dp) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                IconButton(onClick = onBack, modifier = Modifier.testTag("article_create_back")) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Indietro")
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Nuovo articolo", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("Scrivi e pubblica nel CMS OpenCart", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+
+        Column(
+            modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            OutlinedTextField(title, { title = it.take(255) }, label = { Text("Titolo *") }, modifier = Modifier.fillMaxWidth().testTag("create_content_title"))
+            OutlinedTextField(author, { author = it.take(64) }, label = { Text("Autore *") }, modifier = Modifier.fillMaxWidth().testTag("create_article_author"))
+            Box(modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = { topicsExpanded = true }, modifier = Modifier.fillMaxWidth().testTag("create_article_topic")) {
+                    Text(selectedTopic?.title ?: "Seleziona categoria CMS")
+                }
+                DropdownMenu(expanded = topicsExpanded, onDismissRequest = { topicsExpanded = false }) {
+                    topics.forEach { topic ->
+                        DropdownMenuItem(text = { Text(topic.title) }, onClick = {
+                            selectedTopic = topic
+                            topicsExpanded = false
+                        })
+                    }
+                }
+            }
+            Text("Immagine articolo", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            SecureImagePicker(
+                tagPrefix = "article",
+                onImageSelected = { selectedImage = it; imageError = null },
+                onError = { imageError = it }
+            )
+            selectedImage?.let {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("${it.fileName} (${it.bytes.size / 1024} KB)", modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.primary)
+                    OutlinedButton(onClick = { selectedImage = null }) { Text("Rimuovi") }
+                }
+            }
+            imageError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            RichHtmlEditor(
+                html = content,
+                onHtmlChange = { content = it },
+                label = "Contenuto articolo *",
+                modifier = Modifier.testTag("create_content_body")
+            )
+            OutlinedTextField(metaTitle, { metaTitle = it.take(255) }, label = { Text("Meta tag Titolo *") }, modifier = Modifier.fillMaxWidth().testTag("create_article_meta_title"))
+            OutlinedTextField(metaDescription, { metaDescription = it.take(255) }, label = { Text("Meta tag Descrizione") }, modifier = Modifier.fillMaxWidth().testTag("create_article_meta_description"))
+            OutlinedTextField(metaKeyword, { metaKeyword = it.take(255) }, label = { Text("Meta tag Parola Chiave") }, modifier = Modifier.fillMaxWidth().testTag("create_article_meta_keyword"))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(if (active) "Pubblicato" else "Bozza")
+                Switch(checked = active, onCheckedChange = { active = it })
+            }
+            Text(
+                "Il contenuto HTML viene ripulito dal bridge e replicato nelle lingue attive.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Surface(tonalElevation = 4.dp) {
+            Row(modifier = Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f)) { Text("Annulla") }
+                Button(
+                    enabled = valid,
+                    modifier = Modifier.weight(1f).testTag("save_content_create"),
+                    onClick = {
+                        onSave(
+                            AdminRecord(
+                                id = "",
+                                title = title.trim(),
+                                subtitle = author.trim(),
+                                content = content.trim(),
+                                active = active,
+                                parentId = selectedTopic?.id?.toIntOrNull(),
+                                editable = true,
+                                metaTitle = metaTitle.trim(),
+                                metaDescription = metaDescription.trim(),
+                                metaKeyword = metaKeyword.trim(),
+                                imageUpload = selectedImage
+                            )
+                        )
+                    }
+                ) { Text("Pubblica") }
+            }
+        }
     }
 }
 

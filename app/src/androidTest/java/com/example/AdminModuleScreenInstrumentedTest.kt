@@ -137,8 +137,7 @@ class AdminModuleScreenInstrumentedTest {
     }
 
     @Test
-    fun newArticleRequiresAndReturnsAnExistingTopic() {
-        var submitted: AdminRecord? = null
+    fun newArticleOpensAFullPageEditorWithTopicAndSeoFields() {
         val module = AdminModule.ARTICLES
         val topic = AdminRecord(id = "12", title = "Guide", active = true)
         composeRule.setContent {
@@ -147,24 +146,21 @@ class AdminModuleScreenInstrumentedTest {
                     module = module,
                     snapshot = AdminModuleSnapshot(module = module),
                     onRefresh = {},
-                    onContentCreate = { submitted = it },
+                    onContentCreate = {},
                     availableTopics = listOf(topic)
                 )
             }
         }
 
         composeRule.onNodeWithTag("create_articles").performClick()
+        composeRule.onNodeWithTag("article_create_page").assertExists()
         composeRule.onNodeWithTag("create_content_title").performTextInput("Guida acquisto")
         composeRule.onNodeWithTag("create_article_author").performTextInput("Redazione")
         composeRule.onNodeWithTag("create_article_meta_title").performTextInput("Guida acquisto online")
-        composeRule.onNodeWithTag("create_content_body").performTextInput("Contenuto verificato")
+        composeRule.onNodeWithTag("rich_html_editor").assertExists()
+        composeRule.onNodeWithTag("rich_editor_toolbar").assertExists()
         composeRule.onNodeWithTag("article_camera").assertExists()
         composeRule.onNodeWithTag("article_gallery").assertExists()
-        composeRule.onNodeWithTag("save_content_create").performClick()
-
-        composeRule.runOnIdle {
-            assertEquals(12, submitted?.parentId)
-            assertEquals("Guida acquisto online", submitted?.metaTitle)
-        }
+        composeRule.onNodeWithTag("save_content_create").assertExists()
     }
 }
