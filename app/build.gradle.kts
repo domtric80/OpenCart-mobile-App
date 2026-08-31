@@ -17,8 +17,8 @@ android {
     applicationId = "com.aistudio.cartadmin.ocmgmt"
     minSdk = 24
     targetSdk = 36
-    versionCode = 28
-    versionName = "2.1.0-dev.10"
+    versionCode = 29
+    versionName = "2.1.0-dev.11"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

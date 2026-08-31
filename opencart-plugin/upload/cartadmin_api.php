@@ -101,6 +101,60 @@ function cartadminActiveLanguageIds(mysqli $mysqli, string $dbPrefix): array {
     return array_values(array_filter(array_unique($languageIds), static fn(int $id): bool => $id > 0));
 }
 
+/**
+ * Riduce l'HTML editoriale alla formattazione prodotta dall'editor mobile.
+ * Script, link, media, handler evento e attributi arbitrari non raggiungono il DB.
+ */
+function cartadminSanitizeRichHtml(string $html): string {
+    $allowedTags = '<p><br><strong><b><em><i><u><ul><ol><li><h1><h2><h3><font><span>';
+    $clean = trim(strip_tags(mb_substr($html, 0, 65535), $allowedTags));
+
+    if (!class_exists('DOMDocument')) {
+        // Senza DOM conserviamo i tag consentiti, ma scartiamo tutti gli attributi.
+        // Il colore viene perso in modo sicuro invece di accettare markup non verificato.
+        return preg_replace('/<([a-z0-9]+)\b[^>]*>/i', '<$1>', $clean) ?? '';
+    }
+
+    $document = new DOMDocument('1.0', 'UTF-8');
+    $previous = libxml_use_internal_errors(true);
+    $loaded = $document->loadHTML('<?xml encoding="UTF-8"><div id="cartadmin-root">' . $clean . '</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+    libxml_clear_errors();
+    libxml_use_internal_errors($previous);
+    if (!$loaded) {
+        return '';
+    }
+
+    $root = $document->getElementById('cartadmin-root');
+    if (!$root) {
+        return '';
+    }
+    $elements = [];
+    foreach ($root->getElementsByTagName('*') as $element) {
+        $elements[] = $element;
+    }
+    foreach ($elements as $element) {
+        $color = '';
+        if (strtolower($element->nodeName) === 'font') {
+            $candidate = (string)$element->getAttribute('color');
+            if (preg_match('/^#[0-9a-f]{6}$/i', $candidate) === 1) {
+                $color = strtoupper($candidate);
+            }
+        }
+        while ($element->attributes && $element->attributes->length > 0) {
+            $element->removeAttributeNode($element->attributes->item(0));
+        }
+        if ($color !== '') {
+            $element->setAttribute('color', $color);
+        }
+    }
+
+    $result = '';
+    foreach ($root->childNodes as $child) {
+        $result .= $document->saveHTML($child);
+    }
+    return trim($result);
+}
+
 function cartadminRequiredScope(string $action, string $module = ''): string {
     $reads = ['status', 'ping', 'orders', 'products', 'categories', 'management_list', 'visitor_telemetry', 'subscriptions', 'returns'];
     $ordersWrites = ['update_order_status', 'update_subscription_status', 'update_return_status'];
@@ -510,7 +564,7 @@ try {
             sendJson([
                 'success' => true,
                 'status' => 'online',
-                'bridge_version' => '2.1.0-dev.10',
+                'bridge_version' => '2.1.0-dev.11',
                 'author' => 'SOLO SOLUZIONI (OpenCart ITALIA)',
                 'store_name' => $storeName,
                 'authenticated_operator' => $authenticatedOperator,
@@ -934,7 +988,7 @@ try {
             $rawModule = isset($_POST['module']) && is_string($_POST['module']) ? strtolower(trim($_POST['module'])) : '';
             $title = isset($_POST['title']) && is_string($_POST['title']) ? trim(strip_tags($_POST['title'])) : '';
             $secondary = isset($_POST['secondary']) && is_string($_POST['secondary']) ? trim(strip_tags($_POST['secondary'])) : '';
-            $content = isset($_POST['content']) && is_string($_POST['content']) ? trim(strip_tags($_POST['content'])) : '';
+            $content = isset($_POST['content']) && is_string($_POST['content']) ? cartadminSanitizeRichHtml($_POST['content']) : '';
             $parentId = isset($_POST['parent_id']) ? (int)$_POST['parent_id'] : 0;
             $sortOrder = isset($_POST['sort_order']) ? (int)$_POST['sort_order'] : 0;
             $active = isset($_POST['active']) && (string)$_POST['active'] === '1' ? 1 : 0;
@@ -1516,7 +1570,7 @@ try {
             $name = isset($_POST['name']) && is_string($_POST['name']) ? trim(strip_tags($_POST['name'])) : '';
             $model = isset($_POST['model']) && is_string($_POST['model']) ? trim(strip_tags($_POST['model'])) : '';
             $sku = isset($_POST['sku']) && is_string($_POST['sku']) ? trim(strip_tags($_POST['sku'])) : '';
-            $description = isset($_POST['description']) && is_string($_POST['description']) ? trim(strip_tags($_POST['description'])) : '';
+            $description = isset($_POST['description']) && is_string($_POST['description']) ? cartadminSanitizeRichHtml($_POST['description']) : '';
             $category = isset($_POST['category']) && is_string($_POST['category']) ? trim(strip_tags($_POST['category'])) : '';
             $price = isset($_POST['price']) && is_numeric($_POST['price']) ? max(0.0, (float)$_POST['price']) : -1.0;
             $quantity = isset($_POST['quantity']) ? max(0, (int)$_POST['quantity']) : -1;
@@ -1925,7 +1979,7 @@ try {
             $name = isset($_POST['name']) && is_string($_POST['name']) ? trim(strip_tags($_POST['name'])) : '';
             $model = isset($_POST['model']) && is_string($_POST['model']) ? trim(strip_tags($_POST['model'])) : '';
             $sku = isset($_POST['sku']) && is_string($_POST['sku']) ? trim(strip_tags($_POST['sku'])) : '';
-            $description = isset($_POST['description']) && is_string($_POST['description']) ? trim(strip_tags($_POST['description'])) : '';
+            $description = isset($_POST['description']) && is_string($_POST['description']) ? cartadminSanitizeRichHtml($_POST['description']) : '';
             $category = isset($_POST['category']) && is_string($_POST['category']) ? trim(strip_tags($_POST['category'])) : '';
             $price = isset($_POST['price']) && is_numeric($_POST['price']) ? max(0.0, (float)$_POST['price']) : -1.0;
             $quantity = isset($_POST['quantity']) ? max(0, (int)$_POST['quantity']) : -1;

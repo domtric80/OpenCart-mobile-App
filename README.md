@@ -54,8 +54,11 @@ Nel ramo di sviluppo 2.1, approvazioni clienti e richieste GDPR possono essere i
 - `FragmentActivity` allineata ad AndroidX Fragment 1.9.0 per supportare i request code del moderno `ActivityResultRegistry` ed eliminare l'errore “Can only use lower 16 bits for requestCode”;
 - lettura delle sessioni che OpenCart mantiene in `customer_online`, senza un secondo filtro basato sull'orologio MySQL, mantenendo separati guest e clienti registrati;
 - diagnostica del numero di sessioni e dell'ultima visita registrata, con istruzioni esplicite quando OpenCart non popola `customer_online`.
+- creazione di prodotti e articoli in schermate dedicate a pagina intera, al posto delle finestre modali;
+- editor visuale per descrizioni prodotto e contenuti articolo con Paragrafo/H1/H2/H3, colore testo, grassetto, corsivo, sottolineato ed elenco puntato;
+- barra di formattazione adattata alla tastiera e sanificazione HTML sia nell'app sia nel bridge: script, media incorporati, link attivi, handler evento e attributi arbitrari non vengono salvati.
 
-Queste funzioni richiedono app e bridge `2.1.0-dev.10` e non fanno ancora parte della release stabile v2.0.1.
+Queste funzioni richiedono app e bridge `2.1.0-dev.11` e non fanno ancora parte della release stabile v2.0.1.
 
 Nel pannello 2.1, prima di generare un token occorre indicare un'etichetta, selezionare un utente amministrativo OpenCart attivo e scegliere gli scope necessari. Il token conserva `user_id` e username verificati lato server e si associa alla prima installazione Android che lo usa; per un secondo dispositivo va creato un token separato. La revoca è individuale e non interrompe gli altri dispositivi. Il nome operatore eventualmente conservato nell'app non può sostituire quello assegnato dal pannello.
 

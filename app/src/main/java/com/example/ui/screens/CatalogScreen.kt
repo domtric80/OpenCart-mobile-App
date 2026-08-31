@@ -28,6 +28,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -94,6 +95,7 @@ import com.example.model.Category
 import com.example.model.Product
 import com.example.model.ProductImageUpload
 import com.example.ui.components.SecureImagePicker
+import com.example.ui.components.RichHtmlEditor
 import com.example.ui.theme.AlertRed
 import com.example.ui.theme.AlertRedContainer
 import com.example.ui.theme.CardSurfaceLight
@@ -173,6 +175,18 @@ fun CatalogScreen(
 
     LaunchedEffect(requestedTab) {
         selectedTab = requestedTab
+    }
+
+    if (showAddProductDialog) {
+        ProductCreatePage(
+            categories = categories,
+            onBack = { showAddProductDialog = false },
+            onSave = { name, model, sku, price, specialPrice, qty, minAlert, category, desc, status, image ->
+                onAddNewProduct(name, model, sku, price, specialPrice, qty, minAlert, category, desc, status, image)
+                showAddProductDialog = false
+            }
+        )
+        return
     }
 
     val filteredProducts = products.filter { prod ->
@@ -478,21 +492,7 @@ fun CatalogScreen(
 
     // --- MODAL DIALOGS ---
 
-    // 1. Add Product Dialog
-    if (showAddProductDialog) {
-        ProductFormDialog(
-            title = "Aggiungi Prodotto OpenCart",
-            categories = categories,
-            initialProduct = null,
-            onDismiss = { showAddProductDialog = false },
-            onConfirm = { name, model, sku, price, specialPrice, qty, minAlert, category, desc, status, image ->
-                onAddNewProduct(name, model, sku, price, specialPrice, qty, minAlert, category, desc, status, image)
-                showAddProductDialog = false
-            }
-        )
-    }
-
-    // 2. Edit Product Dialog
+    // Existing products are still edited in a compact dialog.
     editingProduct?.let { prod ->
         ProductFormDialog(
             title = "Modifica Prodotto",
@@ -518,7 +518,7 @@ fun CatalogScreen(
         )
     }
 
-    // 3. Delete Product Confirmation
+    // Delete Product Confirmation
     productToDelete?.let { prod ->
         AlertDialog(
             onDismissRequest = { productToDelete = null },
@@ -956,9 +956,156 @@ private fun CategoryManagementCard(
     }
 }
 
-/**
- * Dialog for adding or editing a product with OpenCart fields.
- */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ProductCreatePage(
+    categories: List<Category>,
+    onBack: () -> Unit,
+    onSave: (
+        String, String, String, Double, Double?, Int, Int, String, String, Boolean, ProductImageUpload?
+    ) -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    var model by remember { mutableStateOf("") }
+    var sku by remember { mutableStateOf("") }
+    var priceText by remember { mutableStateOf("") }
+    var quantityText by remember { mutableStateOf("10") }
+    var minAlertText by remember { mutableStateOf("5") }
+    var selectedCategory by remember { mutableStateOf(categories.firstOrNull()?.name ?: "Generale") }
+    var description by remember { mutableStateOf("") }
+    var status by remember { mutableStateOf(true) }
+    var selectedImage by remember { mutableStateOf<ProductImageUpload?>(null) }
+    var imageError by remember { mutableStateOf<String?>(null) }
+    var categoryExpanded by remember { mutableStateOf(false) }
+    val valid = name.isNotBlank() && model.isNotBlank() && (priceText.toDoubleOrNull() ?: 0.0) > 0
+
+    Column(
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).testTag("product_create_page")
+    ) {
+        Surface(tonalElevation = 3.dp) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                IconButton(onClick = onBack, modifier = Modifier.testTag("product_create_back")) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Indietro")
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Nuovo prodotto", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("Crea e pubblica nel catalogo OpenCart", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+
+        Column(
+            modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            OutlinedTextField(name, { name = it.take(255) }, label = { Text("Nome prodotto *") }, modifier = Modifier.fillMaxWidth().testTag("create_product_name"))
+            Text("Immagine prodotto", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            SecureImagePicker(
+                tagPrefix = "product",
+                onImageSelected = { selectedImage = it; imageError = null },
+                onError = { imageError = it }
+            )
+            selectedImage?.let {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("${it.fileName} (${it.bytes.size / 1024} KB)", modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.primary)
+                    TextButton(onClick = { selectedImage = null }) { Text("Rimuovi") }
+                }
+            }
+            imageError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(model, { model = it.take(64) }, label = { Text("Modello *") }, modifier = Modifier.weight(1f))
+                OutlinedTextField(sku, { sku = it.take(64) }, label = { Text("SKU") }, modifier = Modifier.weight(1f))
+            }
+            ExposedDropdownMenuBox(
+                expanded = categoryExpanded,
+                onExpandedChange = { categoryExpanded = !categoryExpanded },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    selectedCategory,
+                    {},
+                    readOnly = true,
+                    label = { Text("Categoria *") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(categoryExpanded) },
+                    modifier = Modifier.fillMaxWidth().menuAnchor()
+                )
+                ExposedDropdownMenu(expanded = categoryExpanded, onDismissRequest = { categoryExpanded = false }) {
+                    categories.forEach { category ->
+                        DropdownMenuItem(text = { Text(category.name) }, onClick = {
+                            selectedCategory = category.name
+                            categoryExpanded = false
+                        })
+                    }
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    priceText,
+                    { priceText = it },
+                    label = { Text("Prezzo (€) *") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.weight(1f)
+                )
+                OutlinedTextField(
+                    quantityText,
+                    { quantityText = it.filter(Char::isDigit).take(8) },
+                    label = { Text("Quantità *") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            OutlinedTextField(
+                minAlertText,
+                { minAlertText = it.filter(Char::isDigit).take(8) },
+                label = { Text("Soglia allerta") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth()
+            )
+            RichHtmlEditor(
+                html = description,
+                onHtmlChange = { description = it },
+                label = "Descrizione prodotto",
+                modifier = Modifier.testTag("create_product_description")
+            )
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(if (status) "Prodotto attivo" else "Prodotto disabilitato")
+                Switch(status, { status = it })
+            }
+            Text(
+                "La descrizione viene salvata come HTML ripulito nel database OpenCart.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Surface(tonalElevation = 4.dp) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f)) { Text("Annulla") }
+                Button(
+                    enabled = valid,
+                    modifier = Modifier.weight(1f).testTag("save_product_create"),
+                    onClick = {
+                        onSave(
+                            name.trim(), model.trim(), sku.trim(), priceText.toDoubleOrNull() ?: 0.0, null,
+                            quantityText.toIntOrNull() ?: 0, minAlertText.toIntOrNull() ?: 5,
+                            selectedCategory, description, status, selectedImage
+                        )
+                    }
+                ) { Text("Pubblica") }
+            }
+        }
+    }
+}
+
+/** Dialog for editing an existing product. New products use a full page. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ProductFormDialog(
@@ -1133,13 +1280,11 @@ private fun ProductFormDialog(
                     )
                 }
 
-                // Description
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = { Text("Descrizione breve") },
-                    maxLines = 3,
-                    modifier = Modifier.fillMaxWidth()
+                RichHtmlEditor(
+                    html = description,
+                    onHtmlChange = { description = it },
+                    label = "Descrizione prodotto",
+                    modifier = Modifier.testTag("edit_product_description")
                 )
 
                 // Status Switch

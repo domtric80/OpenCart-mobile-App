@@ -22,8 +22,11 @@ class CatalogMediaPickerInstrumentedTest {
     fun newProductOffersCameraAndGallerySources() {
         showNewProductDialog()
 
+        composeRule.onNodeWithTag("product_create_page").assertExists()
         composeRule.onNodeWithTag("product_camera").assertExists()
         composeRule.onNodeWithTag("product_gallery").assertExists()
+        composeRule.onNodeWithTag("rich_html_editor").assertExists()
+        composeRule.onNodeWithTag("rich_editor_toolbar").assertExists()
     }
 
     @Test

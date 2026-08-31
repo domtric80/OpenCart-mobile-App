@@ -234,6 +234,9 @@ jobs:
 
           ### Correzioni di ${TAG_NAME}
 
+          - “Nuovo prodotto” e “Nuovo articolo” ora usano schermate dedicate a pagina intera, più leggibili e adatte alla compilazione da smartphone;
+          - descrizioni prodotto e contenuti articolo dispongono di un editor visuale con P/H1/H2/H3, colore testo, grassetto, corsivo, sottolineato ed elenco puntato;
+          - la barra dell'editor si adatta all'apertura della tastiera e il markup viene sanificato sia sul dispositivo sia dal bridge OpenCart prima del salvataggio;
           - flusso multimediale ridotto ai contratti di sistema \`TakePicturePreview\` e \`GetContent\`, eliminando FileProvider, URI condivisi, Photo Picker e grant OEM;
           - fotocamera e galleria senza permessi generali; in caso di errore viene mostrato anche il dettaglio tecnico restituito dal dispositivo;
           - AndroidX Fragment aggiornato e allineato ad Activity per eliminare l'errore \`Can only use lower 16 bits for requestCode\`;

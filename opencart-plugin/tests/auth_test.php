@@ -91,8 +91,8 @@ $contentSource = ($contentCaseStart !== false && $contentCaseEnd !== false)
     ? substr($bridgeSource, $contentCaseStart, $contentCaseEnd - $contentCaseStart)
     : '';
 
-assertSameValue('2.1.0-dev.10', $manifest['version'] ?? '', 'The OpenCart manifest version must match the development release.');
-assertSourceContains($bridgeSource, "'bridge_version' => '2.1.0-dev.10'", 'The status endpoint must report the same development release.');
+assertSameValue('2.1.0-dev.11', $manifest['version'] ?? '', 'The OpenCart manifest version must match the development release.');
+assertSourceContains($bridgeSource, "'bridge_version' => '2.1.0-dev.11'", 'The status endpoint must report the same development release.');
 assertSourceOmits($bridgeSource, 'get_key_setup', 'The bridge must not expose public token setup.');
 assertSourceOmits($bridgeSource, "\$_REQUEST['api_key']", 'The bridge must ignore URL/form credentials.');
 assertSourceOmits($bridgeSource, '`username` = ? AND `key` = ?', 'The bridge must not authenticate against plaintext native API keys.');
@@ -138,6 +138,11 @@ assertSourceContains($bridgeSource, "case 'visitor_telemetry':", 'The bridge mus
 assertSourceContains($bridgeSource, 'SUM(CASE WHEN `customer_id` = 0 THEN 1 ELSE 0 END) AS guests', 'Visitor telemetry must count OpenCart guest sessions explicitly.');
 assertSourceContains($bridgeSource, "'guest_visitors_now' => \$guestVisitors", 'Guest totals must be exposed without returning IP addresses.');
 assertSourceContains($bridgeSource, 'if ($onlineTableExists) {', 'Existing telemetry rows must remain readable independently from an ambiguous multi-store setting.');
+assertSourceContains($bridgeSource, 'function cartadminSanitizeRichHtml(string $html): string', 'Rich editorial HTML must pass through a dedicated allowlist sanitizer.');
+assertSourceContains($bridgeSource, "\$allowedTags = '<p><br><strong><b><em><i><u><ul><ol><li><h1><h2><h3><font><span>';", 'The rich editor sanitizer must expose only the supported formatting tags.');
+assertSourceContains($bridgeSource, "preg_match('/^#[0-9a-f]{6}\$/i', \$candidate)", 'Only six-digit hexadecimal text colours may survive sanitization.');
+assertSourceContains($bridgeSource, "cartadminSanitizeRichHtml(\$_POST['content'])", 'CMS creation must sanitize editor HTML before persistence.');
+assertSourceContains($bridgeSource, "cartadminSanitizeRichHtml(\$_POST['description'])", 'Product descriptions must sanitize editor HTML before persistence.');
 assertSourceContains($bridgeSource, "MAX(CASE WHEN `value` = '1' THEN 1 ELSE 0 END)", 'Telemetry enablement must account for every configured OpenCart store.');
 assertSourceContains($bridgeSource, 'MAX(`date_added`) AS latest_record_at', 'Telemetry must expose the latest native OpenCart online record for diagnostics.');
 assertSourceContains($bridgeSource, "'records_total' => \$recordsTotal", 'Telemetry must expose the number of rows OpenCart considers active.');
