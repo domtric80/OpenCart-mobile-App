@@ -1,6 +1,7 @@
 package com.example.network
 
 import okhttp3.FormBody
+import okhttp3.MultipartBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -238,5 +239,34 @@ class BridgeRequestFactoryTest {
         assertFalse(names.contains("username"))
         assertEquals("editorial-secret", request.header("X-CartAdmin-Key"))
         assertNull(request.header("X-CartAdmin-User"))
+    }
+
+    @Test
+    fun productImageUsesBoundedMultipartAndHeaderOnlyCredentials() {
+        val request = BridgeRequestFactory.authenticatedMultipartPost(
+            baseUrl = "https://shop.example",
+            action = "create_product",
+            apiKey = "image-secret",
+            fields = mapOf("name" to "Prodotto", "model" to "MODEL-1"),
+            imageBytes = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte()),
+            imageMimeType = "image/jpeg",
+            imageFileName = "camera.jpg"
+        )
+        val body = request.body as MultipartBody
+
+        assertEquals(4, body.parts.size)
+        assertEquals("image-secret", request.header("X-CartAdmin-Key"))
+        assertFalse(request.url.toString().contains("image-secret"))
+        assertFalse(body.parts.joinToString().contains("api_key"))
+    }
+
+    @Test
+    fun oversizedOrUnsupportedProductImageIsRejected() {
+        assertThrows(IllegalArgumentException::class.java) {
+            BridgeRequestFactory.authenticatedMultipartPost(
+                "https://shop.example", "create_product", "secret", fields = emptyMap(),
+                imageBytes = ByteArray(1), imageMimeType = "image/gif", imageFileName = "x.gif"
+            )
+        }
     }
 }

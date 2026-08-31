@@ -23,7 +23,7 @@ class RemoteMutationIntegrityRegressionTest {
 
     @Test
     fun productUpdateWaitsForRemoteConfirmationBeforeChangingLocalState() {
-        val function = viewModelSource.substringAfter("fun updateProduct(product: Product)")
+        val function = viewModelSource.substringAfter("fun updateProduct(product: Product,")
             .substringBefore("fun deleteProduct")
 
         val remoteCall = function.indexOf("apiClient.updateProduct")
@@ -64,6 +64,16 @@ class RemoteMutationIntegrityRegressionTest {
         assertTrue(reload > remoteCall)
         assertFalse(function.contains("repository."))
         assertFalse(function.contains("offline"))
+    }
+
+    @Test
+    fun cmsCreationReloadsOnlyAfterRemoteConfirmation() {
+        val function = viewModelSource.substringAfter("fun createAdminContent(")
+            .substringBefore("fun addAntispamKeyword(")
+        assertTrue(function.contains("apiClient.createAdminContent"))
+        assertTrue(function.contains(".onSuccess"))
+        assertTrue(function.contains("loadAdminModule(module, forceRefresh = true)"))
+        assertFalse(function.contains("repository."))
     }
 
     private fun assertRemoteBeforeLocal(

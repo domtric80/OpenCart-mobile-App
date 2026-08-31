@@ -271,6 +271,8 @@ fun MainAppContent(
                             onAddAntispam = viewModel::addAntispamKeyword,
                             onDeleteAntispam = viewModel::deleteAntispamKeyword,
                             onContentUpdate = { record -> viewModel.updateAdminContent(managementModule, record) },
+                            onContentCreate = { record -> viewModel.createAdminContent(managementModule, record) },
+                            availableTopics = adminModules[com.example.model.AdminModule.TOPICS]?.records.orEmpty(),
                             onSensitiveAction = { id, operation -> viewModel.requestSensitiveAdminCommand(managementModule, id, operation) }
                         )
                     } else CatalogScreen(
@@ -282,11 +284,11 @@ fun MainAppContent(
                         onSetDirectStock = { productId, newQty ->
                             viewModel.setDirectProductStock(productId, newQty)
                         },
-                        onAddNewProduct = { name, model, sku, price, special, qty, minAlert, category, desc, status ->
-                            viewModel.addNewProduct(name, model, sku, price, special, qty, minAlert, category, desc, status)
+                        onAddNewProduct = { name, model, sku, price, special, qty, minAlert, category, desc, status, image ->
+                            viewModel.addNewProduct(name, model, sku, price, special, qty, minAlert, category, desc, status, image)
                         },
-                        onUpdateProduct = { product ->
-                            viewModel.updateProduct(product)
+                        onUpdateProduct = { product, image ->
+                            viewModel.updateProduct(product, image)
                         },
                         onDeleteProduct = { productId ->
                             viewModel.deleteProduct(productId)
@@ -321,6 +323,8 @@ fun MainAppContent(
                         onAddAntispam = viewModel::addAntispamKeyword,
                         onDeleteAntispam = viewModel::deleteAntispamKeyword,
                         onContentUpdate = { record -> viewModel.updateAdminContent(selectedAdminModule, record) },
+                        onContentCreate = { record -> viewModel.createAdminContent(selectedAdminModule, record) },
+                        availableTopics = adminModules[com.example.model.AdminModule.TOPICS]?.records.orEmpty(),
                         onSensitiveAction = { id, operation -> viewModel.requestSensitiveAdminCommand(selectedAdminModule, id, operation) }
                     )
                 }

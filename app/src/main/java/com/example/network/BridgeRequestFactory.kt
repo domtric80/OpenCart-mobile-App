@@ -3,7 +3,10 @@ package com.example.network
 import com.example.BuildConfig
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 
 internal object BridgeRequestFactory {
 
@@ -53,6 +56,41 @@ internal object BridgeRequestFactory {
 
         return authenticate(
             builder = Request.Builder().url(bridgeEndpoint(baseUrl)).post(formBody),
+            apiKey = apiKey,
+            username = username
+        ).build()
+    }
+
+    fun authenticatedMultipartPost(
+        baseUrl: String,
+        action: String,
+        apiKey: String,
+        username: String = "",
+        fields: Map<String, String>,
+        imageBytes: ByteArray,
+        imageMimeType: String,
+        imageFileName: String
+    ): Request {
+        require(action.matches(Regex("[a-z_]+"))) { "Azione bridge non valida" }
+        require(fields.keys.none { it.equals("api_key", true) || it.equals("username", true) }) {
+            "Le credenziali non possono essere inserite nel multipart body"
+        }
+        require(imageBytes.isNotEmpty() && imageBytes.size <= 5 * 1024 * 1024) { "Immagine non valida o superiore a 5 MB" }
+        require(imageMimeType in setOf("image/jpeg", "image/png", "image/webp")) { "Formato immagine non supportato" }
+
+        val body = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart("action", action)
+            .apply { fields.forEach { (name, value) -> addFormDataPart(name, value) } }
+            .addFormDataPart(
+                "image",
+                imageFileName.take(128),
+                imageBytes.toRequestBody(imageMimeType.toMediaType())
+            )
+            .build()
+
+        return authenticate(
+            builder = Request.Builder().url(bridgeEndpoint(baseUrl)).post(body),
             apiKey = apiKey,
             username = username
         ).build()

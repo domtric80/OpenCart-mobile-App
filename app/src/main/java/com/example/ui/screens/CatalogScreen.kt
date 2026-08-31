@@ -1,6 +1,10 @@
 package com.example.ui.screens
 
+import android.content.Context
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -29,6 +33,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -36,6 +41,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.LocalOffer
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingBag
@@ -75,6 +81,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -91,6 +98,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.Category
 import com.example.model.Product
+import com.example.model.ProductImageUpload
 import com.example.ui.theme.AlertRed
 import com.example.ui.theme.AlertRedContainer
 import com.example.ui.theme.CardSurfaceLight
@@ -109,6 +117,12 @@ import com.example.ui.theme.ThemePrimary
 import com.example.ui.theme.ThemePrimaryContainer
 import com.example.ui.theme.ThemeSecondary
 import com.example.ui.theme.ThemeSecondaryContainer
+import androidx.core.content.FileProvider
+import java.io.ByteArrayOutputStream
+import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 enum class CatalogTab(val label: String) {
     PRODUCTS("Prodotti"),
@@ -132,9 +146,10 @@ fun CatalogScreen(
         minAlert: Int,
         category: String,
         description: String,
-        status: Boolean
+        status: Boolean,
+        image: ProductImageUpload?
     ) -> Unit,
-    onUpdateProduct: (product: Product) -> Unit,
+    onUpdateProduct: (product: Product, image: ProductImageUpload?) -> Unit,
     onDeleteProduct: (productId: String) -> Unit,
     onToggleProductStatus: (productId: String) -> Unit,
     onAddNewCategory: (name: String, description: String, sortOrder: Int, status: Boolean) -> Unit,
@@ -480,8 +495,8 @@ fun CatalogScreen(
             categories = categories,
             initialProduct = null,
             onDismiss = { showAddProductDialog = false },
-            onConfirm = { name, model, sku, price, specialPrice, qty, minAlert, category, desc, status ->
-                onAddNewProduct(name, model, sku, price, specialPrice, qty, minAlert, category, desc, status)
+            onConfirm = { name, model, sku, price, specialPrice, qty, minAlert, category, desc, status, image ->
+                onAddNewProduct(name, model, sku, price, specialPrice, qty, minAlert, category, desc, status, image)
                 showAddProductDialog = false
             }
         )
@@ -494,7 +509,7 @@ fun CatalogScreen(
             categories = categories,
             initialProduct = prod,
             onDismiss = { editingProduct = null },
-            onConfirm = { name, model, sku, price, specialPrice, qty, minAlert, category, desc, status ->
+            onConfirm = { name, model, sku, price, specialPrice, qty, minAlert, category, desc, status, image ->
                 val updated = prod.copy(
                     name = name,
                     model = model,
@@ -507,7 +522,7 @@ fun CatalogScreen(
                     description = desc,
                     status = status
                 )
-                onUpdateProduct(updated)
+                onUpdateProduct(updated, image)
                 editingProduct = null
             }
         )
@@ -971,9 +986,12 @@ private fun ProductFormDialog(
         minAlert: Int,
         category: String,
         description: String,
-        status: Boolean
+        status: Boolean,
+        image: ProductImageUpload?
     ) -> Unit
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf(initialProduct?.name ?: "") }
     var model by remember { mutableStateOf(initialProduct?.model ?: "") }
     var sku by remember { mutableStateOf(initialProduct?.sku ?: "") }
@@ -986,6 +1004,25 @@ private fun ProductFormDialog(
     }
     var description by remember { mutableStateOf(initialProduct?.description ?: "") }
     var status by remember { mutableStateOf(initialProduct?.status ?: true) }
+    var selectedImage by remember { mutableStateOf<ProductImageUpload?>(null) }
+    var imageError by remember { mutableStateOf<String?>(null) }
+    var cameraUri by remember { mutableStateOf<Uri?>(null) }
+
+    fun importImage(uri: Uri, fallbackName: String) {
+        scope.launch {
+            runCatching { readProductImage(context, uri, fallbackName) }
+                .onSuccess { selectedImage = it; imageError = null }
+                .onFailure { imageError = it.message ?: "Immagine non valida" }
+        }
+    }
+
+    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { importImage(it, "gallery-image") }
+    }
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
+        val uri = cameraUri
+        if (saved && uri != null) importImage(uri, "camera-photo.jpg")
+    }
 
     var categoryDropdownExpanded by remember { mutableStateOf(false) }
 
@@ -1012,6 +1049,34 @@ private fun ProductFormDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                Text("Immagine prodotto", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            val file = File.createTempFile("product-camera-", ".jpg", context.cacheDir)
+                            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                            cameraUri = uri
+                            cameraLauncher.launch(uri)
+                        },
+                        modifier = Modifier.weight(1f).testTag("product_camera")
+                    ) {
+                        Icon(Icons.Default.CameraAlt, contentDescription = null)
+                        Text(" Fotocamera")
+                    }
+                    OutlinedButton(
+                        onClick = { galleryLauncher.launch("image/*") },
+                        modifier = Modifier.weight(1f).testTag("product_gallery")
+                    ) {
+                        Icon(Icons.Default.PhotoLibrary, contentDescription = null)
+                        Text(" Galleria")
+                    }
+                }
+                selectedImage?.let {
+                    Text("Selezionata: ${it.fileName} (${it.bytes.size / 1024} KB)", color = MaterialTheme.colorScheme.primary)
+                    TextButton(onClick = { selectedImage = null }) { Text("Rimuovi immagine") }
+                }
+                imageError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
 
                 // Model & SKU in Row
                 Row(
@@ -1142,7 +1207,7 @@ private fun ProductFormDialog(
                     val qty = quantityText.toIntOrNull() ?: 0
                     val minAlert = minAlertText.toIntOrNull() ?: 5
                     if (name.isNotBlank() && model.isNotBlank() && price > 0) {
-                        onConfirm(name, model, sku, price, special, qty, minAlert, selectedCategory, description, status)
+                        onConfirm(name, model, sku, price, special, qty, minAlert, selectedCategory, description, status, selectedImage)
                     }
                 },
                 enabled = name.isNotBlank() && model.isNotBlank() && (priceText.toDoubleOrNull() ?: 0.0) > 0
@@ -1157,6 +1222,32 @@ private fun ProductFormDialog(
         }
     )
 }
+
+private suspend fun readProductImage(context: Context, uri: Uri, fallbackName: String): ProductImageUpload =
+    withContext(Dispatchers.IO) {
+        val maxBytes = 5 * 1024 * 1024
+        val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
+            val output = ByteArrayOutputStream()
+            val buffer = ByteArray(16 * 1024)
+            var total = 0
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                total += read
+                require(total <= maxBytes) { "L'immagine supera il limite di 5 MB" }
+                output.write(buffer, 0, read)
+            }
+            output.toByteArray()
+        } ?: error("Impossibile leggere l'immagine selezionata")
+        val mime = when {
+            bytes.size >= 3 && bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte() && bytes[2] == 0xFF.toByte() -> "image/jpeg"
+            bytes.size >= 8 && bytes.copyOfRange(0, 8).contentEquals(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)) -> "image/png"
+            bytes.size >= 12 && String(bytes, 0, 4, Charsets.US_ASCII) == "RIFF" && String(bytes, 8, 4, Charsets.US_ASCII) == "WEBP" -> "image/webp"
+            else -> error("Formato non supportato: usa JPEG, PNG o WebP")
+        }
+        val extension = when (mime) { "image/png" -> "png"; "image/webp" -> "webp"; else -> "jpg" }
+        ProductImageUpload(bytes, mime, "${fallbackName.substringBeforeLast('.')}.$extension")
+    }
 
 /**
  * Dialog for adding or editing a category with OpenCart parameters.
