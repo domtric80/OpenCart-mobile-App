@@ -49,8 +49,11 @@ Nel ramo di sviluppo 2.1, approvazioni clienti e richieste GDPR possono essere i
 - acquisizione dell'immagine di un prodotto dalla fotocamera o dalla galleria, con upload multipart autenticato, limite di 5 MB e validazione JPEG/PNG/WebP sia nell'app sia nel bridge;
 - telemetria distinta tra visitatori guest e clienti registrati, senza esporre indirizzi IP o identità;
 - creazione di articoli e categorie CMS direttamente dall'app, con associazione allo store, replica sulle lingue attive e audit atomico.
+- creazione articoli completa dei campi nativi Meta tag Titolo, Descrizione e Parola Chiave, oltre all'immagine editoriale validata;
+- Photo Picker AndroidX con fallback compatibili e gestione degli errori esterni, senza chiusura dell'app quando fotocamera o galleria non sono disponibili;
+- lettura delle sessioni già presenti in `customer_online` anche con configurazioni multi-store discordanti, mantenendo separati guest e clienti registrati.
 
-Queste funzioni richiedono app e bridge `2.1.0-dev.5` e non fanno ancora parte della release stabile v2.0.1.
+Queste funzioni richiedono app e bridge `2.1.0-dev.6` e non fanno ancora parte della release stabile v2.0.1.
 
 Nel pannello 2.1, prima di generare un token occorre indicare un'etichetta, selezionare un utente amministrativo OpenCart attivo e scegliere gli scope necessari. Il token conserva `user_id` e username verificati lato server e si associa alla prima installazione Android che lo usa; per un secondo dispositivo va creato un token separato. La revoca è individuale e non interrompe gli altri dispositivi. Il nome operatore eventualmente conservato nell'app non può sostituire quello assegnato dal pannello.
 
@@ -148,8 +151,8 @@ CartAdmin mostra separatamente **Guest online** (`customer_id = 0`) e **Clienti 
 - In **Catalogo > Prodotti > Nuovo prodotto** scegli **Fotocamera** oppure **Galleria**. Android affida lo scatto all'app fotocamera installata e condivide soltanto un file temporaneo privato; CartAdmin non richiede accesso generale alle foto.
 - Sono accettate immagini JPEG, PNG e WebP fino a 5 MB. Il bridge ricontrolla tipo reale e dimensioni, genera un nome casuale e salva il file in `image/catalog/cartadmin/`.
 - In **Altro > CMS > Argomenti** usa **Nuova categoria CMS**. Inserisci titolo, descrizione, ordinamento e stato.
-- In **Altro > CMS > Articoli** usa **Nuovo articolo**, scegli una categoria CMS esistente, quindi inserisci titolo, autore, contenuto e stato.
-- I nuovi contenuti vengono associati allo store principale e inizializzati in tutte le lingue attive. Traduzioni differenziate, immagini editoriali e SEO avanzata restano gestibili dal pannello OpenCart.
+- In **Altro > CMS > Articoli** usa **Nuovo articolo**, scegli una categoria CMS esistente, quindi inserisci titolo, autore, contenuto, **Meta tag Titolo** obbligatorio, Meta tag Descrizione, Meta tag Parola Chiave, immagine e stato.
+- L'immagine articolo usa lo stesso flusso sicuro di fotocamera/galleria dei prodotti. I nuovi contenuti vengono associati allo store principale e inizializzati in tutte le lingue attive; le traduzioni differenziate restano rifinibili dal pannello OpenCart.
 
 ## Come viene protetto il token
 

@@ -156,9 +156,15 @@ class AdminModuleScreenInstrumentedTest {
         composeRule.onNodeWithTag("create_articles").performClick()
         composeRule.onNodeWithTag("create_content_title").performTextInput("Guida acquisto")
         composeRule.onNodeWithTag("create_article_author").performTextInput("Redazione")
+        composeRule.onNodeWithTag("create_article_meta_title").performTextInput("Guida acquisto online")
         composeRule.onNodeWithTag("create_content_body").performTextInput("Contenuto verificato")
+        composeRule.onNodeWithTag("article_camera").assertExists()
+        composeRule.onNodeWithTag("article_gallery").assertExists()
         composeRule.onNodeWithTag("save_content_create").performClick()
 
-        composeRule.runOnIdle { assertEquals(12, submitted?.parentId) }
+        composeRule.runOnIdle {
+            assertEquals(12, submitted?.parentId)
+            assertEquals("Guida acquisto online", submitted?.metaTitle)
+        }
     }
 }

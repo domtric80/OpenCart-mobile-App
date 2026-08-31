@@ -301,7 +301,12 @@ data class AdminRecord(
     val rating: Int? = null,
     val sortOrder: Int? = null,
     val parentId: Int? = null,
-    val editable: Boolean = false
+    val editable: Boolean = false,
+    val metaTitle: String = "",
+    val metaDescription: String = "",
+    val metaKeyword: String = "",
+    /** Upload transitorio: non viene persistito nel database locale. */
+    val imageUpload: ProductImageUpload? = null
 )
 
 data class AdminModuleSnapshot(

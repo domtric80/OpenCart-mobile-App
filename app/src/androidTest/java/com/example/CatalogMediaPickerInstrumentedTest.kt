@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import com.example.model.Category
 import com.example.ui.screens.CatalogScreen
 import org.junit.Rule
@@ -18,6 +19,35 @@ class CatalogMediaPickerInstrumentedTest {
 
     @Test
     fun newProductOffersCameraAndGallerySources() {
+        showNewProductDialog()
+
+        composeRule.onNodeWithTag("product_camera").assertExists()
+        composeRule.onNodeWithTag("product_gallery").assertExists()
+    }
+
+    @Test
+    fun galleryPickerCanOpenAndReturnWithoutClosingCartAdmin() {
+        showNewProductDialog()
+        composeRule.onNodeWithTag("product_gallery").performClick()
+        Thread.sleep(1_000)
+        InstrumentationRegistry.getInstrumentation().uiAutomation
+            .executeShellCommand("input keyevent KEYCODE_BACK").close()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("product_gallery").assertExists()
+    }
+
+    @Test
+    fun cameraCanOpenAndReturnWithoutClosingCartAdmin() {
+        showNewProductDialog()
+        composeRule.onNodeWithTag("product_camera").performClick()
+        Thread.sleep(1_000)
+        InstrumentationRegistry.getInstrumentation().uiAutomation
+            .executeShellCommand("input keyevent KEYCODE_BACK").close()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("product_camera").assertExists()
+    }
+
+    private fun showNewProductDialog() {
         composeRule.setContent {
             MaterialTheme {
                 CatalogScreen(
@@ -38,7 +68,5 @@ class CatalogMediaPickerInstrumentedTest {
         }
 
         composeRule.onNodeWithTag("add_item_top_btn").performClick()
-        composeRule.onNodeWithTag("product_camera").assertExists()
-        composeRule.onNodeWithTag("product_gallery").assertExists()
     }
 }

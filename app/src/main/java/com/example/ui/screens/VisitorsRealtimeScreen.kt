@@ -256,7 +256,7 @@ fun VisitorsRealtimeScreen(
 
 @Composable
 private fun TelemetryStatusCard(stats: VisitorRealtimeStats) {
-    val isReady = stats.dataAvailable && stats.trackingEnabled
+    val isReady = stats.dataAvailable
     val container = when {
         !stats.dataAvailable -> MaterialTheme.colorScheme.errorContainer
         !stats.trackingEnabled -> StatusPendingGoldBg
@@ -269,7 +269,7 @@ private fun TelemetryStatusCard(stats: VisitorRealtimeStats) {
     }
     val message = when {
         !stats.dataAvailable -> "Il bridge installato non espone ancora la telemetria. Aggiorna il plugin CartAdmin alla stessa versione dell’app."
-        !stats.trackingEnabled -> "Il tracciamento OpenCart è disattivato. Nel pannello admin apri Sistema > Impostazioni > Opzioni e abilita “Clienti online”."
+        !stats.trackingEnabled -> "La tabella OpenCart è disponibile, ma il tracciamento risulta disattivato. I dati già presenti vengono comunque mostrati; abilita “Clienti online” per ricevere nuovi accessi."
         else -> "Dati reali da ${stats.source.ifBlank { "OpenCart customer_online" }}${stats.lastUpdated.takeIf { it.isNotBlank() }?.let { " • $it" }.orEmpty()}"
     }
 
@@ -283,7 +283,11 @@ private fun TelemetryStatusCard(stats: VisitorRealtimeStats) {
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text(
-                text = if (isReady) "Telemetria OpenCart attiva" else "Telemetria non disponibile",
+                text = when {
+                    !stats.dataAvailable -> "Telemetria non disponibile"
+                    stats.trackingEnabled -> "Telemetria OpenCart attiva"
+                    else -> "Telemetria OpenCart parzialmente attiva"
+                },
                 color = foreground,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold
