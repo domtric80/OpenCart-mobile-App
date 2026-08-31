@@ -51,6 +51,8 @@ import androidx.compose.ui.unit.dp
 import com.example.model.AdminModule
 import com.example.model.AdminRecord
 import com.example.model.AdminModuleSnapshot
+import com.example.model.ProductImageUpload
+import com.example.ui.components.SecureImagePicker
 
 @Composable
 fun AdminModuleScreen(
@@ -375,12 +377,18 @@ private fun AdminContentCreateDialog(
     var title by remember { mutableStateOf("") }
     var author by remember { mutableStateOf("") }
     var content by remember { mutableStateOf("") }
+    var metaTitle by remember { mutableStateOf("") }
+    var metaDescription by remember { mutableStateOf("") }
+    var metaKeyword by remember { mutableStateOf("") }
+    var selectedImage by remember { mutableStateOf<ProductImageUpload?>(null) }
+    var imageError by remember { mutableStateOf<String?>(null) }
     var sortOrder by remember { mutableStateOf("0") }
     var active by remember { mutableStateOf(true) }
     var selectedTopic by remember(topics) { mutableStateOf(topics.firstOrNull()) }
     var topicsExpanded by remember { mutableStateOf(false) }
     val isArticle = module == AdminModule.ARTICLES
     val valid = title.isNotBlank() && content.isNotBlank() &&
+        (!isArticle || metaTitle.isNotBlank()) &&
         (!isArticle || (author.isNotBlank() && selectedTopic != null)) &&
         (isArticle || sortOrder.toIntOrNull() != null)
 
@@ -408,6 +416,34 @@ private fun AdminContentCreateDialog(
                             }
                         }
                     }
+                    OutlinedTextField(
+                        metaTitle,
+                        { metaTitle = it.take(255) },
+                        label = { Text("Meta tag Titolo *") },
+                        modifier = Modifier.fillMaxWidth().testTag("create_article_meta_title")
+                    )
+                    OutlinedTextField(
+                        metaDescription,
+                        { metaDescription = it.take(255) },
+                        label = { Text("Meta tag Descrizione") },
+                        modifier = Modifier.fillMaxWidth().testTag("create_article_meta_description")
+                    )
+                    OutlinedTextField(
+                        metaKeyword,
+                        { metaKeyword = it.take(255) },
+                        label = { Text("Meta tag Parola Chiave") },
+                        modifier = Modifier.fillMaxWidth().testTag("create_article_meta_keyword")
+                    )
+                    Text("Immagine articolo", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    SecureImagePicker(
+                        tagPrefix = "article",
+                        onImageSelected = { selectedImage = it; imageError = null },
+                        onError = { imageError = it }
+                    )
+                    selectedImage?.let {
+                        Text("Selezionata: ${it.fileName} (${it.bytes.size / 1024} KB)", color = MaterialTheme.colorScheme.primary)
+                    }
+                    imageError?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                 } else {
                     OutlinedTextField(
                         sortOrder,
@@ -428,7 +464,7 @@ private fun AdminContentCreateDialog(
                     Switch(checked = active, onCheckedChange = { active = it })
                 }
                 Text(
-                    "Il contenuto viene creato in tutte le lingue attive e associato allo store principale. Potrai rifinire traduzioni e SEO dal pannello OpenCart.",
+                    "Il contenuto viene creato in tutte le lingue attive e associato allo store principale. Le traduzioni possono essere rifinite dal pannello OpenCart.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -447,7 +483,11 @@ private fun AdminContentCreateDialog(
                             active = active,
                             sortOrder = if (isArticle) null else sortOrder.toIntOrNull(),
                             parentId = selectedTopic?.id?.toIntOrNull(),
-                            editable = true
+                            editable = true,
+                            metaTitle = if (isArticle) metaTitle.trim() else title.trim(),
+                            metaDescription = metaDescription.trim(),
+                            metaKeyword = metaKeyword.trim(),
+                            imageUpload = selectedImage
                         )
                     )
                 },

@@ -510,7 +510,7 @@ try {
             sendJson([
                 'success' => true,
                 'status' => 'online',
-                'bridge_version' => '2.1.0-dev.5',
+                'bridge_version' => '2.1.0-dev.6',
                 'author' => 'SOLO SOLUZIONI (OpenCart ITALIA)',
                 'store_name' => $storeName,
                 'authenticated_operator' => $authenticatedOperator,
@@ -938,11 +938,16 @@ try {
             $parentId = isset($_POST['parent_id']) ? (int)$_POST['parent_id'] : 0;
             $sortOrder = isset($_POST['sort_order']) ? (int)$_POST['sort_order'] : 0;
             $active = isset($_POST['active']) && (string)$_POST['active'] === '1' ? 1 : 0;
+            $metaTitle = isset($_POST['meta_title']) && is_string($_POST['meta_title']) ? trim(strip_tags($_POST['meta_title'])) : $title;
+            $metaDescription = isset($_POST['meta_description']) && is_string($_POST['meta_description']) ? trim(strip_tags($_POST['meta_description'])) : '';
+            $metaKeyword = isset($_POST['meta_keyword']) && is_string($_POST['meta_keyword']) ? trim(strip_tags($_POST['meta_keyword'])) : '';
+            $imagePath = '';
 
             if (!in_array($rawModule, ['articles', 'topics'], true)
                 || $title === '' || mb_strlen($title) > 255
                 || $content === '' || mb_strlen($content) > 20000
-                || ($rawModule === 'articles' && ($secondary === '' || mb_strlen($secondary) > 64 || $parentId < 1))
+                || mb_strlen($metaTitle) > 255 || mb_strlen($metaDescription) > 255 || mb_strlen($metaKeyword) > 255
+                || ($rawModule === 'articles' && ($secondary === '' || mb_strlen($secondary) > 64 || $parentId < 1 || $metaTitle === ''))
                 || ($rawModule === 'topics' && ($sortOrder < 0 || $sortOrder > 999999))) {
                 cartadminInsertSecurityAudit($mysqli, $db_prefix, $authContext, 'management_create', $rawModule, 0, 'failed', '', '', 'Validazione creazione CMS non superata');
                 sendJson(['success' => false, 'error' => 'I dati del nuovo contenuto CMS non sono validi.'], 400);
@@ -965,10 +970,17 @@ try {
                 if (!$topicExists) {
                     sendJson(['success' => false, 'error' => 'Seleziona una categoria CMS esistente.'], 409);
                 }
+                if (isset($_FILES['image']) && is_array($_FILES['image'])) {
+                    try {
+                        $imagePath = cartadminStoreProductImage($_FILES['image']);
+                    } catch (Throwable $imageError) {
+                        sendJson(['success' => false, 'error' => $imageError instanceof InvalidArgumentException ? $imageError->getMessage() : 'Impossibile salvare l’immagine articolo.'], 400);
+                    }
+                }
             }
 
-            $mysqli->begin_transaction();
             try {
+                $mysqli->begin_transaction();
                 if ($rawModule === 'articles') {
                     $baseStmt = $mysqli->prepare("INSERT INTO `{$db_prefix}article` (`topic_id`, `author`, `status`, `date_added`, `date_modified`) VALUES (?, ?, ?, NOW(), NOW())");
                     if (!$baseStmt) throw new RuntimeException('Tabella articoli non disponibile');
@@ -976,7 +988,7 @@ try {
                     $baseStmt->execute();
                     $recordId = (int)$mysqli->insert_id;
                     $baseStmt->close();
-                    $descriptionStmt = $mysqli->prepare("INSERT INTO `{$db_prefix}article_description` (`article_id`, `language_id`, `image`, `name`, `description`, `tag`, `meta_title`, `meta_description`, `meta_keyword`) VALUES (?, ?, '', ?, ?, '', ?, '', '')");
+                    $descriptionStmt = $mysqli->prepare("INSERT INTO `{$db_prefix}article_description` (`article_id`, `language_id`, `image`, `name`, `description`, `tag`, `meta_title`, `meta_description`, `meta_keyword`) VALUES (?, ?, ?, ?, ?, '', ?, ?, ?)");
                     $storeStmt = $mysqli->prepare("INSERT INTO `{$db_prefix}article_to_store` (`article_id`, `store_id`) VALUES (?, 0)");
                 } else {
                     $baseStmt = $mysqli->prepare("INSERT INTO `{$db_prefix}topic` (`sort_order`, `status`) VALUES (?, ?)");
@@ -992,7 +1004,11 @@ try {
                     throw new RuntimeException('Preparazione contenuto CMS non riuscita');
                 }
                 foreach ($languageIds as $languageId) {
-                    $descriptionStmt->bind_param('iisss', $recordId, $languageId, $title, $content, $title);
+                    if ($rawModule === 'articles') {
+                        $descriptionStmt->bind_param('iissssss', $recordId, $languageId, $imagePath, $title, $content, $metaTitle, $metaDescription, $metaKeyword);
+                    } else {
+                        $descriptionStmt->bind_param('iisss', $recordId, $languageId, $title, $content, $title);
+                    }
                     if (!$descriptionStmt->execute()) throw new RuntimeException('Descrizione CMS non creata');
                 }
                 $descriptionStmt->close();
@@ -1004,6 +1020,8 @@ try {
                 if ($rawModule === 'articles') {
                     $afterState['author'] = $secondary;
                     $afterState['topic_id'] = $parentId;
+                    $afterState['seo_digest'] = hash_hmac('sha256', $metaTitle . '|' . $metaDescription . '|' . $metaKeyword, $auditSalt);
+                    $afterState['has_image'] = $imagePath !== '';
                 } else {
                     $afterState['sort_order'] = $sortOrder;
                 }
@@ -1014,6 +1032,9 @@ try {
                 $mysqli->commit();
             } catch (Throwable $createError) {
                 $mysqli->rollback();
+                if ($imagePath !== '' && defined('DIR_IMAGE')) {
+                    @unlink(rtrim(DIR_IMAGE, '/\\') . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $imagePath));
+                }
                 cartadminInsertSecurityAudit($mysqli, $db_prefix, $authContext, 'management_create', $rawModule, 0, 'failed', '', '', 'Rollback creazione CMS');
                 sendJson(['success' => false, 'error' => 'Creazione CMS non riuscita. Verifica la compatibilità del bridge con OpenCart.'], 409);
             }
@@ -1319,9 +1340,9 @@ try {
 
         case 'visitor_telemetry':
             $trackingEnabled = false;
-            $resTracking = $mysqli->query("SELECT `value` FROM `{$db_prefix}setting` WHERE `key` = 'config_customer_online' ORDER BY `store_id` ASC LIMIT 1");
+            $resTracking = $mysqli->query("SELECT MAX(CASE WHEN `value` = '1' THEN 1 ELSE 0 END) AS `enabled` FROM `{$db_prefix}setting` WHERE `key` = 'config_customer_online'");
             if ($resTracking && $row = $resTracking->fetch_assoc()) {
-                $trackingEnabled = ((string)$row['value'] === '1');
+                $trackingEnabled = ((int)($row['enabled'] ?? 0) === 1);
             }
 
             $onlineTableExists = false;
@@ -1341,20 +1362,18 @@ try {
             $trafficSources = [];
             $liveEvents = [];
 
-            if ($trackingEnabled && $onlineTableExists) {
+            // La tabella resta la fonte autorevole: può contenere sessioni anche quando una
+            // configurazione multi-store viene letta come disattivata o è stata appena cambiata.
+            if ($onlineTableExists) {
                 $expiryHours = 1;
-                $resExpiry = $mysqli->query("SELECT `value` FROM `{$db_prefix}setting` WHERE `key` = 'config_customer_online_expire' ORDER BY `store_id` ASC LIMIT 1");
+                $resExpiry = $mysqli->query("SELECT MAX(CAST(`value` AS UNSIGNED)) AS `expiry_hours` FROM `{$db_prefix}setting` WHERE `key` = 'config_customer_online_expire'");
                 if ($resExpiry && $row = $resExpiry->fetch_assoc()) {
-                    $expiryHours = max(1, min(24, (int)$row['value']));
+                    $expiryHours = max(1, min(24, (int)($row['expiry_hours'] ?? 1)));
                 }
 
-                $activeSince = date('Y-m-d H:i:s', strtotime('-' . $expiryHours . ' hour'));
-                $minuteSince = date('Y-m-d H:i:s', strtotime('-1 minute'));
-                $historySince = date('Y-m-d H:i:s', strtotime('-30 minutes'));
-
-                $stmtCount = $mysqli->prepare("SELECT COUNT(*) AS total, SUM(CASE WHEN `customer_id` = 0 THEN 1 ELSE 0 END) AS guests, SUM(CASE WHEN `customer_id` > 0 THEN 1 ELSE 0 END) AS registered FROM `{$db_prefix}customer_online` WHERE `date_added` >= ?");
+                $stmtCount = $mysqli->prepare("SELECT COUNT(*) AS total, SUM(CASE WHEN `customer_id` = 0 THEN 1 ELSE 0 END) AS guests, SUM(CASE WHEN `customer_id` > 0 THEN 1 ELSE 0 END) AS registered FROM `{$db_prefix}customer_online` WHERE `date_added` >= DATE_SUB(NOW(), INTERVAL ? HOUR)");
                 if ($stmtCount) {
-                    $stmtCount->bind_param('s', $activeSince);
+                    $stmtCount->bind_param('i', $expiryHours);
                     $stmtCount->execute();
                     $res = $stmtCount->get_result();
                     $activeVisitors = ($res && $row = $res->fetch_assoc()) ? (int)$row['total'] : 0;
@@ -1363,35 +1382,25 @@ try {
                     $stmtCount->close();
                 }
 
-                $stmtMinute = $mysqli->prepare("SELECT COUNT(*) AS total FROM `{$db_prefix}customer_online` WHERE `date_added` >= ?");
-                if ($stmtMinute) {
-                    $stmtMinute->bind_param('s', $minuteSince);
-                    $stmtMinute->execute();
-                    $res = $stmtMinute->get_result();
+                $res = $mysqli->query("SELECT COUNT(*) AS total FROM `{$db_prefix}customer_online` WHERE `date_added` >= DATE_SUB(NOW(), INTERVAL 1 MINUTE)");
+                if ($res) {
                     $pageUpdatesPerMinute = ($res && $row = $res->fetch_assoc()) ? (int)$row['total'] : 0;
-                    $stmtMinute->close();
                 }
 
-                $stmtHistory = $mysqli->prepare("SELECT DATE_FORMAT(`date_added`, '%H:%i') AS minute_label, COUNT(*) AS active_users FROM `{$db_prefix}customer_online` WHERE `date_added` >= ? GROUP BY minute_label ORDER BY minute_label ASC");
-                if ($stmtHistory) {
-                    $stmtHistory->bind_param('s', $historySince);
-                    $stmtHistory->execute();
-                    $res = $stmtHistory->get_result();
-                    if ($res) {
-                        while ($row = $res->fetch_assoc()) {
-                            $history[] = [
-                                'time_label' => (string)$row['minute_label'],
-                                'active_users' => (int)$row['active_users'],
-                                'page_views' => (int)$row['active_users']
-                            ];
-                        }
+                $res = $mysqli->query("SELECT DATE_FORMAT(`date_added`, '%H:%i') AS minute_label, COUNT(*) AS active_users FROM `{$db_prefix}customer_online` WHERE `date_added` >= DATE_SUB(NOW(), INTERVAL 30 MINUTE) GROUP BY minute_label ORDER BY minute_label ASC");
+                if ($res) {
+                    while ($row = $res->fetch_assoc()) {
+                        $history[] = [
+                            'time_label' => (string)$row['minute_label'],
+                            'active_users' => (int)$row['active_users'],
+                            'page_views' => (int)$row['active_users']
+                        ];
                     }
-                    $stmtHistory->close();
                 }
 
-                $stmtOnline = $mysqli->prepare("SELECT `customer_id`, `url`, `referer`, `date_added` FROM `{$db_prefix}customer_online` WHERE `date_added` >= ? ORDER BY `date_added` DESC LIMIT 200");
+                $stmtOnline = $mysqli->prepare("SELECT `customer_id`, `url`, `referer`, `date_added` FROM `{$db_prefix}customer_online` WHERE `date_added` >= DATE_SUB(NOW(), INTERVAL ? HOUR) ORDER BY `date_added` DESC LIMIT 200");
                 if ($stmtOnline) {
-                    $stmtOnline->bind_param('s', $activeSince);
+                    $stmtOnline->bind_param('i', $expiryHours);
                     $stmtOnline->execute();
                     $res = $stmtOnline->get_result();
                     $pageCounts = [];
@@ -1452,9 +1461,9 @@ try {
 
                 $checkCartTable = $mysqli->query("SHOW TABLES LIKE '{$db_prefix}cart'");
                 if ($checkCartTable && $checkCartTable->num_rows > 0) {
-                    $stmtCarts = $mysqli->prepare("SELECT COUNT(DISTINCT `session_id`) AS total FROM `{$db_prefix}cart` WHERE `date_added` >= ?");
+                    $stmtCarts = $mysqli->prepare("SELECT COUNT(DISTINCT `session_id`) AS total FROM `{$db_prefix}cart` WHERE `date_added` >= DATE_SUB(NOW(), INTERVAL ? HOUR)");
                     if ($stmtCarts) {
-                        $stmtCarts->bind_param('s', $activeSince);
+                        $stmtCarts->bind_param('i', $expiryHours);
                         $stmtCarts->execute();
                         $res = $stmtCarts->get_result();
                         $activeCarts = ($res && $row = $res->fetch_assoc()) ? (int)$row['total'] : 0;

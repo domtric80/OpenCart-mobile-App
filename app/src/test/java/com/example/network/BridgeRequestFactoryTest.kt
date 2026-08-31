@@ -149,6 +149,33 @@ class BridgeRequestFactoryTest {
     }
 
     @Test
+    fun cmsArticleMultipartCarriesSeoAndImageWithoutCredentials() {
+        val request = BridgeRequestFactory.authenticatedMultipartPost(
+            baseUrl = "https://shop.example",
+            action = "management_create",
+            apiKey = "cms-secret",
+            fields = mapOf(
+                "module" to "articles",
+                "meta_title" to "Titolo SEO",
+                "meta_description" to "Descrizione SEO",
+                "meta_keyword" to "uno,due"
+            ),
+            imageBytes = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 0xFF.toByte()),
+            imageMimeType = "image/jpeg",
+            imageFileName = "articolo.jpg"
+        )
+
+        val body = request.body as MultipartBody
+        val dispositionHeaders = body.parts.mapNotNull { it.headers?.get("Content-Disposition") }
+        assertTrue(dispositionHeaders.any { it.contains("name=\"meta_title\"") })
+        assertTrue(dispositionHeaders.any { it.contains("name=\"meta_description\"") })
+        assertTrue(dispositionHeaders.any { it.contains("name=\"meta_keyword\"") })
+        assertTrue(dispositionHeaders.any { it.contains("name=\"image\"") && it.contains("articolo.jpg") })
+        assertEquals("cms-secret", request.header("X-CartAdmin-Key"))
+        assertFalse(dispositionHeaders.any { it.contains("api_key") })
+    }
+
+    @Test
     fun managementListUsesAllowlistedModuleQueryAndHeaderOnlyCredentials() {
         val request = BridgeRequestFactory.authenticatedGet(
             baseUrl = "https://shop.example",

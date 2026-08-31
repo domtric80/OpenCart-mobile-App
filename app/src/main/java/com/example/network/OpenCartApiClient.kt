@@ -646,20 +646,35 @@ class OpenCartApiClient(context: Context) {
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
             require(module == AdminModule.ARTICLES || module == AdminModule.TOPICS) { "Modulo CMS non creabile" }
-            val request = BridgeRequestFactory.authenticatedFormPost(
+            val fields = mapOf(
+                "module" to module.apiKey,
+                "title" to record.title,
+                "secondary" to record.subtitle,
+                "content" to record.content,
+                "parent_id" to (record.parentId?.toString() ?: ""),
+                "sort_order" to (record.sortOrder?.toString() ?: "0"),
+                "active" to if (record.active == true) "1" else "0",
+                "meta_title" to record.metaTitle,
+                "meta_description" to record.metaDescription,
+                "meta_keyword" to record.metaKeyword
+            )
+            val request = record.imageUpload?.let { image ->
+                BridgeRequestFactory.authenticatedMultipartPost(
+                    baseUrl = baseUrl,
+                    action = "management_create",
+                    apiKey = apiKey,
+                    username = username,
+                    fields = fields,
+                    imageBytes = image.bytes,
+                    imageMimeType = image.mimeType,
+                    imageFileName = image.fileName
+                )
+            } ?: BridgeRequestFactory.authenticatedFormPost(
                 baseUrl = baseUrl,
                 action = "management_create",
                 apiKey = apiKey,
                 username = username,
-                fields = mapOf(
-                    "module" to module.apiKey,
-                    "title" to record.title,
-                    "secondary" to record.subtitle,
-                    "content" to record.content,
-                    "parent_id" to (record.parentId?.toString() ?: ""),
-                    "sort_order" to (record.sortOrder?.toString() ?: "0"),
-                    "active" to if (record.active == true) "1" else "0"
-                )
+                fields = fields
             )
             tlsClient.execute(request).use { response ->
                 val body = response.body?.string().orEmpty()
