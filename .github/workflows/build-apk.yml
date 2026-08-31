@@ -230,16 +230,31 @@ jobs:
             cat << EOF > release_notes.md
           ## CartAdmin ${TAG_NAME} — pre-release di test
 
-          > **Non usare in produzione.** Questa build serve a verificare su dispositivi Android fisici la nuova protezione hardware delle credenziali.
+          > **Non usare in produzione.** Questa build 2.1 serve a verificare su dispositivi Android fisici i flussi amministrativi, la protezione hardware delle credenziali e la compatibilità dei provider multimediali OEM.
 
-          ### Modifiche di sicurezza da verificare
+          ### Correzioni di ${TAG_NAME}
+
+          - fotocamera e galleria avviate mediante intent Android diretti per evitare \`IllegalArgumentException\` sui firmware che rifiutano i contratti AndroidX;
+          - galleria tramite \`GET_CONTENT\` con fallback \`OPEN_DOCUMENT\`, senza permessi generali sull'archivio;
+          - fotocamera con accesso limitato al solo URI temporaneo, grant esplicito ai gestori OEM e fallback alla cattura anteprima;
+          - conteggio dei guest e dei clienti registrati dalle sessioni che OpenCart mantiene nella tabella nativa \`customer_online\`, senza un secondo filtro soggetto a differenze tra orologio PHP e MySQL;
+          - diagnostica nell'app con numero di record, ultima visita e indicazioni quando OpenCart non sta popolando \`customer_online\`.
+
+          ### Funzioni 2.1 incluse
+
+          - creazione e modifica di prodotti e categorie, incluse immagini JPEG/PNG/WebP validate fino a 5 MB;
+          - creazione di articoli e categorie CMS, inclusi meta tag e immagine editoriale;
+          - gestione controllata di pagine, recensioni, articoli e argomenti;
+          - token distinti per operatore e dispositivo, scope minimi, revoca selettiva e audit server-side atomico.
+
+          ### Sicurezza confermata
 
           - autenticazione del bridge OpenCart esclusivamente tramite header; rimosso il provisioning pubblico e l'invio di credenziali in URL o form;
           - credenziali Android cifrate con AES-256-GCM e chiave hardware-backed di Android Keystore;
           - StrongBox preferito quando disponibile e TEE hardware-backed obbligatorio; il salvataggio persistente fallisce in modo sicuro sui dispositivi privi di protezione hardware;
           - migrazione dei dati Room precedentemente in chiaro e bonifica del database SQLite;
           - migrazione delle password locali a PBKDF2;
-          - regole di backup Android aggiornate per escludere dati sensibili.
+          - regole di backup Android aggiornate per escludere dati sensibili;
           - pacchetto installabile da OpenCart 4.1.x con \`install.json\` e configurazione dal pannello amministrativo;
           - token bridge mostrato una sola volta e memorizzato nel database esclusivamente come hash non reversibile Argon2id/bcrypt;
           - rimosso dall'app il generatore PHP che incorporava il token in un file.
@@ -251,10 +266,11 @@ jobs:
 
           ### Verifiche eseguite
 
-          - build release, test unitari e Android Lint nel workflow;
-          - contenuto del pacchetto OCMOD validato dal workflow.
+          - build release firmata, test unitari, compilazione dei test strumentali e Android Lint;
+          - sintassi e test PHP, struttura OCMOD, CodeQL, Dependency Review e Semgrep;
+          - test strumentali eseguiti localmente su AVD Pixel 8 API 36 prima della PR.
 
-          Rimane obbligatoria la prova su dispositivo fisico con TEE o StrongBox. L'aggiornamento diretto funziona solo se l'app già installata è firmata con la stessa chiave di rilascio.
+          App e bridge devono essere aggiornati insieme alla stessa versione. Rimane obbligatoria la prova su dispositivo fisico, in particolare sui provider fotocamera/galleria OEM e sullo store OpenCart di test. L'aggiornamento diretto funziona solo se l'app già installata è firmata con la stessa chiave di rilascio.
           EOF
           else
             cat << EOF > release_notes.md
