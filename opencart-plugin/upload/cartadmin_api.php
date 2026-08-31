@@ -510,7 +510,7 @@ try {
             sendJson([
                 'success' => true,
                 'status' => 'online',
-                'bridge_version' => '2.1.0-dev.6',
+                'bridge_version' => '2.1.0-dev.7',
                 'author' => 'SOLO SOLUZIONI (OpenCart ITALIA)',
                 'store_name' => $storeName,
                 'authenticated_operator' => $authenticatedOperator,
