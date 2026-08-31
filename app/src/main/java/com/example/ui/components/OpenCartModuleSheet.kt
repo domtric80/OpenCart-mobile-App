@@ -126,12 +126,12 @@ fun OpenCartModuleSheet(onDismiss: () -> Unit) {
                 Text("PROCEDURA", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 StepRow("1", "Installa l’estensione", "In OpenCart apri Estensioni > Installer, carica cartadmin.ocmod.zip e completa l’installazione.")
                 StepRow("2", "Apri CartAdmin Bridge", "Vai in Estensioni > Estensioni, seleziona Moduli, installa e apri CartAdmin Bridge.")
-                StepRow("3", "Genera il token", "Genera il token dal pannello e copialo subito: nel database resta soltanto il suo hash non reversibile.")
-                StepRow("4", "Collega l’app", "Inserisci URL, nome operatore e token nella configurazione dell’app, quindi esegui Test API.")
+                StepRow("3", "Genera il token", "Assegna etichetta, utente OpenCart attivo e permessi dal pannello, poi copialo subito: nel database resta soltanto il suo hash non reversibile.")
+                StepRow("4", "Collega l’app", "Inserisci URL e token nella configurazione dell’app, quindi esegui Test API. Il token si associa a questo dispositivo.")
             }
 
             Text(
-                "La copia del token salvata nell’app è cifrata con Android Keystore hardware-backed. La rotazione dal pannello invalida immediatamente il token precedente.",
+                "La copia del token salvata nell’app è cifrata con Android Keystore hardware-backed. Ogni dispositivo usa un token distinto, revocabile dal pannello.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

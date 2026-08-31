@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
@@ -42,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.model.AdminModule
+import com.example.model.AdminRecord
 import com.example.model.AdminModuleSnapshot
 
 @Composable
@@ -52,12 +54,14 @@ fun AdminModuleScreen(
     onStatusChange: (recordId: String, active: Boolean) -> Unit = { _, _ -> },
     onAddAntispam: (keyword: String) -> Unit = {},
     onDeleteAntispam: (recordId: String) -> Unit = {},
+    onContentUpdate: (record: AdminRecord) -> Unit = {},
     onSensitiveAction: (recordId: String, operation: String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val state = snapshot ?: AdminModuleSnapshot(module = module, isLoading = true)
     var antispamKeyword by remember(module) { mutableStateOf("") }
     var pendingSensitiveAction by remember(module) { mutableStateOf<Pair<String, String>?>(null) }
+    var recordBeingEdited by remember(module) { mutableStateOf<AdminRecord?>(null) }
 
     LazyColumn(
         modifier = modifier
@@ -244,6 +248,15 @@ fun AdminModuleScreen(
                                     Text(" Rimuovi")
                                 }
                             }
+                            if (record.editable) {
+                                OutlinedButton(
+                                    onClick = { recordBeingEdited = record },
+                                    modifier = Modifier.testTag("edit_${module.apiKey}_${record.id}")
+                                ) {
+                                    Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(17.dp))
+                                    Text(" Modifica")
+                                }
+                            }
                             if ((module == AdminModule.CUSTOMER_APPROVALS || module == AdminModule.GDPR) && record.actionable) {
                                 if (record.pendingOperation.isNotBlank()) {
                                     Surface(
@@ -296,6 +309,123 @@ fun AdminModuleScreen(
             }
         )
     }
+
+    recordBeingEdited?.let { record ->
+        AdminContentEditDialog(
+            module = module,
+            record = record,
+            onDismiss = { recordBeingEdited = null },
+            onSave = { updated ->
+                onContentUpdate(updated)
+                recordBeingEdited = null
+            }
+        )
+    }
+}
+
+@Composable
+private fun AdminContentEditDialog(
+    module: AdminModule,
+    record: AdminRecord,
+    onDismiss: () -> Unit,
+    onSave: (AdminRecord) -> Unit
+) {
+    var title by remember(record.id) { mutableStateOf(record.title) }
+    var secondary by remember(record.id) { mutableStateOf(record.subtitle) }
+    var content by remember(record.id) { mutableStateOf(record.content) }
+    var ratingText by remember(record.id) { mutableStateOf(record.rating?.toString().orEmpty()) }
+    var sortOrderText by remember(record.id) { mutableStateOf(record.sortOrder?.toString().orEmpty()) }
+
+    val editsTitle = module == AdminModule.PAGES || module == AdminModule.ARTICLES || module == AdminModule.TOPICS
+    val editsSecondary = module == AdminModule.ARTICLES || module == AdminModule.REVIEWS
+    val editsReview = module == AdminModule.REVIEWS
+    val editsSortOrder = module == AdminModule.PAGES || module == AdminModule.TOPICS
+    val parsedRating = ratingText.toIntOrNull()
+    val parsedSortOrder = sortOrderText.toIntOrNull()
+    val valid = when {
+        editsTitle && title.trim().isEmpty() -> false
+        editsSecondary && secondary.trim().isEmpty() -> false
+        editsReview && (content.trim().isEmpty() || parsedRating !in 1..5) -> false
+        editsSortOrder && (parsedSortOrder == null || parsedSortOrder < 0) -> false
+        else -> true
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Modifica ${module.label}") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (editsTitle) {
+                    OutlinedTextField(
+                        value = title,
+                        onValueChange = { title = it.take(255) },
+                        label = { Text(if (module == AdminModule.PAGES) "Titolo pagina" else "Titolo") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("content_title")
+                    )
+                }
+                if (editsSecondary) {
+                    OutlinedTextField(
+                        value = secondary,
+                        onValueChange = { secondary = it.take(64) },
+                        label = { Text("Autore") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("content_secondary")
+                    )
+                }
+                if (editsReview) {
+                    OutlinedTextField(
+                        value = content,
+                        onValueChange = { content = it.take(2000) },
+                        label = { Text("Testo recensione") },
+                        minLines = 4,
+                        modifier = Modifier.fillMaxWidth().testTag("content_body")
+                    )
+                    OutlinedTextField(
+                        value = ratingText,
+                        onValueChange = { ratingText = it.filter(Char::isDigit).take(1) },
+                        label = { Text("Valutazione (1–5)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("content_rating")
+                    )
+                }
+                if (editsSortOrder) {
+                    OutlinedTextField(
+                        value = sortOrderText,
+                        onValueChange = { sortOrderText = it.filter(Char::isDigit).take(6) },
+                        label = { Text("Ordinamento") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("content_sort_order")
+                    )
+                }
+                if (module == AdminModule.PAGES || module == AdminModule.ARTICLES || module == AdminModule.TOPICS) {
+                    Text(
+                        "Viene aggiornata la lingua principale dello store. Il contenuto HTML e le traduzioni esistenti restano invariati.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = valid,
+                onClick = {
+                    onSave(
+                        record.copy(
+                            title = title.trim(),
+                            subtitle = secondary.trim(),
+                            content = content.trim(),
+                            rating = if (editsReview) parsedRating else record.rating,
+                            sortOrder = if (editsSortOrder) parsedSortOrder else record.sortOrder
+                        )
+                    )
+                },
+                modifier = Modifier.testTag("save_content_edit")
+            ) { Text("Salva sullo store") }
+        },
+        dismissButton = { OutlinedButton(onClick = onDismiss) { Text("Annulla") } }
+    )
 }
 
 @Composable

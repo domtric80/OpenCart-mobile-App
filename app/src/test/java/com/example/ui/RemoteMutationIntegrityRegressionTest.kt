@@ -53,6 +53,19 @@ class RemoteMutationIntegrityRegressionTest {
         assertFalse(function.contains("offline"))
     }
 
+    @Test
+    fun editorialChangesReloadOnlyAfterRemoteConfirmation() {
+        val function = viewModelSource.substringAfter("fun updateAdminContent(")
+            .substringBefore("fun addAntispamKeyword(")
+
+        val remoteCall = function.indexOf("apiClient.updateAdminContent")
+        val reload = function.indexOf("loadAdminModule(module, forceRefresh = true)")
+        assertTrue(remoteCall >= 0)
+        assertTrue(reload > remoteCall)
+        assertFalse(function.contains("repository."))
+        assertFalse(function.contains("offline"))
+    }
+
     private fun assertRemoteBeforeLocal(
         functionStart: String,
         functionEnd: String,

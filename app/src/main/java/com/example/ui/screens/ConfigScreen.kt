@@ -662,13 +662,16 @@ fun ConfigScreen(
                     OutlinedTextField(
                         value = apiUsername,
                         onValueChange = { apiUsername = it },
-                        label = { Text("Nome operatore (audit) / utente API nativa") },
+                        label = { Text("Etichetta locale / utente API nativa") },
                         leadingIcon = {
                             Icon(Icons.Default.Store, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         },
                         modifier = Modifier.fillMaxWidth().testTag("config_api_username_input"),
                         shape = RoundedCornerShape(14.dp),
-                        singleLine = true
+                        singleLine = true,
+                        supportingText = {
+                            Text("Con CartAdmin Bridge l’operatore autorevole è quello assegnato al token nel pannello OpenCart.")
+                        }
                     )
 
                     OutlinedTextField(

@@ -29,9 +29,21 @@ class Cartadmin extends \Opencart\System\Engine\Controller {
 		$state = $this->model_extension_cartadmin_module_cartadmin->getTokenState();
 
 		$data['configured'] = $state['configured'];
+		$data['active_count'] = $state['active_count'];
 		$data['last_four'] = $state['last_four'];
 		$data['created_at'] = $state['created_at'];
 		$data['generate'] = $this->url->link($this->route . '.generate', $token, true);
+		$data['revoke'] = $this->url->link($this->route . '.revoke', $token, true);
+		$data['tokens'] = $this->model_extension_cartadmin_module_cartadmin->getTokens();
+		$data['operators'] = $this->model_extension_cartadmin_module_cartadmin->getOperators();
+		$data['available_scopes'] = [
+			'read' => $this->language->get('scope_read'),
+			'orders.write' => $this->language->get('scope_orders'),
+			'catalog.write' => $this->language->get('scope_catalog'),
+			'content.write' => $this->language->get('scope_content'),
+			'customers.write' => $this->language->get('scope_customers'),
+			'audit.write' => $this->language->get('scope_audit')
+		];
 		$data['back'] = $this->url->link('marketplace/extension', $token . '&type=module');
 		$data['endpoint'] = rtrim(HTTP_CATALOG, '/') . '/extension/cartadmin/cartadmin_api.php';
 		$data['commands'] = array_map(function (array $command): array {
@@ -68,13 +80,52 @@ class Cartadmin extends \Opencart\System\Engine\Controller {
 		}
 
 		if (!$json) {
-			$this->load->model('extension/cartadmin/module/cartadmin');
-			$this->model_extension_cartadmin_module_cartadmin->install();
-			$token = $this->model_extension_cartadmin_module_cartadmin->rotateToken();
+			$label = isset($this->request->post['label']) ? trim((string)$this->request->post['label']) : '';
+			$operator_user_id = isset($this->request->post['operator_user_id']) ? (int)$this->request->post['operator_user_id'] : 0;
+			$scopes = isset($this->request->post['scopes']) && is_array($this->request->post['scopes']) ? $this->request->post['scopes'] : [];
+			$allowedScopes = ['read', 'orders.write', 'catalog.write', 'content.write', 'customers.write', 'audit.write'];
+			$scopes = array_values(array_intersect($allowedScopes, array_map('strval', $scopes)));
 
-			$json['success'] = $this->language->get('text_token_generated');
-			$json['token'] = $token;
-			$json['last_four'] = substr($token, -4);
+			try {
+				$this->load->model('extension/cartadmin/module/cartadmin');
+				$this->model_extension_cartadmin_module_cartadmin->install();
+				$token = $this->model_extension_cartadmin_module_cartadmin->createToken($label, $operator_user_id, $scopes);
+
+				$json['success'] = $this->language->get('text_token_generated');
+				$json['token'] = $token;
+				$json['last_four'] = substr($token, -4);
+			} catch (\Throwable $exception) {
+				$json['error'] = $this->language->get('error_token_data');
+			}
+		}
+
+		$this->response->addHeader('Content-Type: application/json');
+		$this->response->addHeader('Cache-Control: no-store');
+		$this->response->addHeader('X-Content-Type-Options: nosniff');
+		$this->response->setOutput(json_encode($json, JSON_UNESCAPED_SLASHES));
+	}
+
+	public function revoke(): void {
+		$this->load->language($this->route);
+		$json = [];
+
+		if (!$this->user->hasPermission('modify', $this->route)) {
+			$json['error'] = $this->language->get('error_permission');
+		} elseif (($this->request->server['REQUEST_METHOD'] ?? '') !== 'POST') {
+			$json['error'] = $this->language->get('error_method');
+		}
+
+		$token_id = isset($this->request->post['token_id']) ? (int)$this->request->post['token_id'] : 0;
+		if (!$json && $token_id < 1) {
+			$json['error'] = $this->language->get('error_token_data');
+		}
+
+		if (!$json) {
+			$this->load->model('extension/cartadmin/module/cartadmin');
+			$revoked = $this->model_extension_cartadmin_module_cartadmin->revokeToken($token_id);
+			$json[$revoked ? 'success' : 'error'] = $revoked
+				? $this->language->get('text_token_revoked')
+				: $this->language->get('error_token_revoke');
 		}
 
 		$this->response->addHeader('Content-Type: application/json');

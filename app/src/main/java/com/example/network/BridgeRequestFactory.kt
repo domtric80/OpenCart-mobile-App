@@ -64,13 +64,10 @@ internal object BridgeRequestFactory {
         username: String = ""
     ): Request.Builder {
         require(apiKey.isNotBlank()) { "Il token CartAdmin non può essere vuoto" }
+        require(username.length <= 128) { "Etichetta operatore locale troppo lunga" }
         return builder
             .header("X-CartAdmin-Key", apiKey)
-            .apply {
-                if (username.isNotBlank()) {
-                    header("X-CartAdmin-User", username)
-                }
-            }
+            .header("X-CartAdmin-Device", BridgeDeviceIdentity.current())
             .header("User-Agent", "CartAdmin-Android/${BuildConfig.VERSION_NAME}")
             .header("Accept", "application/json")
     }

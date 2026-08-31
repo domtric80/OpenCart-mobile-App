@@ -17,17 +17,47 @@
         <div class="alert alert-info"><i class="fa-solid fa-lock"></i> {{ text_security }}</div>
         <dl class="row">
           <dt class="col-sm-3">Stato</dt>
-          <dd class="col-sm-9"><span id="token-status" class="badge {{ configured ? 'bg-success' : 'bg-warning text-dark' }}">{{ configured ? text_configured : text_not_configured }}</span></dd>
+          <dd class="col-sm-9"><span id="token-status" class="badge {{ configured ? 'bg-success' : 'bg-warning text-dark' }}">{{ configured ? active_count ~ ' ' ~ text_active_tokens : text_not_configured }}</span></dd>
           <dt class="col-sm-3">{{ text_endpoint }}</dt><dd class="col-sm-9"><code>{{ endpoint }}</code></dd>
-          {% if configured %}<dt class="col-sm-3">{{ text_last_four }}</dt><dd id="last-four" class="col-sm-9"><code>••••{{ last_four }}</code></dd>
-          <dt class="col-sm-3">{{ text_created_at }}</dt><dd class="col-sm-9">{{ created_at }}</dd>{% endif %}
         </dl>
-        <button type="button" id="button-generate" class="btn btn-primary"><i class="fa-solid fa-key"></i> {{ configured ? button_rotate : button_generate }}</button>
+        <div class="row g-3 align-items-end">
+          <div class="col-md-4"><label for="token-label" class="form-label">{{ text_token_label }}</label><input id="token-label" class="form-control" maxlength="64" placeholder="{{ text_token_label_placeholder }}"></div>
+          <div class="col-md-4"><label for="token-operator" class="form-label">{{ text_operator_name }}</label><select id="token-operator" class="form-select"><option value="">{{ text_operator_placeholder }}</option>{% for operator in operators %}<option value="{{ operator.user_id }}">{{ operator.username }} — {{ operator.firstname }} {{ operator.lastname }}</option>{% endfor %}</select></div>
+          <div class="col-md-4"><button type="button" id="button-generate" class="btn btn-primary"><i class="fa-solid fa-key"></i> {{ button_generate }}</button></div>
+          <div class="col-12">
+            <label class="form-label d-block">{{ text_scopes }}</label>
+            {% for scope, label in available_scopes %}
+              <div class="form-check form-check-inline"><input class="form-check-input token-scope" type="checkbox" id="scope-{{ loop.index }}" value="{{ scope }}" {{ scope == 'read' ? 'checked disabled' : 'checked' }}><label class="form-check-label" for="scope-{{ loop.index }}">{{ label }}</label></div>
+            {% endfor %}
+          </div>
+          <div class="col-12"><small class="text-muted">{{ text_device_binding }}</small></div>
+        </div>
         <div id="token-once" class="card border-danger mt-3 d-none">
           <div class="card-header text-bg-danger">{{ text_token_once }}</div>
           <div class="card-body">
             <div class="input-group"><input id="generated-token" type="text" class="form-control font-monospace" readonly><button id="button-copy" type="button" class="btn btn-outline-secondary">{{ button_copy }}</button></div>
           </div>
+        </div>
+        <div class="table-responsive mt-4">
+          <table class="table table-striped align-middle">
+            <thead><tr><th>ID</th><th>{{ text_token_label }}</th><th>{{ text_operator_name }}</th><th>{{ text_scopes }}</th><th>{{ text_device }}</th><th>{{ text_last_used }}</th><th>Stato</th><th class="text-end">Azioni</th></tr></thead>
+            <tbody>
+              {% for token_item in tokens %}
+                <tr>
+                  <td>#{{ token_item.token_id }} / <code>••••{{ token_item.last_four }}</code></td>
+                  <td>{{ token_item.label }}</td>
+                  <td>{{ token_item.operator_name }}</td>
+                  <td><small>{{ token_item.scopes }}</small></td>
+                  <td>{{ token_item.device_hash ? text_bound : text_waiting_binding }}</td>
+                  <td>{{ token_item.last_used_at ?: '—' }}</td>
+                  <td><span class="badge {{ token_item.active ? 'bg-success' : 'bg-secondary' }}">{{ token_item.active ? text_active : text_revoked }}</span></td>
+                  <td class="text-end">{% if token_item.active %}<button type="button" class="btn btn-outline-danger btn-sm token-revoke" data-token-id="{{ token_item.token_id }}">{{ button_revoke_token }}</button>{% endif %}</td>
+                </tr>
+              {% else %}
+                <tr><td colspan="8" class="text-muted">{{ text_no_tokens }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -66,10 +96,17 @@
 </div>
 <script>
 document.getElementById('button-generate').addEventListener('click', async function () {
-  if ({{ configured ? 'true' : 'false' }} && !window.confirm('Il token attuale smetterà immediatamente di funzionare. Continuare?')) return;
+  const label = document.getElementById('token-label').value.trim();
+  const operatorUserId = document.getElementById('token-operator').value;
+  if (!label || !operatorUserId) {
+    showAlert('danger', '{{ error_token_data|escape('js') }}');
+    return;
+  }
   this.disabled = true;
   try {
-    const response = await fetch('{{ generate }}', {method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'}});
+    const body = new URLSearchParams({label, operator_user_id: operatorUserId});
+    document.querySelectorAll('.token-scope:checked').forEach(scope => body.append('scopes[]', scope.value));
+    const response = await fetch('{{ generate }}', {method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'}, body});
     const json = await response.json();
     if (json.error) throw new Error(json.error);
     document.getElementById('generated-token').value = json.token;
@@ -108,6 +145,22 @@ document.querySelectorAll('.command-action').forEach(function (button) {
       const json = await response.json();
       if (json.error) throw new Error(json.error);
       window.alert(json.success);
+      window.location.reload();
+    } catch (error) {
+      showAlert('danger', error.message);
+      this.disabled = false;
+    }
+  });
+});
+document.querySelectorAll('.token-revoke').forEach(function (button) {
+  button.addEventListener('click', async function () {
+    if (!window.confirm('{{ text_revoke_confirm|escape('js') }}')) return;
+    this.disabled = true;
+    try {
+      const body = new URLSearchParams({token_id: this.dataset.tokenId});
+      const response = await fetch('{{ revoke }}', {method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest', 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'}, body});
+      const json = await response.json();
+      if (json.error) throw new Error(json.error);
       window.location.reload();
     } catch (error) {
       showAlert('danger', error.message);

@@ -270,6 +270,7 @@ fun MainAppContent(
                             onStatusChange = { id, active -> viewModel.updateAdminRecordStatus(managementModule, id, active) },
                             onAddAntispam = viewModel::addAntispamKeyword,
                             onDeleteAntispam = viewModel::deleteAntispamKeyword,
+                            onContentUpdate = { record -> viewModel.updateAdminContent(managementModule, record) },
                             onSensitiveAction = { id, operation -> viewModel.requestSensitiveAdminCommand(managementModule, id, operation) }
                         )
                     } else CatalogScreen(
@@ -319,6 +320,7 @@ fun MainAppContent(
                         onStatusChange = { id, active -> viewModel.updateAdminRecordStatus(selectedAdminModule, id, active) },
                         onAddAntispam = viewModel::addAntispamKeyword,
                         onDeleteAntispam = viewModel::deleteAntispamKeyword,
+                        onContentUpdate = { record -> viewModel.updateAdminContent(selectedAdminModule, record) },
                         onSensitiveAction = { id, operation -> viewModel.requestSensitiveAdminCommand(selectedAdminModule, id, operation) }
                     )
                 }
