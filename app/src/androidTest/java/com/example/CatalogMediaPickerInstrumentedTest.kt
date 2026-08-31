@@ -11,7 +11,9 @@ import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.model.Category
+import com.example.ui.components.RichHtmlEditor
 import com.example.ui.screens.CatalogScreen
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -34,6 +36,22 @@ class CatalogMediaPickerInstrumentedTest {
         composeRule.onNodeWithTag("rich_html_editor").assertExists().performClick()
         composeRule.onNodeWithTag("rich_editor_toolbar").assertIsDisplayed()
         composeRule.onNodeWithTag("editor_grassetto").assertExists()
+    }
+
+    @Test
+    fun richEditorToolbarFormatsTextWhileKeyboardIsOpen() {
+        var html = "<p>Test</p>"
+        composeRule.setContent {
+            MaterialTheme {
+                RichHtmlEditor(html = html, onHtmlChange = { html = it })
+            }
+        }
+
+        composeRule.onNodeWithTag("open_rich_html_editor").performClick()
+        composeRule.onNodeWithTag("rich_html_editor").performClick()
+        composeRule.onNodeWithTag("rich_editor_toolbar").assertIsDisplayed()
+        composeRule.onNodeWithTag("editor_grassetto").performClick()
+        composeRule.runOnIdle { assertTrue("HTML prodotto: $html", html.contains("<strong>Test</strong>")) }
     }
 
     @Test

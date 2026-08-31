@@ -1,7 +1,6 @@
 package com.example.ui.components
 
 import android.graphics.Typeface
-import android.graphics.Rect
 import android.text.Editable
 import android.text.Html
 import android.text.Spanned
@@ -16,7 +15,6 @@ import android.text.style.RelativeSizeSpan
 import android.text.style.StyleSpan
 import android.text.style.UnderlineSpan
 import android.view.WindowManager
-import android.view.ViewTreeObserver
 import android.widget.EditText
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -48,15 +46,12 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -65,11 +60,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -158,43 +151,13 @@ private fun FullScreenRichTextDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = true)
     ) {
         val dialogView = LocalView.current
-        val density = LocalDensity.current
-        var bottomOcclusionPx by remember { mutableIntStateOf(0) }
-        DisposableEffect(dialogView) {
-            val listener = ViewTreeObserver.OnGlobalLayoutListener {
-                val visibleFrame = Rect()
-                dialogView.rootView.getWindowVisibleDisplayFrame(visibleFrame)
-                bottomOcclusionPx = (dialogView.rootView.height - visibleFrame.bottom).coerceAtLeast(0)
-            }
-            dialogView.viewTreeObserver.addOnGlobalLayoutListener(listener)
-            onDispose { dialogView.viewTreeObserver.removeOnGlobalLayoutListener(listener) }
-        }
         SideEffect {
             (dialogView.parent as? DialogWindowProvider)?.window?.setSoftInputMode(
                 WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
             )
         }
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Scaffold(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(bottom = with(density) { bottomOcclusionPx.toDp() })
-                    .testTag("rich_editor_fullscreen"),
-                containerColor = MaterialTheme.colorScheme.background,
-                bottomBar = {
-                    EditorToolbar(
-                        editor = editor,
-                        blockMenuOpen = blockMenuOpen,
-                        onBlockMenuOpenChange = { blockMenuOpen = it },
-                        colorMenuOpen = colorMenuOpen,
-                        onColorMenuOpenChange = { colorMenuOpen = it },
-                        onInline = ::inline,
-                        onBlock = ::block,
-                        onPublishFormattingChange = ::publishFormattingChange
-                    )
-                }
-            ) { contentPadding ->
-                Column(modifier = Modifier.fillMaxSize().padding(contentPadding)) {
+            Column(modifier = Modifier.fillMaxSize().testTag("rich_editor_fullscreen")) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -205,6 +168,16 @@ private fun FullScreenRichTextDialog(
                         Icon(Icons.Default.Check, contentDescription = "Conferma testo")
                     }
                 }
+                EditorToolbar(
+                    editor = editor,
+                    blockMenuOpen = blockMenuOpen,
+                    onBlockMenuOpenChange = { blockMenuOpen = it },
+                    colorMenuOpen = colorMenuOpen,
+                    onColorMenuOpenChange = { colorMenuOpen = it },
+                    onInline = ::inline,
+                    onBlock = ::block,
+                    onPublishFormattingChange = ::publishFormattingChange
+                )
                 AndroidView(
                     modifier = Modifier.fillMaxWidth().weight(1f).testTag("rich_html_editor"),
                     factory = { context ->
@@ -229,7 +202,6 @@ private fun FullScreenRichTextDialog(
         }
     }
 }
-}
 
 @Composable
 private fun EditorToolbar(
@@ -248,7 +220,6 @@ private fun EditorToolbar(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
-            .zIndex(2f)
             .testTag("rich_editor_toolbar")
     ) {
         Row(
@@ -325,8 +296,10 @@ private fun selectedOrParagraph(editor: EditText): IntRange {
         end = previousStart
     }
     if (start == end) {
-        start = editable.lastIndexOf('\n', max(0, start - 1)).let { if (it < 0) 0 else it + 1 }
-        end = editable.indexOf('\n', start).let { if (it < 0) editable.length else it }
+        var anchor = start
+        while (anchor > 0 && editable[anchor - 1] == '\n') anchor--
+        start = editable.lastIndexOf('\n', max(0, anchor - 1)).let { if (it < 0) 0 else it + 1 }
+        end = editable.indexOf('\n', anchor).let { if (it < 0) editable.length else it }
     }
     return start..end
 }

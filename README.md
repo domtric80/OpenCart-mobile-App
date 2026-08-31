@@ -58,9 +58,10 @@ Nel ramo di sviluppo 2.1, approvazioni clienti e richieste GDPR possono essere i
 - editor visuale per descrizioni prodotto e contenuti articolo con Paragrafo/H1/H2/H3, colore testo, grassetto, corsivo, sottolineato ed elenco puntato;
 - barra di formattazione adattata alla tastiera e sanificazione HTML sia nell'app sia nel bridge: script, media incorporati, link attivi, handler evento e attributi arbitrari non vengono salvati.
 - correzione del caricamento categorie nella creazione prodotto: la schermata richiede un aggiornamento mirato allo store e seleziona la prima categoria reale anche quando la risposta arriva dopo l'apertura;
-- editor visuale realmente a schermo intero, con area di scrittura estesa e toolbar a icone fissata sopra tastiera e barre di sistema, senza coprire il testo attivo.
+- editor visuale realmente a schermo intero, con area di scrittura estesa e toolbar a icone fissata in alto sotto il titolo, sempre accessibile anche quando la tastiera è aperta;
+- comandi di formattazione corretti anche quando il cursore si trova dopo le righe finali generate dall'HTML Android.
 
-Queste funzioni richiedono app e bridge `2.1.0-dev.12` e non fanno ancora parte della release stabile v2.0.1.
+Queste funzioni richiedono app e bridge `2.1.0-dev.13` e non fanno ancora parte della release stabile v2.0.1.
 
 Nel pannello 2.1, prima di generare un token occorre indicare un'etichetta, selezionare un utente amministrativo OpenCart attivo e scegliere gli scope necessari. Il token conserva `user_id` e username verificati lato server e si associa alla prima installazione Android che lo usa; per un secondo dispositivo va creato un token separato. La revoca è individuale e non interrompe gli altri dispositivi. Il nome operatore eventualmente conservato nell'app non può sostituire quello assegnato dal pannello.
 

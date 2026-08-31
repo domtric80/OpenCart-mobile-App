@@ -41,7 +41,7 @@ class RichHtmlEditorSecurityTest {
         assertTrue(source.contains("DialogProperties(usePlatformDefaultWidth = false"))
         assertTrue(source.contains("SOFT_INPUT_ADJUST_RESIZE"))
         assertFalse(source.contains(".imePadding()"))
-        assertTrue(source.indexOf("testTag(\"rich_html_editor\")") < source.indexOf("testTag(\"rich_editor_toolbar\")"))
+        assertTrue(source.indexOf("EditorToolbar(") < source.indexOf("AndroidView("))
         assertTrue(manifest.contains("android:windowSoftInputMode=\"adjustResize\""))
     }
 }
