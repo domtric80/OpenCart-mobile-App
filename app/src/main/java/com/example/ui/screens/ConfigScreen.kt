@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CleaningServices
@@ -77,17 +76,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.Store
 import com.example.network.OpenCartConnectionResult
-import com.example.notification.FcmTokenManager
 import com.example.notification.NotificationHelper
 import com.example.ui.components.OpenCartModuleSheet
 import com.example.ui.theme.AlertRed
@@ -127,17 +123,10 @@ fun ConfigScreen(
     var showModuleSheet by remember { mutableStateOf(false) }
     var cacheClearedMessage by remember { mutableStateOf<String?>(null) }
 
-    val clipboardManager = LocalClipboardManager.current
-    var fcmToken by remember { mutableStateOf<String?>(null) }
-
     // Notification Toggles
     var notifyNewOrders by remember { mutableStateOf(true) }
     var notifyStockAlerts by remember { mutableStateOf(true) }
     var notifySoundEnabled by remember { mutableStateOf(true) }
-
-    LaunchedEffect(Unit) {
-        fcmToken = FcmTokenManager.fetchCurrentToken(context)
-    }
 
     LaunchedEffect(currentStore?.id) {
         if (currentStore != null) {
@@ -498,10 +487,7 @@ fun ConfigScreen(
                         Button(
                             onClick = {
                                 val success = NotificationHelper.sendNewOrderNotification(
-                                    context = context,
-                                    orderNumber = "#" + (1050..1999).random(),
-                                    customerName = "Mario Rossi",
-                                    total = 149.90
+                                    context = context
                                 )
                                 if (success) {
                                     Toast.makeText(context, "Notifica simulazione ordine inviata!", Toast.LENGTH_SHORT).show()
@@ -522,62 +508,6 @@ fun ConfigScreen(
                         }
                     }
 
-                    // FCM Registration Token Display & Copy
-                    if (fcmToken != null) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-                                .padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "TOKEN DISPOSITIVO FCM (PER PUSH SERVER)",
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 10.sp,
-                                        letterSpacing = 0.8.sp
-                                    ),
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "Copia Token",
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.primary
-                                        ),
-                                        modifier = Modifier
-                                            .clickable {
-                                                clipboardManager.setText(AnnotatedString(fcmToken ?: ""))
-                                                Toast.makeText(context, "Token FCM copiato negli appunti!", Toast.LENGTH_SHORT).show()
-                                            }
-                                            .padding(vertical = 2.dp, horizontal = 4.dp)
-                                    )
-                                }
-                            }
-                            SelectionContainer {
-                                Text(
-                                    text = fcmToken ?: "",
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        fontSize = 11.sp,
-                                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                                        lineHeight = 15.sp
-                                    ),
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                        }
-                    }
                 }
             }
 

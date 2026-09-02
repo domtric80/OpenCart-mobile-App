@@ -24,8 +24,11 @@ class AndroidKeystoreCredentialProtectorSecurityTest {
     fun encryptionIsAuthenticatedAndBoundToStoreAndField() {
         assertTrue(source.contains("AES/GCM/NoPadding"))
         assertTrue(source.contains("setRandomizedEncryptionRequired(true)"))
-        assertTrue(source.contains("cipher.updateAAD(aad(storeId, field))"))
+        assertTrue(source.contains("cipher.updateAAD(aad(FORMAT_PREFIX, storeId, field))"))
         assertTrue(source.contains("GCM_TAG_BITS = 128"))
+        assertTrue(source.contains("setUserAuthenticationRequired(true)"))
+        assertTrue(source.contains("AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL"))
+        assertTrue(source.contains("AUTHORIZATION_WINDOW_SECONDS = 300"))
     }
 
     @Test
@@ -37,6 +40,10 @@ class AndroidKeystoreCredentialProtectorSecurityTest {
         val extractionRules = File("src/main/res/xml/data_extraction_rules.xml").readText()
 
         assertTrue(databaseSource.contains("PRAGMA secure_delete=ON"))
+        assertTrue(databaseSource.contains("db.execSQL(\"DELETE FROM orders_cache\")"))
+        assertTrue(databaseSource.contains("db.execSQL(\"DELETE FROM subscriptions_cache\")"))
+        assertTrue(databaseSource.contains("db.execSQL(\"DELETE FROM returns_cache\")"))
+        assertTrue(databaseSource.contains("db.execSQL(\"DELETE FROM audit_logs\")"))
         assertTrue(databaseSource.contains("PRAGMA wal_checkpoint(TRUNCATE)"))
         assertTrue(databaseSource.contains("VACUUM"))
         assertTrue(legacyBackupRules.contains("domain=\"database\""))

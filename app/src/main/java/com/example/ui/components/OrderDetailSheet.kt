@@ -209,7 +209,7 @@ fun OrderDetailSheet(
                     modifier = Modifier.size(16.dp)
                 )
                 Text(
-                    text = "Cache Locale Room attiva • Accesso offline disponibile",
+                    text = "Dati live protetti • Nessun dato ordine salvato offline",
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontWeight = FontWeight.Medium,
                         fontSize = 11.sp

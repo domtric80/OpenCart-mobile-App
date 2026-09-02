@@ -27,7 +27,7 @@
           <div class="col-12">
             <label class="form-label d-block">{{ text_scopes }}</label>
             {% for scope, label in available_scopes %}
-              <div class="form-check form-check-inline"><input class="form-check-input token-scope" type="checkbox" id="scope-{{ loop.index }}" value="{{ scope }}" {{ scope == 'read' ? 'checked disabled' : 'checked' }}><label class="form-check-label" for="scope-{{ loop.index }}">{{ label }}</label></div>
+              <div class="form-check form-check-inline"><input class="form-check-input token-scope" type="checkbox" id="scope-{{ loop.index }}" value="{{ scope }}" {{ scope == 'status.read' ? 'checked disabled' : '' }}><label class="form-check-label" for="scope-{{ loop.index }}">{{ label }}</label></div>
             {% endfor %}
           </div>
           <div class="col-12"><small class="text-muted">{{ text_device_binding }}</small></div>

@@ -35,6 +35,7 @@ object NotificationHelper {
                 description = "Notifiche immediate per nuovi ordini ricevuti su OpenCart"
                 enableVibration(true)
                 setShowBadge(true)
+                lockscreenVisibility = NotificationCompat.VISIBILITY_SECRET
             }
 
             val stockChannel = NotificationChannel(
@@ -44,6 +45,7 @@ object NotificationHelper {
             ).apply {
                 description = "Avvisi quando i prodotti scendono sotto la soglia minima"
                 enableVibration(true)
+                lockscreenVisibility = NotificationCompat.VISIBILITY_SECRET
             }
 
             notificationManager.createNotificationChannel(ordersChannel)
@@ -109,10 +111,7 @@ object NotificationHelper {
      * Sends a notification when a new order is received
      */
     fun sendNewOrderNotification(
-        context: Context,
-        orderNumber: String,
-        customerName: String,
-        total: Double
+        context: Context
     ): Boolean {
         createNotificationChannels(context)
 
@@ -120,19 +119,12 @@ object NotificationHelper {
             context = context,
             requestCode = NOTIFICATION_ID_ORDER,
             action = "com.example.cartadmin.ACTION_ORDER_NOTIFICATION"
-        ) {
-            putExtra("notification_order_number", orderNumber)
-        }
-
-        val formattedTotal = String.format("€%.2f", total)
+        )
         val notification = NotificationCompat.Builder(context, CHANNEL_ORDERS_ID)
             .setSmallIcon(android.R.drawable.stat_notify_chat)
-            .setContentTitle("🛒 Nuovo Ordine $orderNumber: $formattedTotal")
-            .setContentText("Cliente: $customerName • Tocca per visualizzare")
-            .setStyle(
-                NotificationCompat.BigTextStyle()
-                    .bigText("Nuovo ordine ricevuto su OpenCart da $customerName per un totale di $formattedTotal. Tocca per gestire la spedizione.")
-            )
+            .setContentTitle("Nuovo evento ordine")
+            .setContentText("Sblocca CartAdmin per visualizzare i dettagli.")
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
@@ -150,9 +142,7 @@ object NotificationHelper {
      * Sends a notification when a product is low in stock
      */
     fun sendLowStockNotification(
-        context: Context,
-        productName: String,
-        remainingQuantity: Int
+        context: Context
     ): Boolean {
         createNotificationChannels(context)
 
@@ -160,14 +150,13 @@ object NotificationHelper {
             context = context,
             requestCode = NOTIFICATION_ID_STOCK,
             action = "com.example.cartadmin.ACTION_STOCK_NOTIFICATION"
-        ) {
-            putExtra("notification_product_name", productName)
-        }
+        )
 
         val notification = NotificationCompat.Builder(context, CHANNEL_STOCK_ID)
             .setSmallIcon(android.R.drawable.stat_notify_error)
-            .setContentTitle("⚠️ Allarme Sottoscorta: $productName")
-            .setContentText("Rimaste solo $remainingQuantity unità a magazzino.")
+            .setContentTitle("Allarme magazzino")
+            .setContentText("Sblocca CartAdmin per visualizzare i dettagli.")
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)

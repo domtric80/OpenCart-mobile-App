@@ -2,6 +2,8 @@
 
 CartAdmin è un'app Android per consultare e amministrare un negozio OpenCart da smartphone. Il progetto è sviluppato in Kotlin con Jetpack Compose e include il bridge CartAdmin per OpenCart 4.1.x. La release stabile corrente è la v2.1.0.
 
+Il branch di hardening prepara **2.1.1-dev.1**. Non è ancora una release: app e bridge di sviluppo devono essere installati insieme e richiedono la rigenerazione del token.
+
 ## Download
 
 La release stabile è disponibile in [GitHub Releases](https://github.com/domtric80/OpenCart-mobile-App/releases/latest).
@@ -15,7 +17,7 @@ Il bridge incluso non dichiara compatibilità con OpenCart 3.x. Un eventuale pac
 
 ### Novità della 2.1.0
 
-- CRUD remoto verificato per prodotti e categorie, con conferma del bridge prima dell'aggiornamento locale;
+- CRUD remoto verificato per prodotti e categorie, con conferma del bridge prima dell'aggiornamento dello stato in memoria;
 - immagini prodotto e articolo da fotocamera o galleria, validate come JPEG/PNG/WebP fino a 5 MB;
 - creazione di articoli e categorie CMS, inclusi meta tag, immagine, lingue attive e associazione allo store;
 - modifica controllata di pagine, recensioni, articoli e argomenti, con ricalcolo del rating prodotto;
@@ -28,6 +30,19 @@ Il bridge incluso non dichiara compatibilità con OpenCart 3.x. Un eventuale pac
 - compatibilità dei flussi fotocamera/galleria verificata anche con il moderno `ActivityResultRegistry`.
 
 App Android e bridge devono essere aggiornati entrambi alla v2.1.0.
+
+### Hardening in 2.1.1-dev.1
+
+- il `MainViewModel`, le credenziali decifrate e le chiamate di rete esistono soltanto dopo lo sblocco tramite biometria forte o credenziale sicura del dispositivo;
+- l'app si blocca e distrugge la sessione quando passa in background e comunque dopo cinque minuti;
+- screenshot, registrazione schermo, overlay e tocchi oscurati vengono bloccati per la finestra amministrativa;
+- la chiave AES delle credenziali richiede una recente autenticazione utente ed è obbligatoriamente custodita in TEE/StrongBox;
+- ogni richiesta al bridge è firmata con una chiave ECDSA hardware non esportabile; timestamp e nonce impediscono il riutilizzo delle richieste;
+- ordini, clienti, resi, abbonamenti e audit non vengono più persistiti nella cache Room e le vecchie copie locali vengono bonificate;
+- notifiche e schermata di blocco non mostrano cliente, importo, prodotto o token FCM;
+- rimosso il fallback all'API nativa OpenCart con privilegi globali: è accettato soltanto il bridge HTTPS con scope granulari;
+- il bridge applica HTTPS/HSTS, rate limiting, metodi HTTP, token per operatore/dispositivo, scope separati e audit atomico delle scritture;
+- le GitHub Actions di terze parti sono fissate a commit immutabili; release e plugin includono checksum SHA-256 e attestazione di provenienza.
 
 ### Novità della 2.0.1
 
@@ -49,9 +64,9 @@ App Android e bridge devono essere aggiornati entrambi alla v2.1.0.
 - attivazione e disattivazione remota verificata per i moduli che espongono uno stato semplice;
 - compatibilità esplicita: se una tabella non esiste nella versione installata, l'app mostra “funzione non disponibile” invece di dati fittizi.
 
-Nel pannello 2.1, prima di generare un token occorre indicare un'etichetta, selezionare un utente amministrativo OpenCart attivo e scegliere gli scope necessari. Il token conserva `user_id` e username verificati lato server e si associa alla prima installazione Android che lo usa; per un secondo dispositivo va creato un token separato. La revoca è individuale e non interrompe gli altri dispositivi. Il nome operatore eventualmente conservato nell'app non può sostituire quello assegnato dal pannello.
+Nel pannello, prima di generare un token occorre indicare un'etichetta, selezionare un utente amministrativo OpenCart attivo e scegliere soltanto gli scope necessari. `Stato connessione` è obbligatorio; per il normale uso selezionare separatamente lettura/scrittura di Ordini, Catalogo e Contenuti. Concedere `Lettura clienti e GDPR` e `Clienti e GDPR` soltanto ai dispositivi che devono realmente gestire tali dati. Il token conserva `user_id` e username verificati lato server; per un secondo dispositivo va creato un token separato. La revoca è individuale e non interrompe gli altri dispositivi.
 
-Durante l'aggiornamento, il bridge migra una sola volta l'hash del token 2.0 esistente senza recuperarne il valore in chiaro. Quel token legacy mantiene temporaneamente tutti gli scope ed è marcato nel pannello come da sostituire: dopo aver installato app e bridge 2.1, creare un token nominativo con privilegi minimi, provarlo sul dispositivo e revocare quello legacy. App e bridge 2.1 devono essere aggiornati insieme perché il nuovo bridge richiede anche l'identità casuale dell'installazione Android.
+Con il passaggio alla 2.1.1 i token precedenti devono essere revocati e rigenerati: il vecchio scope globale `read` non viene più accettato e il nuovo bridge richiede la prova crittografica della chiave hardware del dispositivo. Aggiornare prima il bridge, generare un token nominativo con privilegi minimi, aggiornare l'app e inserire il nuovo token. App e bridge devono avere la stessa versione.
 
 ### Novità della 1.2.8
 
@@ -154,6 +169,8 @@ CartAdmin mostra separatamente **Guest online** (`customer_id = 0`) e **Clienti 
 - Il token salvato non viene associato al campo dell'interfaccia. Dopo lo sblocco dell'app la credenziale può essere decifrata in memoria soltanto per effettuare richieste HTTPS autenticate.
 - Il bridge accetta il token negli header HTTP e ignora credenziali inviate in URL o form body.
 - Ogni token è associato al primo dispositivo che lo usa, ha scope espliciti ed è revocabile singolarmente dal pannello OpenCart.
+- L'associazione è verificata da una firma ECDSA P-256 prodotta da una chiave privata non esportabile in TEE/StrongBox; il server conserva soltanto la chiave pubblica e rifiuta richieste scadute o già usate.
+- Gli scope di lettura sono distinti per stato, ordini, catalogo, contenuti, clienti/GDPR e telemetria; non esiste più un permesso globale `read`.
 - Il registro di sicurezza attribuisce l'operazione all'utente OpenCart assegnato al token lato server. L'app 2.1 non invia un nome operatore; eventuali dichiarazioni provenienti da client precedenti vengono conservate soltanto come digest HMAC e indicatore di incongruenza.
 - Le modifiche editoriali riuscite e il relativo evento di audit vengono confermati nella stessa transazione. In caso di rollback viene registrato un fallimento separato, senza contenuti o dati personali in chiaro.
 
@@ -166,13 +183,13 @@ Non inserire token, password, keystore o chiavi di firma in issue, screenshot, c
 - catalogo, categorie, quantità e prezzi con CRUD remoto verificato;
 - elenchi amministrativi per Pagine, Recensioni, CMS e Clienti, editor controllati e coda Clienti/GDPR;
 - abbonamenti e resi esposti dal bridge;
-- cache locale Room e sincronizzazione manuale;
+- cache Room limitata ai profili negozio interamente cifrati con chiave hardware; tutti i dati remoti restano soltanto nella sessione sbloccata;
 - selezione di più profili negozio;
 - notifiche Firebase Cloud Messaging quando configurate;
 - audit delle operazioni inviate al bridge;
 - blocco dell'app con password locale PBKDF2 e sblocco biometrico forte opzionale.
 
-Le schermate possono mostrare dati memorizzati localmente quando il negozio non è raggiungibile. Una sincronizzazione riuscita che restituisce zero abbonamenti o zero resi svuota le rispettive cache: l'app non inserisce dati dimostrativi. Verificare sempre l'esito della sincronizzazione prima di considerare aggiornati i dati.
+Ordini, clienti, resi, abbonamenti, audit, catalogo e telemetria non sono disponibili offline e scompaiono quando la sessione viene bloccata. Nome, URL, versione e credenziali del profilo negozio sono cifrati tramite una chiave non esportabile in TEE/StrongBox. Anche il token FCM non viene copiato in preferenze locali. L'app non inserisce dati dimostrativi.
 
 ## Screenshot
 

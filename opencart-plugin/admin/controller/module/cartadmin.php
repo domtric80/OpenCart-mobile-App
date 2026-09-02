@@ -37,12 +37,16 @@ class Cartadmin extends \Opencart\System\Engine\Controller {
 		$data['tokens'] = $this->model_extension_cartadmin_module_cartadmin->getTokens();
 		$data['operators'] = $this->model_extension_cartadmin_module_cartadmin->getOperators();
 		$data['available_scopes'] = [
-			'read' => $this->language->get('scope_read'),
+			'status.read' => $this->language->get('scope_status_read'),
+			'orders.read' => $this->language->get('scope_orders_read'),
+			'catalog.read' => $this->language->get('scope_catalog_read'),
+			'content.read' => $this->language->get('scope_content_read'),
+			'customers.read' => $this->language->get('scope_customers_read'),
+			'telemetry.read' => $this->language->get('scope_telemetry_read'),
 			'orders.write' => $this->language->get('scope_orders'),
 			'catalog.write' => $this->language->get('scope_catalog'),
 			'content.write' => $this->language->get('scope_content'),
-			'customers.write' => $this->language->get('scope_customers'),
-			'audit.write' => $this->language->get('scope_audit')
+			'customers.write' => $this->language->get('scope_customers')
 		];
 		$data['back'] = $this->url->link('marketplace/extension', $token . '&type=module');
 		$data['endpoint'] = rtrim(HTTP_CATALOG, '/') . '/extension/cartadmin/cartadmin_api.php';
@@ -83,7 +87,7 @@ class Cartadmin extends \Opencart\System\Engine\Controller {
 			$label = isset($this->request->post['label']) ? trim((string)$this->request->post['label']) : '';
 			$operator_user_id = isset($this->request->post['operator_user_id']) ? (int)$this->request->post['operator_user_id'] : 0;
 			$scopes = isset($this->request->post['scopes']) && is_array($this->request->post['scopes']) ? $this->request->post['scopes'] : [];
-			$allowedScopes = ['read', 'orders.write', 'catalog.write', 'content.write', 'customers.write', 'audit.write'];
+			$allowedScopes = ['status.read', 'orders.read', 'catalog.read', 'content.read', 'customers.read', 'telemetry.read', 'orders.write', 'catalog.write', 'content.write', 'customers.write'];
 			$scopes = array_values(array_intersect($allowedScopes, array_map('strval', $scopes)));
 
 			try {

@@ -15,7 +15,7 @@
  * - No unauthenticated provisioning or first-request key adoption
  * - Brute-force throttling (timed delay on unauthorized requests)
  * - Safe OpenCart root config.php loader
- * - Remote audit trail logging in 'cartadmin_audit' table
+ * - Atomic server-side security audit with no client-supplied identity
  */
 
 // 1. Configurazione Intestazioni di Sicurezza
@@ -24,6 +24,17 @@ header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: DENY');
 header('X-XSS-Protection: 1; mode=block');
 header('Cache-Control: no-store');
+header("Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; base-uri 'none'");
+header('Referrer-Policy: no-referrer');
+header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
+
+$httpsEnabled = (!empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off')
+    || ((int)($_SERVER['SERVER_PORT'] ?? 0) === 443)
+    || (strtolower(trim(explode(',', (string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''))[0])) === 'https');
+if (!$httpsEnabled) {
+    sendJson(['success' => false, 'error' => 'HTTPS obbligatorio.'], 426);
+}
+header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
 
 if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     sendJson(['success' => false, 'error' => 'Metodo non consentito.'], 405);
@@ -156,7 +167,6 @@ function cartadminSanitizeRichHtml(string $html): string {
 }
 
 function cartadminRequiredScope(string $action, string $module = ''): string {
-    $reads = ['status', 'ping', 'orders', 'products', 'categories', 'management_list', 'visitor_telemetry', 'subscriptions', 'returns'];
     $ordersWrites = ['update_order_status', 'update_subscription_status', 'update_return_status'];
     $catalogWrites = ['update_stock', 'update_product', 'create_product', 'delete_product', 'create_category', 'update_category', 'delete_category'];
 
@@ -175,11 +185,28 @@ function cartadminRequiredScope(string $action, string $module = ''): string {
     if ($action === 'management_status') {
         return $module === 'customers' ? 'customers.write' : 'content.write';
     }
-    if ($action === 'audit_log') {
-        return 'audit.write';
+    if (in_array($action, ['status', 'ping'], true)) {
+        return 'status.read';
+    }
+    if (in_array($action, ['orders', 'subscriptions', 'returns'], true)) {
+        return 'orders.read';
+    }
+    if (in_array($action, ['products', 'categories'], true)) {
+        return 'catalog.read';
+    }
+    if ($action === 'visitor_telemetry') {
+        return 'telemetry.read';
+    }
+    if ($action === 'management_list') {
+        if (in_array($module, ['customers', 'customer_approvals', 'gdpr'], true)) {
+            return 'customers.read';
+        }
+        if (in_array($module, ['subscription_plans', 'pages', 'reviews', 'articles', 'topics', 'comments', 'antispam'], true)) {
+            return 'content.read';
+        }
     }
 
-    return in_array($action, $reads, true) ? 'read' : 'forbidden';
+    return 'forbidden';
 }
 
 function cartadminInsertSecurityAudit(
@@ -229,6 +256,48 @@ function cartadminStateDigest(array $state, string $auditSalt): string {
     }
 
     return hash_hmac('sha256', $encoded, $auditSalt);
+}
+
+function cartadminEnforceRateLimit(mysqli $mysqli, string $dbPrefix, string $rateKey): void {
+    if ($rateKey === '') {
+        return;
+    }
+    $stmt = $mysqli->prepare("SELECT `blocked_until` FROM `{$dbPrefix}cartadmin_rate_limit` WHERE `rate_key` = ? AND `blocked_until` IS NOT NULL AND `blocked_until` > NOW() LIMIT 1");
+    if (!$stmt) {
+        sendJson(['success' => false, 'error' => 'Protezione accessi non disponibile.'], 503);
+    }
+    $stmt->bind_param('s', $rateKey);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $blocked = $result && $result->num_rows > 0;
+    $stmt->close();
+    if ($blocked) {
+        sendJson(['success' => false, 'error' => 'Troppi tentativi. Riprova più tardi.', 'code' => 429], 429);
+    }
+}
+
+function cartadminRecordAuthFailure(mysqli $mysqli, string $dbPrefix, string $rateKey): void {
+    if ($rateKey === '') {
+        return;
+    }
+    $stmt = $mysqli->prepare("INSERT INTO `{$dbPrefix}cartadmin_rate_limit` (`rate_key`, `failures`, `window_started`, `blocked_until`) VALUES (?, 1, NOW(), NULL) ON DUPLICATE KEY UPDATE `blocked_until` = IF((IF(`window_started` < DATE_SUB(NOW(), INTERVAL 5 MINUTE), 0, `failures`) + 1) >= 10, DATE_ADD(NOW(), INTERVAL 15 MINUTE), `blocked_until`), `failures` = IF(`window_started` < DATE_SUB(NOW(), INTERVAL 5 MINUTE), 1, `failures` + 1), `window_started` = IF(`window_started` < DATE_SUB(NOW(), INTERVAL 5 MINUTE), NOW(), `window_started`)");
+    if ($stmt) {
+        $stmt->bind_param('s', $rateKey);
+        $stmt->execute();
+        $stmt->close();
+    }
+}
+
+function cartadminClearAuthFailures(mysqli $mysqli, string $dbPrefix, string $rateKey): void {
+    if ($rateKey === '') {
+        return;
+    }
+    $stmt = $mysqli->prepare("DELETE FROM `{$dbPrefix}cartadmin_rate_limit` WHERE `rate_key` = ?");
+    if ($stmt) {
+        $stmt->bind_param('s', $rateKey);
+        $stmt->execute();
+        $stmt->close();
+    }
 }
 
 /** Salva un upload immagine validato in catalog/cartadmin senza usare il nome client. */
@@ -335,6 +404,7 @@ $mysqli->query("CREATE TABLE IF NOT EXISTS `{$db_prefix}cartadmin_token` (
     `operator_name` VARCHAR(64) NOT NULL,
     `scopes` VARCHAR(255) NOT NULL,
     `device_hash` CHAR(64) NULL,
+    `device_public_key` TEXT NULL,
     `active` TINYINT(1) NOT NULL DEFAULT 1,
     `created_at` DATETIME NOT NULL,
     `last_used_at` DATETIME NULL,
@@ -381,6 +451,24 @@ $mysqli->query("CREATE TABLE IF NOT EXISTS `{$db_prefix}cartadmin_command` (
     UNIQUE KEY `uq_pending_target` (`dedupe_key`),
     INDEX `idx_command_status` (`status`, `created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+$deviceKeyColumn = $mysqli->query("SHOW COLUMNS FROM `{$db_prefix}cartadmin_token` LIKE 'device_public_key'");
+if (!$deviceKeyColumn || $deviceKeyColumn->num_rows === 0) {
+    $mysqli->query("ALTER TABLE `{$db_prefix}cartadmin_token` ADD COLUMN `device_public_key` TEXT NULL AFTER `device_hash`");
+}
+$mysqli->query("CREATE TABLE IF NOT EXISTS `{$db_prefix}cartadmin_rate_limit` (
+    `rate_key` CHAR(64) PRIMARY KEY,
+    `failures` SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    `window_started` DATETIME NOT NULL,
+    `blocked_until` DATETIME NULL,
+    INDEX `idx_rate_cleanup` (`window_started`, `blocked_until`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+$mysqli->query("CREATE TABLE IF NOT EXISTS `{$db_prefix}cartadmin_device_nonce` (
+    `token_id` INT NOT NULL,
+    `nonce` CHAR(36) NOT NULL,
+    `created_at` DATETIME NOT NULL,
+    PRIMARY KEY (`token_id`, `nonce`),
+    INDEX `idx_nonce_cleanup` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
 // 5. Migrazione una tantum del token singolo verso credenziali revocabili.
 $legacyMarkerResult = $mysqli->query("SELECT `value` FROM `{$db_prefix}cartadmin_setting` WHERE `key` = 'legacy_token_migrated' LIMIT 1");
@@ -406,7 +494,7 @@ if (!$legacyMigrated || $legacyCredentialsPresent) {
     $mysqli->begin_transaction();
     try {
         if ($legacyHash !== '') {
-            $legacyInsert = $mysqli->prepare("INSERT INTO `{$db_prefix}cartadmin_token` (`token_lookup`, `token_hash`, `last_four`, `label`, `operator_name`, `scopes`, `active`, `created_at`) VALUES (NULL, ?, ?, 'Token legacy da sostituire', 'Operatore legacy', 'read,orders.write,catalog.write,content.write,customers.write,audit.write', 1, ?)");
+            $legacyInsert = $mysqli->prepare("INSERT INTO `{$db_prefix}cartadmin_token` (`token_lookup`, `token_hash`, `last_four`, `label`, `operator_name`, `scopes`, `active`, `created_at`, `revoked_at`) VALUES (NULL, ?, ?, 'Token legacy revocato', 'Operatore legacy', '', 0, ?, NOW())");
             if (!$legacyInsert) {
                 throw new RuntimeException('Migrazione token non disponibile');
             }
@@ -443,16 +531,21 @@ if (preg_match('/^[a-f0-9]{64}$/', $auditSalt) !== 1) {
     $auditSaltStmt->close();
 }
 
+$remoteAddress = isset($_SERVER['REMOTE_ADDR']) && is_string($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '';
+$ipHash = $remoteAddress !== '' ? hash_hmac('sha256', $remoteAddress, $auditSalt) : '';
+cartadminEnforceRateLimit($mysqli, $db_prefix, $ipHash);
+
 // 6. Verifica token, dispositivo e identità server-side.
-[$receivedKey, $claimedUsername, $receivedDeviceId] = cartadminExtractCredentials($_SERVER);
-if ($receivedKey === '' || $receivedDeviceId === '') {
+[$receivedKey, $claimedUsername, $receivedDeviceId, $receivedDeviceKey, $deviceTimestamp, $deviceNonce, $deviceSignature] = cartadminExtractCredentials($_SERVER);
+if ($receivedKey === '' || $receivedDeviceId === '' || $receivedDeviceKey === '' || $deviceTimestamp === '' || $deviceNonce === '' || $deviceSignature === '') {
+    cartadminRecordAuthFailure($mysqli, $db_prefix, $ipHash);
     usleep(200000);
     sendJson(['success' => false, 'error' => 'Non autorizzato. Credenziale o identità dispositivo mancante.', 'code' => 401], 401);
 }
 
 $tokenRows = [];
 if (preg_match('/^ca_([a-f0-9]{16})_[a-f0-9]{64}$/', $receivedKey, $tokenParts) === 1) {
-    $lookupStmt = $mysqli->prepare("SELECT t.`token_id`, t.`token_hash`, t.`operator_user_id`, COALESCE(u.`username`, t.`operator_name`) AS `operator_name`, t.`scopes`, t.`device_hash` FROM `{$db_prefix}cartadmin_token` t LEFT JOIN `{$db_prefix}user` u ON (t.`operator_user_id` = u.`user_id`) WHERE t.`token_lookup` = ? AND t.`active` = 1 AND (t.`operator_user_id` IS NULL OR u.`status` = 1) LIMIT 1");
+    $lookupStmt = $mysqli->prepare("SELECT t.`token_id`, t.`token_hash`, t.`operator_user_id`, COALESCE(u.`username`, t.`operator_name`) AS `operator_name`, t.`scopes`, t.`device_hash`, t.`device_public_key` FROM `{$db_prefix}cartadmin_token` t LEFT JOIN `{$db_prefix}user` u ON (t.`operator_user_id` = u.`user_id`) WHERE t.`token_lookup` = ? AND t.`active` = 1 AND (t.`operator_user_id` IS NULL OR u.`status` = 1) LIMIT 1");
     if ($lookupStmt) {
         $lookupStmt->bind_param('s', $tokenParts[1]);
         $lookupStmt->execute();
@@ -463,7 +556,7 @@ if (preg_match('/^ca_([a-f0-9]{16})_[a-f0-9]{64}$/', $receivedKey, $tokenParts) 
         $lookupStmt->close();
     }
 } elseif (preg_match('/^ca_[a-f0-9]{64}$/', $receivedKey) === 1) {
-    $legacyTokens = $mysqli->query("SELECT t.`token_id`, t.`token_hash`, t.`operator_user_id`, COALESCE(u.`username`, t.`operator_name`) AS `operator_name`, t.`scopes`, t.`device_hash` FROM `{$db_prefix}cartadmin_token` t LEFT JOIN `{$db_prefix}user` u ON (t.`operator_user_id` = u.`user_id`) WHERE t.`token_lookup` IS NULL AND t.`active` = 1 AND (t.`operator_user_id` IS NULL OR u.`status` = 1) ORDER BY t.`token_id` DESC LIMIT 5");
+    $legacyTokens = $mysqli->query("SELECT t.`token_id`, t.`token_hash`, t.`operator_user_id`, COALESCE(u.`username`, t.`operator_name`) AS `operator_name`, t.`scopes`, t.`device_hash`, t.`device_public_key` FROM `{$db_prefix}cartadmin_token` t LEFT JOIN `{$db_prefix}user` u ON (t.`operator_user_id` = u.`user_id`) WHERE t.`token_lookup` IS NULL AND t.`active` = 1 AND (t.`operator_user_id` IS NULL OR u.`status` = 1) ORDER BY t.`token_id` DESC LIMIT 5");
     if ($legacyTokens) {
         while ($row = $legacyTokens->fetch_assoc()) {
             $tokenRows[] = $row;
@@ -479,6 +572,7 @@ foreach ($tokenRows as $tokenRow) {
     }
 }
 if ($authenticatedToken === null) {
+    cartadminRecordAuthFailure($mysqli, $db_prefix, $ipHash);
     usleep(200000);
     sendJson(['success' => false, 'error' => 'Non autorizzato. Token CartAdmin non valido o revocato.', 'code' => 401], 401);
 }
@@ -486,36 +580,46 @@ if ($authenticatedToken === null) {
 $tokenId = (int)$authenticatedToken['token_id'];
 $deviceHash = hash('sha256', $receivedDeviceId);
 $storedDeviceHash = trim((string)($authenticatedToken['device_hash'] ?? ''));
-if ($storedDeviceHash === '') {
-    $bindStmt = $mysqli->prepare("UPDATE `{$db_prefix}cartadmin_token` SET `device_hash` = ? WHERE `token_id` = ? AND `active` = 1 AND (`device_hash` IS NULL OR `device_hash` = '')");
+$storedDeviceKey = trim((string)($authenticatedToken['device_public_key'] ?? ''));
+$requestMethodForProof = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? ''));
+$requestUriForProof = isset($_SERVER['REQUEST_URI']) && is_string($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
+if (!cartadminVerifyDeviceProof($receivedDeviceId, $receivedDeviceKey, $deviceTimestamp, $deviceNonce, $deviceSignature, $requestMethodForProof, $requestUriForProof)) {
+    cartadminRecordAuthFailure($mysqli, $db_prefix, $ipHash);
+    sendJson(['success' => false, 'error' => 'Non autorizzato. Prova hardware del dispositivo non valida.', 'code' => 401], 401);
+}
+if ($storedDeviceKey === '') {
+    $bindStmt = $mysqli->prepare("UPDATE `{$db_prefix}cartadmin_token` SET `device_hash` = ?, `device_public_key` = ? WHERE `token_id` = ? AND `active` = 1 AND (`device_public_key` IS NULL OR `device_public_key` = '')");
     if (!$bindStmt) {
         sendJson(['success' => false, 'error' => 'Associazione dispositivo non disponibile.'], 500);
     }
-    $bindStmt->bind_param('si', $deviceHash, $tokenId);
+    $bindStmt->bind_param('ssi', $deviceHash, $receivedDeviceKey, $tokenId);
     $bindStmt->execute();
     $bound = $bindStmt->affected_rows === 1;
     $bindStmt->close();
     if (!$bound) {
-        $verifyBindStmt = $mysqli->prepare("SELECT `device_hash` FROM `{$db_prefix}cartadmin_token` WHERE `token_id` = ? AND `active` = 1 LIMIT 1");
+        $verifyBindStmt = $mysqli->prepare("SELECT `device_hash`, `device_public_key` FROM `{$db_prefix}cartadmin_token` WHERE `token_id` = ? AND `active` = 1 LIMIT 1");
         if (!$verifyBindStmt) {
             sendJson(['success' => false, 'error' => 'Verifica associazione dispositivo non disponibile.'], 500);
         }
         $verifyBindStmt->bind_param('i', $tokenId);
         $verifyBindStmt->execute();
         $verifyBindResult = $verifyBindStmt->get_result();
-        $storedDeviceHash = ($verifyBindResult && $row = $verifyBindResult->fetch_assoc()) ? (string)$row['device_hash'] : '';
+        $bindRow = $verifyBindResult ? $verifyBindResult->fetch_assoc() : null;
+        $storedDeviceHash = is_array($bindRow) ? (string)($bindRow['device_hash'] ?? '') : '';
+        $storedDeviceKey = is_array($bindRow) ? trim((string)($bindRow['device_public_key'] ?? '')) : '';
         $verifyBindStmt->close();
-        if ($storedDeviceHash === '' || !hash_equals($storedDeviceHash, $deviceHash)) {
+        if ($storedDeviceHash === '' || !hash_equals($storedDeviceHash, $deviceHash) || !hash_equals($storedDeviceKey, $receivedDeviceKey)) {
+            cartadminRecordAuthFailure($mysqli, $db_prefix, $ipHash);
             sendJson(['success' => false, 'error' => 'Non autorizzato. Token associato a un altro dispositivo.', 'code' => 401], 401);
         }
     }
-} elseif (!hash_equals($storedDeviceHash, $deviceHash)) {
+} elseif (!hash_equals($storedDeviceHash, $deviceHash) || !hash_equals($storedDeviceKey, $receivedDeviceKey)) {
+    cartadminRecordAuthFailure($mysqli, $db_prefix, $ipHash);
     usleep(200000);
     sendJson(['success' => false, 'error' => 'Non autorizzato. Token associato a un altro dispositivo.', 'code' => 401], 401);
 }
 
-$remoteAddress = isset($_SERVER['REMOTE_ADDR']) && is_string($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '';
-$ipHash = $remoteAddress !== '' ? hash_hmac('sha256', $remoteAddress, $auditSalt) : '';
+cartadminClearAuthFailures($mysqli, $db_prefix, $ipHash);
 $authenticatedOperator = mb_substr(strip_tags((string)$authenticatedToken['operator_name']), 0, 64);
 $authenticatedScopes = cartadminParseScopes((string)$authenticatedToken['scopes']);
 $normalizedClaim = mb_substr(strip_tags($claimedUsername), 0, 64);
@@ -547,6 +651,30 @@ if (!cartadminHasScope($authenticatedScopes, $requiredScope)) {
     sendJson(['success' => false, 'error' => 'Operazione non autorizzata per questo token.', 'code' => 403], 403);
 }
 
+$nonceStmt = $mysqli->prepare("INSERT INTO `{$db_prefix}cartadmin_device_nonce` (`token_id`, `nonce`, `created_at`) VALUES (?, ?, NOW())");
+if (!$nonceStmt) {
+    sendJson(['success' => false, 'error' => 'Protezione anti-replay non disponibile.'], 503);
+}
+$nonceStmt->bind_param('is', $tokenId, $deviceNonce);
+$nonceAccepted = $nonceStmt->execute();
+$nonceStmt->close();
+if (!$nonceAccepted) {
+    cartadminRecordAuthFailure($mysqli, $db_prefix, $ipHash);
+    sendJson(['success' => false, 'error' => 'Non autorizzato. Richiesta già utilizzata.', 'code' => 401], 401);
+}
+if (random_int(1, 100) === 1) {
+    $mysqli->query("DELETE FROM `{$db_prefix}cartadmin_device_nonce` WHERE `created_at` < DATE_SUB(NOW(), INTERVAL 10 MINUTE)");
+}
+
+$readActions = ['status', 'ping', 'orders', 'subscriptions', 'returns', 'products', 'categories', 'visitor_telemetry', 'management_list'];
+$expectedMethod = in_array($action, $readActions, true) ? 'GET' : 'POST';
+$requestMethod = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? ''));
+if ($requestMethod !== $expectedMethod) {
+    cartadminInsertSecurityAudit($mysqli, $db_prefix, $authContext, $action, $scopeModule, 0, 'denied', '', '', 'Metodo HTTP non consentito');
+    header('Allow: ' . $expectedMethod);
+    sendJson(['success' => false, 'error' => 'Metodo HTTP non consentito.', 'code' => 405], 405);
+}
+
 try {
     switch ($action) {
 
@@ -564,14 +692,13 @@ try {
             sendJson([
                 'success' => true,
                 'status' => 'online',
-                'bridge_version' => '2.1.0',
+                'bridge_version' => '2.1.1-dev.1',
                 'author' => 'SOLO SOLUZIONI (OpenCart ITALIA)',
                 'store_name' => $storeName,
                 'authenticated_operator' => $authenticatedOperator,
                 'granted_scopes' => $authenticatedScopes,
                 'total_orders' => $totalOrders,
                 'total_products' => $totalProducts,
-                'database_prefix' => $db_prefix,
                 'timestamp' => date('c')
             ]);
             break;
@@ -899,8 +1026,10 @@ try {
 
             $requestedBy = $authenticatedOperator;
             $dedupeKey = $rawModule . ':' . $recordId;
+            $mysqli->begin_transaction();
             $commandStmt = $mysqli->prepare("INSERT INTO `{$db_prefix}cartadmin_command` (`module`, `target_id`, `operation`, `requested_by`, `status`, `dedupe_key`, `created_at`) VALUES (?, ?, ?, ?, 'pending', ?, NOW())");
             if (!$commandStmt) {
+                $mysqli->rollback();
                 sendJson(['success' => false, 'error' => 'Impossibile accodare la richiesta.'], 500);
             }
             $commandStmt->bind_param('sisss', $rawModule, $recordId, $operation, $requestedBy, $dedupeKey);
@@ -908,6 +1037,7 @@ try {
             if (!$executed) {
                 $commandError = $commandStmt->errno;
                 $commandStmt->close();
+                $mysqli->rollback();
                 if ($commandError === 1062) {
                     sendJson(['success' => false, 'error' => 'Esiste già una richiesta in attesa per questo elemento.'], 409);
                 }
@@ -915,6 +1045,12 @@ try {
             }
             $commandId = (int)$mysqli->insert_id;
             $commandStmt->close();
+            $afterDigest = cartadminStateDigest(['command_id' => $commandId, 'target_id' => $recordId, 'operation' => $operation], $auditSalt);
+            if (!cartadminInsertSecurityAudit($mysqli, $db_prefix, $authContext, 'management_command', $rawModule, $recordId, 'success', '', $afterDigest, 'Richiesta amministrativa accodata')) {
+                $mysqli->rollback();
+                sendJson(['success' => false, 'error' => 'Audit richiesta non disponibile.'], 500);
+            }
+            $mysqli->commit();
 
             sendJson([
                 'success' => true,
@@ -951,14 +1087,22 @@ try {
                     sendJson(['success' => false, 'error' => 'La parola è già presente nell’elenco Antispam.'], 409);
                 }
 
+                $mysqli->begin_transaction();
                 $insertStmt = $mysqli->prepare("INSERT INTO `{$db_prefix}antispam` (`keyword`) VALUES (?)");
                 if (!$insertStmt) {
+                    $mysqli->rollback();
                     sendJson(['success' => false, 'error' => 'Impossibile aggiungere la parola Antispam.'], 500);
                 }
                 $insertStmt->bind_param('s', $keyword);
                 $insertStmt->execute();
                 $createdId = (int)$mysqli->insert_id;
                 $insertStmt->close();
+                $afterDigest = cartadminStateDigest(['antispam_id' => $createdId, 'keyword_digest' => hash_hmac('sha256', $keyword, $auditSalt)], $auditSalt);
+                if (!cartadminInsertSecurityAudit($mysqli, $db_prefix, $authContext, 'management_antispam', 'antispam', $createdId, 'success', '', $afterDigest, 'Inserimento regola antispam')) {
+                    $mysqli->rollback();
+                    sendJson(['success' => false, 'error' => 'Audit Antispam non disponibile.'], 500);
+                }
+                $mysqli->commit();
                 sendJson(['success' => true, 'id' => (string)$createdId, 'keyword' => $keyword]);
             }
 
@@ -967,8 +1111,10 @@ try {
                 if ($recordId < 1) {
                     sendJson(['success' => false, 'error' => 'Identificativo Antispam non valido.'], 400);
                 }
+                $mysqli->begin_transaction();
                 $deleteStmt = $mysqli->prepare("DELETE FROM `{$db_prefix}antispam` WHERE `antispam_id` = ?");
                 if (!$deleteStmt) {
+                    $mysqli->rollback();
                     sendJson(['success' => false, 'error' => 'Modulo Antispam non disponibile.'], 409);
                 }
                 $deleteStmt->bind_param('i', $recordId);
@@ -976,8 +1122,15 @@ try {
                 $deleted = $deleteStmt->affected_rows === 1;
                 $deleteStmt->close();
                 if (!$deleted) {
+                    $mysqli->rollback();
                     sendJson(['success' => false, 'error' => 'Parola Antispam non trovata.'], 404);
                 }
+                $beforeDigest = cartadminStateDigest(['antispam_id' => $recordId, 'exists' => true], $auditSalt);
+                if (!cartadminInsertSecurityAudit($mysqli, $db_prefix, $authContext, 'management_antispam', 'antispam', $recordId, 'success', $beforeDigest, '', 'Eliminazione regola antispam')) {
+                    $mysqli->rollback();
+                    sendJson(['success' => false, 'error' => 'Audit Antispam non disponibile.'], 500);
+                }
+                $mysqli->commit();
                 sendJson(['success' => true, 'id' => (string)$recordId]);
             }
 
@@ -1654,6 +1807,10 @@ try {
                 $stmtLink->bind_param('ii', $productId, $categoryId);
                 $stmtLink->execute();
                 $stmtLink->close();
+                $afterDigest = cartadminStateDigest(['product_id' => $productId, 'quantity' => $quantity, 'status' => $status], $auditSalt);
+                if (!cartadminInsertSecurityAudit($mysqli, $db_prefix, $authContext, 'create_product', 'products', $productId, 'success', '', $afterDigest, 'Creazione prodotto')) {
+                    throw new RuntimeException('Audit atomico non disponibile');
+                }
                 $mysqli->commit();
             } catch (Throwable $error) {
                 $mysqli->rollback();
@@ -1745,6 +1902,10 @@ try {
                 if (!$deleted) {
                     throw new RuntimeException('Il prodotto non è stato eliminato.');
                 }
+                $beforeDigest = cartadminStateDigest(['product_id' => $productId, 'exists' => true], $auditSalt);
+                if (!cartadminInsertSecurityAudit($mysqli, $db_prefix, $authContext, 'delete_product', 'products', $productId, 'success', $beforeDigest, '', 'Eliminazione prodotto')) {
+                    throw new RuntimeException('Audit atomico non disponibile');
+                }
                 $mysqli->commit();
             } catch (Throwable $error) {
                 $mysqli->rollback();
@@ -1803,6 +1964,10 @@ try {
                 $stmtStore->bind_param('i', $categoryId);
                 $stmtStore->execute();
                 $stmtStore->close();
+                $afterDigest = cartadminStateDigest(['category_id' => $categoryId, 'sort_order' => $sortOrder, 'status' => $status], $auditSalt);
+                if (!cartadminInsertSecurityAudit($mysqli, $db_prefix, $authContext, 'create_category', 'categories', $categoryId, 'success', '', $afterDigest, 'Creazione categoria')) {
+                    throw new RuntimeException('Audit atomico non disponibile');
+                }
                 $mysqli->commit();
             } catch (Throwable $error) {
                 $mysqli->rollback();
@@ -1855,6 +2020,10 @@ try {
                     $stmtDescription->execute();
                 }
                 $stmtDescription->close();
+                $afterDigest = cartadminStateDigest(['category_id' => $categoryId, 'sort_order' => $sortOrder, 'status' => $status], $auditSalt);
+                if (!cartadminInsertSecurityAudit($mysqli, $db_prefix, $authContext, 'update_category', 'categories', $categoryId, 'success', '', $afterDigest, 'Aggiornamento categoria')) {
+                    throw new RuntimeException('Audit atomico non disponibile');
+                }
                 $mysqli->commit();
             } catch (Throwable $error) {
                 $mysqli->rollback();
@@ -1939,6 +2108,10 @@ try {
                 if (!$deleted) {
                     throw new RuntimeException('La categoria non è stata eliminata.');
                 }
+                $beforeDigest = cartadminStateDigest(['category_id' => $categoryId, 'exists' => true], $auditSalt);
+                if (!cartadminInsertSecurityAudit($mysqli, $db_prefix, $authContext, 'delete_category', 'categories', $categoryId, 'success', $beforeDigest, '', 'Eliminazione categoria')) {
+                    throw new RuntimeException('Audit atomico non disponibile');
+                }
                 $mysqli->commit();
             } catch (Throwable $error) {
                 $mysqli->rollback();
@@ -1957,13 +2130,38 @@ try {
                 sendJson(['success' => false, 'error' => 'ID Prodotto non valido.'], 400);
             }
 
-            $stmt = $mysqli->prepare("UPDATE `{$db_prefix}product` SET `quantity` = ?, `date_modified` = NOW() WHERE `product_id` = ?");
             $affected = 0;
-            if ($stmt) {
+            $mysqli->begin_transaction();
+            try {
+                $beforeStmt = $mysqli->prepare("SELECT `quantity` FROM `{$db_prefix}product` WHERE `product_id` = ? LIMIT 1 FOR UPDATE");
+                if (!$beforeStmt) {
+                    throw new RuntimeException('Verifica giacenza non disponibile');
+                }
+                $beforeStmt->bind_param('i', $productId);
+                $beforeStmt->execute();
+                $beforeResult = $beforeStmt->get_result();
+                $beforeRow = $beforeResult ? $beforeResult->fetch_assoc() : null;
+                $beforeStmt->close();
+                if (!$beforeRow) {
+                    throw new OutOfBoundsException('Prodotto non trovato');
+                }
+                $stmt = $mysqli->prepare("UPDATE `{$db_prefix}product` SET `quantity` = ?, `date_modified` = NOW() WHERE `product_id` = ?");
+                if (!$stmt) {
+                    throw new RuntimeException('Aggiornamento giacenza non disponibile');
+                }
                 $stmt->bind_param('ii', $quantity, $productId);
                 $stmt->execute();
                 $affected = $stmt->affected_rows;
                 $stmt->close();
+                $beforeDigest = cartadminStateDigest(['quantity' => (int)$beforeRow['quantity']], $auditSalt);
+                $afterDigest = cartadminStateDigest(['quantity' => $quantity], $auditSalt);
+                if (!cartadminInsertSecurityAudit($mysqli, $db_prefix, $authContext, 'update_stock', 'products', $productId, 'success', $beforeDigest, $afterDigest, 'Aggiornamento giacenza')) {
+                    throw new RuntimeException('Audit atomico non disponibile');
+                }
+                $mysqli->commit();
+            } catch (Throwable $error) {
+                $mysqli->rollback();
+                sendJson(['success' => false, 'error' => 'Aggiornamento giacenza non riuscito.'], 409);
             }
 
             sendJson([
@@ -2071,6 +2269,10 @@ try {
                     $stmtInsertLink->close();
                 }
 
+                $afterDigest = cartadminStateDigest(['product_id' => $productId, 'quantity' => $quantity, 'status' => $status], $auditSalt);
+                if (!cartadminInsertSecurityAudit($mysqli, $db_prefix, $authContext, 'update_product', 'products', $productId, 'success', '', $afterDigest, 'Aggiornamento prodotto')) {
+                    throw new RuntimeException('Audit atomico non disponibile');
+                }
                 $mysqli->commit();
             } catch (Throwable $error) {
                 $mysqli->rollback();
@@ -2100,18 +2302,35 @@ try {
                 sendJson(['success' => false, 'error' => 'Parametri ordine non validi.'], 400);
             }
 
-            $stmt = $mysqli->prepare("UPDATE `{$db_prefix}order` SET `order_status_id` = ?, `date_modified` = NOW() WHERE `order_id` = ?");
-            if ($stmt) {
+            $mysqli->begin_transaction();
+            try {
+                $beforeStmt = $mysqli->prepare("SELECT `order_status_id` FROM `{$db_prefix}order` WHERE `order_id` = ? LIMIT 1 FOR UPDATE");
+                if (!$beforeStmt) throw new RuntimeException('Verifica ordine non disponibile');
+                $beforeStmt->bind_param('i', $orderId);
+                $beforeStmt->execute();
+                $beforeResult = $beforeStmt->get_result();
+                $beforeRow = $beforeResult ? $beforeResult->fetch_assoc() : null;
+                $beforeStmt->close();
+                if (!$beforeRow) throw new OutOfBoundsException('Ordine non trovato');
+                $stmt = $mysqli->prepare("UPDATE `{$db_prefix}order` SET `order_status_id` = ?, `date_modified` = NOW() WHERE `order_id` = ?");
+                if (!$stmt) throw new RuntimeException('Aggiornamento ordine non disponibile');
                 $stmt->bind_param('ii', $statusId, $orderId);
                 $stmt->execute();
                 $stmt->close();
-            }
-
-            $stmtHist = $mysqli->prepare("INSERT INTO `{$db_prefix}order_history` (`order_id`, `order_status_id`, `notify`, `comment`, `date_added`) VALUES (?, ?, 0, ?, NOW())");
-            if ($stmtHist) {
+                $stmtHist = $mysqli->prepare("INSERT INTO `{$db_prefix}order_history` (`order_id`, `order_status_id`, `notify`, `comment`, `date_added`) VALUES (?, ?, 0, ?, NOW())");
+                if (!$stmtHist) throw new RuntimeException('Storico ordine non disponibile');
                 $stmtHist->bind_param('iis', $orderId, $statusId, $comment);
                 $stmtHist->execute();
                 $stmtHist->close();
+                $beforeDigest = cartadminStateDigest(['status_id' => (int)$beforeRow['order_status_id']], $auditSalt);
+                $afterDigest = cartadminStateDigest(['status_id' => $statusId], $auditSalt);
+                if (!cartadminInsertSecurityAudit($mysqli, $db_prefix, $authContext, 'update_order_status', 'orders', $orderId, 'success', $beforeDigest, $afterDigest, 'Aggiornamento stato ordine')) {
+                    throw new RuntimeException('Audit atomico non disponibile');
+                }
+                $mysqli->commit();
+            } catch (Throwable $error) {
+                $mysqli->rollback();
+                sendJson(['success' => false, 'error' => 'Aggiornamento ordine non riuscito.'], 409);
             }
 
             sendJson([
@@ -2261,12 +2480,29 @@ try {
             $rawStatus = isset($_POST['status']) && is_string($_POST['status']) ? strtoupper(trim($_POST['status'])) : 'ACTIVE';
             $canonicalStatus = array_key_exists($rawStatus, $allowedStatuses) ? $rawStatus : 'ACTIVE';
             $statusCode = $allowedStatuses[$canonicalStatus];
-
-            $stmtSub = $mysqli->prepare("UPDATE `{$db_prefix}subscription` SET `status` = ?, `date_modified` = NOW() WHERE `subscription_id` = ?");
-            if ($stmtSub) {
+            if ($subId <= 0) sendJson(['success' => false, 'error' => 'ID abbonamento non valido.'], 400);
+            $mysqli->begin_transaction();
+            try {
+                $beforeStmt = $mysqli->prepare("SELECT `status` FROM `{$db_prefix}subscription` WHERE `subscription_id` = ? LIMIT 1 FOR UPDATE");
+                if (!$beforeStmt) throw new RuntimeException('Verifica abbonamento non disponibile');
+                $beforeStmt->bind_param('i', $subId);
+                $beforeStmt->execute();
+                $beforeResult = $beforeStmt->get_result();
+                $beforeRow = $beforeResult ? $beforeResult->fetch_assoc() : null;
+                $beforeStmt->close();
+                if (!$beforeRow) throw new OutOfBoundsException('Abbonamento non trovato');
+                $stmtSub = $mysqli->prepare("UPDATE `{$db_prefix}subscription` SET `status` = ?, `date_modified` = NOW() WHERE `subscription_id` = ?");
+                if (!$stmtSub) throw new RuntimeException('Aggiornamento abbonamento non disponibile');
                 $stmtSub->bind_param('ii', $statusCode, $subId);
                 $stmtSub->execute();
                 $stmtSub->close();
+                $beforeDigest = cartadminStateDigest(['status' => (int)$beforeRow['status']], $auditSalt);
+                $afterDigest = cartadminStateDigest(['status' => $statusCode], $auditSalt);
+                if (!cartadminInsertSecurityAudit($mysqli, $db_prefix, $authContext, 'update_subscription_status', 'subscriptions', $subId, 'success', $beforeDigest, $afterDigest, 'Aggiornamento abbonamento')) throw new RuntimeException('Audit atomico non disponibile');
+                $mysqli->commit();
+            } catch (Throwable $error) {
+                $mysqli->rollback();
+                sendJson(['success' => false, 'error' => 'Aggiornamento abbonamento non riuscito.'], 409);
             }
             sendJson(['success' => true, 'subscription_id' => $subId, 'status' => $canonicalStatus]);
             break;
@@ -2274,39 +2510,31 @@ try {
         case 'update_return_status':
             $retId = isset($_POST['return_id']) ? (int)$_POST['return_id'] : 0;
             $statusId = isset($_POST['status_id']) ? max(1, min(10, (int)$_POST['status_id'])) : 1;
-
-            $stmtRet = $mysqli->prepare("UPDATE `{$db_prefix}return` SET `return_status_id` = ?, `date_modified` = NOW() WHERE `return_id` = ?");
-            if ($stmtRet) {
+            if ($retId <= 0) sendJson(['success' => false, 'error' => 'ID reso non valido.'], 400);
+            $mysqli->begin_transaction();
+            try {
+                $beforeStmt = $mysqli->prepare("SELECT `return_status_id` FROM `{$db_prefix}return` WHERE `return_id` = ? LIMIT 1 FOR UPDATE");
+                if (!$beforeStmt) throw new RuntimeException('Verifica reso non disponibile');
+                $beforeStmt->bind_param('i', $retId);
+                $beforeStmt->execute();
+                $beforeResult = $beforeStmt->get_result();
+                $beforeRow = $beforeResult ? $beforeResult->fetch_assoc() : null;
+                $beforeStmt->close();
+                if (!$beforeRow) throw new OutOfBoundsException('Reso non trovato');
+                $stmtRet = $mysqli->prepare("UPDATE `{$db_prefix}return` SET `return_status_id` = ?, `date_modified` = NOW() WHERE `return_id` = ?");
+                if (!$stmtRet) throw new RuntimeException('Aggiornamento reso non disponibile');
                 $stmtRet->bind_param('ii', $statusId, $retId);
                 $stmtRet->execute();
                 $stmtRet->close();
+                $beforeDigest = cartadminStateDigest(['status_id' => (int)$beforeRow['return_status_id']], $auditSalt);
+                $afterDigest = cartadminStateDigest(['status_id' => $statusId], $auditSalt);
+                if (!cartadminInsertSecurityAudit($mysqli, $db_prefix, $authContext, 'update_return_status', 'returns', $retId, 'success', $beforeDigest, $afterDigest, 'Aggiornamento reso')) throw new RuntimeException('Audit atomico non disponibile');
+                $mysqli->commit();
+            } catch (Throwable $error) {
+                $mysqli->rollback();
+                sendJson(['success' => false, 'error' => 'Aggiornamento reso non riuscito.'], 409);
             }
             sendJson(['success' => true, 'return_id' => $retId, 'status_id' => $statusId]);
-            break;
-
-        case 'audit_log':
-            $input = json_decode(file_get_contents('php://input'), true);
-            if (!empty($input) && isset($input['action_type']) && is_string($input['action_type'])) {
-                $stmtAudit = $mysqli->prepare("INSERT INTO `{$db_prefix}cartadmin_audit` 
-                    (`log_id`, `action_type`, `description`, `operator_username`, `timestamp_iso`, `device_model`, `android_version`, `app_version`, `created_at`) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())");
-                if ($stmtAudit) {
-                    $logId = mb_substr(strip_tags((string)($input['log_id'] ?? ('log_' . time()))), 0, 64);
-                    $actType = mb_substr(strip_tags((string)($input['action_type'] ?? 'UNKNOWN')), 0, 64);
-                    $desc = mb_substr(strip_tags((string)($input['description'] ?? '')), 0, 255);
-                    $operator = $authenticatedOperator;
-                    $tsIso = mb_substr(strip_tags((string)($input['timestamp_iso'] ?? date('c'))), 0, 64);
-                    $devModel = mb_substr(strip_tags((string)($input['device_model'] ?? 'Android')), 0, 128);
-                    $androidVer = mb_substr(strip_tags((string)($input['android_version'] ?? '')), 0, 64);
-                    $appVer = mb_substr(strip_tags((string)($input['app_version'] ?? 'unknown')), 0, 32);
-
-                    $stmtAudit->bind_param('ssssssss', $logId, $actType, $desc, $operator, $tsIso, $devModel, $androidVer, $appVer);
-                    $stmtAudit->execute();
-                    $stmtAudit->close();
-                }
-            }
-
-            sendJson(['success' => true, 'message' => 'Audit log registrato con successo.']);
             break;
 
         default:

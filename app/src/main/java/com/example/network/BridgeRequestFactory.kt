@@ -103,9 +103,19 @@ internal object BridgeRequestFactory {
     ): Request.Builder {
         require(apiKey.isNotBlank()) { "Il token CartAdmin non può essere vuoto" }
         require(username.length <= 128) { "Etichetta operatore locale troppo lunga" }
+        val unsignedRequest = builder.build()
+        val requestTarget = buildString {
+            append(unsignedRequest.url.encodedPath)
+            unsignedRequest.url.encodedQuery?.let { append('?').append(it) }
+        }
+        val proof = BridgeDeviceIdentity.createProof(unsignedRequest.method, requestTarget)
         return builder
             .header("X-CartAdmin-Key", apiKey)
-            .header("X-CartAdmin-Device", BridgeDeviceIdentity.current())
+            .header("X-CartAdmin-Device", proof.deviceId)
+            .header("X-CartAdmin-Device-Key", proof.publicKey)
+            .header("X-CartAdmin-Timestamp", proof.timestampSeconds.toString())
+            .header("X-CartAdmin-Nonce", proof.nonce)
+            .header("X-CartAdmin-Signature", proof.signature)
             .header("User-Agent", "CartAdmin-Android/${BuildConfig.VERSION_NAME}")
             .header("Accept", "application/json")
     }

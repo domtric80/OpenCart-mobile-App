@@ -5,9 +5,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.EcomRepository
 import com.example.data.local.AppDatabase
-import com.example.data.local.OfflineAuditRepository
-import com.example.data.local.OfflineCatalogRepository
-import com.example.data.local.OfflineOrderRepository
 import com.example.model.ActivityItem
 import com.example.model.AdminModule
 import com.example.model.AdminModuleSnapshot
@@ -96,9 +93,6 @@ class MainViewModel(
     private val apiClient = OpenCartApiClient(application)
     private val credentialProtector = AndroidKeystoreCredentialProtector(application)
     private val repository = EcomRepository(db.storeProfileDao(), apiClient, credentialProtector)
-    private val offlineOrderRepository = OfflineOrderRepository(db.orderDao())
-    private val offlineCatalogRepository = OfflineCatalogRepository(db.productDao(), db.categoryDao())
-    private val offlineAuditRepository = OfflineAuditRepository(db.auditLogDao())
     private val securityManager = com.example.auth.SecurityManager(application)
 
     private val _selectedTimeframe = MutableStateFlow(Timeframe.TODAY)
@@ -113,40 +107,40 @@ class MainViewModel(
     private val _syncSuccessMessage = MutableStateFlow<String?>(null)
     private val _isTestingConnection = MutableStateFlow(false)
     private val _connectionResult = MutableStateFlow<OpenCartConnectionResult?>(null)
+    private val _auditLogs = MutableStateFlow<List<AuditLog>>(emptyList())
     private val _adminModules = MutableStateFlow<Map<AdminModule, AdminModuleSnapshot>>(emptyMap())
     val adminModules: StateFlow<Map<AdminModule, AdminModuleSnapshot>> = _adminModules.asStateFlow()
     private var visitorTelemetryJob: Job? = null
 
+    override fun onCleared() {
+        visitorTelemetryJob?.cancel()
+        repository.clearSensitiveSession()
+        _adminModules.value = emptyMap()
+        _selectedOrderForDetail.value = null
+        _selectedOrderDetail.value = null
+        super.onCleared()
+    }
+
     init {
         viewModelScope.launch(Dispatchers.IO) {
+            // CartAdmin mantiene sul dispositivo soltanto il profilo negozio cifrato.
+            // Tutti i dati remoti vengono bonificati e restano esclusivamente in memoria.
+            purgeSensitiveLocalCache()
+
             // Carica store salvati sul database Room
             try {
                 val migrated = repository.loadPersistedStores()
-                if (migrated && !db.sanitizeAfterCredentialMigration()) {
-                    _syncSuccessMessage.value =
-                        "Credenziali cifrate; pulizia delle pagine SQLite da ripetere."
+                if (migrated) {
+                    credentialProtector.deleteLegacyKey()
+                    if (!db.sanitizeAfterCredentialMigration()) {
+                        _syncSuccessMessage.value =
+                            "Credenziali cifrate; pulizia delle pagine SQLite da ripetere."
+                    }
                 }
             } catch (error: CredentialProtectionException) {
                 _syncSuccessMessage.value =
                     "Credenziali bloccate: il dispositivo richiede TEE o StrongBox funzionante."
             }
-
-            // Carica ordini locali cached dal DB Room
-            val cachedOrders = db.orderDao().getAllOrders()
-            if (cachedOrders.isNotEmpty()) {
-                repository.setLiveOrders(cachedOrders.map { it.toDomainModel() })
-            }
-
-            val cachedProducts = db.productDao().getAllProducts()
-            if (cachedProducts.isNotEmpty()) {
-                repository.setLiveProducts(cachedProducts.map { it.toDomainModel() })
-            }
-
-            val cachedSubs = db.subscriptionDao().getAllSubscriptions()
-            repository.setSubscriptions(cachedSubs.map { it.toDomainModel() })
-
-            val cachedReturns = db.orderReturnDao().getAllReturns()
-            repository.setReturns(cachedReturns.map { it.toDomainModel() })
 
             // Se è presente uno store configurato, avvia la sincronizzazione automatica reale
             val primaryStore = repository.stores.value.find {
@@ -163,6 +157,16 @@ class MainViewModel(
         }
     }
 
+    private suspend fun purgeSensitiveLocalCache() {
+        db.orderDao().clearAllOrderItems()
+        db.orderDao().clearAllOrders()
+        db.subscriptionDao().clearAllSubscriptions()
+        db.orderReturnDao().clearAllReturns()
+        db.auditLogDao().clearAllAuditLogs()
+        db.productDao().clearAllProducts()
+        db.categoryDao().clearAllCategories()
+    }
+
     val uiState: StateFlow<DashboardUiState> = combine(
         repository.stores,
         repository.currentStoreId,
@@ -173,7 +177,7 @@ class MainViewModel(
         repository.products,
         repository.categories,
         repository.visitorStats,
-        offlineAuditRepository.getAllAuditLogs(),
+        _auditLogs,
         _selectedTimeframe,
         _selectedOrderFilter,
         _selectedOrdersSubSection,
@@ -533,19 +537,6 @@ class MainViewModel(
             val result = apiClient.fetchCategories(store.url, store.apiKey, store.apiUsername, limit = 200)
             result.onSuccess { liveCategories ->
                 repository.setCategories(liveCategories)
-                db.categoryDao().clearAllCategories()
-                liveCategories.forEach { category ->
-                    db.categoryDao().insertCategory(
-                        com.example.data.local.entity.CategoryEntity(
-                            id = category.id,
-                            storeId = store.id,
-                            name = category.name,
-                            description = category.description,
-                            sortOrder = category.sortOrder,
-                            status = category.status
-                        )
-                    )
-                }
                 if (liveCategories.isEmpty()) {
                     showOperationMessage("OpenCart non ha restituito categorie del catalogo.")
                 }
@@ -576,27 +567,6 @@ class MainViewModel(
                 val liveOrders = ordersRes.getOrNull() ?: emptyList()
                 orderCount = liveOrders.size
                 repository.setLiveOrders(liveOrders)
-
-                // Salva nella persistenza locale Room
-                db.orderDao().clearAllOrders()
-                liveOrders.forEach { order ->
-                    db.orderDao().insertOrder(
-                        com.example.data.local.entity.OrderEntity(
-                            id = order.id,
-                            storeId = uiState.value.currentStore?.id ?: "store_1",
-                            orderNumber = order.orderNumber,
-                            customerName = order.customerName,
-                            customerEmail = order.customerEmail,
-                            total = order.total,
-                            status = order.status.name,
-                            dateAdded = order.dateAdded,
-                            itemsCount = order.itemsCount,
-                            shippingMethod = order.shippingMethod,
-                            paymentMethod = order.paymentMethod,
-                            customerNotes = order.notes
-                        )
-                    )
-                }
             }
 
             if (prodRes.isSuccess) {
@@ -604,25 +574,6 @@ class MainViewModel(
                 prodCount = liveProds.size
                 repository.setLiveProducts(liveProds)
 
-                db.productDao().clearAllProducts()
-                liveProds.forEach { prod ->
-                    db.productDao().insertProduct(
-                        com.example.data.local.entity.ProductEntity(
-                            id = prod.id,
-                            storeId = uiState.value.currentStore?.id ?: "store_1",
-                            name = prod.name,
-                            model = prod.model,
-                            sku = prod.sku,
-                            price = prod.price,
-                            specialPrice = prod.specialPrice,
-                            quantity = prod.quantity,
-                            minQuantityAlert = prod.minQuantityAlert,
-                            category = prod.category,
-                            description = prod.description,
-                            status = prod.status
-                        )
-                    )
-                }
             }
 
             if (catRes.isSuccess) {
@@ -631,19 +582,6 @@ class MainViewModel(
                     catCount = liveCats.size
                     repository.setCategories(liveCats)
 
-                    db.categoryDao().clearAllCategories()
-                    liveCats.forEach { cat ->
-                        db.categoryDao().insertCategory(
-                            com.example.data.local.entity.CategoryEntity(
-                                id = cat.id,
-                                storeId = uiState.value.currentStore?.id ?: "store_1",
-                                name = cat.name,
-                                description = cat.description,
-                                sortOrder = cat.sortOrder,
-                                status = cat.status
-                            )
-                        )
-                    }
                 }
             }
 
@@ -651,54 +589,12 @@ class MainViewModel(
                 val liveSubs = subsRes.getOrNull() ?: emptyList()
                 subsCount = liveSubs.size
                 repository.setSubscriptions(liveSubs)
-                db.subscriptionDao().clearAllSubscriptions()
-                liveSubs.forEach { sub ->
-                    db.subscriptionDao().insertSubscription(
-                        com.example.data.local.entity.SubscriptionEntity(
-                            id = sub.id,
-                            storeId = uiState.value.currentStore?.id ?: "store_1",
-                            subscriptionId = sub.subscriptionId,
-                            customerName = sub.customerName,
-                            customerEmail = sub.customerEmail,
-                            planName = sub.planName,
-                            cycleFrequency = sub.cycleFrequency,
-                            amount = sub.amount,
-                            status = sub.status.name,
-                            nextPaymentDate = sub.nextPaymentDate,
-                            startDate = sub.startDate,
-                            paymentMethod = sub.paymentMethod
-                        )
-                    )
-                }
             }
 
             if (retRes.isSuccess) {
                 val liveReturns = retRes.getOrNull() ?: emptyList()
                 retCount = liveReturns.size
                 repository.setReturns(liveReturns)
-                db.orderReturnDao().clearAllReturns()
-                liveReturns.forEach { ret ->
-                    db.orderReturnDao().insertReturn(
-                        com.example.data.local.entity.OrderReturnEntity(
-                            id = ret.id,
-                            storeId = uiState.value.currentStore?.id ?: "store_1",
-                            returnId = ret.returnId,
-                            orderId = ret.orderId,
-                            customerName = ret.customerName,
-                            customerEmail = ret.customerEmail,
-                            customerPhone = ret.customerPhone,
-                            productName = ret.productName,
-                            productModel = ret.productModel,
-                            quantity = ret.quantity,
-                            reason = ret.reason,
-                            opened = ret.opened,
-                            status = ret.status.name,
-                            action = ret.action,
-                            dateAdded = ret.dateAdded,
-                            comment = ret.comment
-                        )
-                    )
-                }
             }
 
             if (ordersRes.isSuccess || prodRes.isSuccess || catRes.isSuccess) {
@@ -718,26 +614,6 @@ class MainViewModel(
             if (ordersRes.isSuccess) {
                 val liveOrders = ordersRes.getOrNull() ?: emptyList()
                 repository.setLiveOrders(liveOrders)
-
-                db.orderDao().clearAllOrders()
-                liveOrders.forEach { order ->
-                    db.orderDao().insertOrder(
-                        com.example.data.local.entity.OrderEntity(
-                            id = order.id,
-                            storeId = uiState.value.currentStore?.id ?: "store_1",
-                            orderNumber = order.orderNumber,
-                            customerName = order.customerName,
-                            customerEmail = order.customerEmail,
-                            total = order.total,
-                            status = order.status.name,
-                            dateAdded = order.dateAdded,
-                            itemsCount = order.itemsCount,
-                            shippingMethod = order.shippingMethod,
-                            paymentMethod = order.paymentMethod,
-                            customerNotes = order.notes
-                        )
-                    )
-                }
             }
 
             val prodRes = apiClient.fetchProducts(url, apiKey, username, limit = 100)
@@ -745,25 +621,6 @@ class MainViewModel(
                 val liveProds = prodRes.getOrNull() ?: emptyList()
                 repository.setLiveProducts(liveProds)
 
-                db.productDao().clearAllProducts()
-                liveProds.forEach { prod ->
-                    db.productDao().insertProduct(
-                        com.example.data.local.entity.ProductEntity(
-                            id = prod.id,
-                            storeId = uiState.value.currentStore?.id ?: "store_1",
-                            name = prod.name,
-                            model = prod.model,
-                            sku = prod.sku,
-                            price = prod.price,
-                            specialPrice = prod.specialPrice,
-                            quantity = prod.quantity,
-                            minQuantityAlert = prod.minQuantityAlert,
-                            category = prod.category,
-                            description = prod.description,
-                            status = prod.status
-                        )
-                    )
-                }
             }
 
             val catRes = apiClient.fetchCategories(url, apiKey, username, limit = 100)
@@ -771,19 +628,6 @@ class MainViewModel(
                 val liveCats = catRes.getOrNull() ?: emptyList()
                 if (liveCats.isNotEmpty()) {
                     repository.setCategories(liveCats)
-                    db.categoryDao().clearAllCategories()
-                    liveCats.forEach { cat ->
-                        db.categoryDao().insertCategory(
-                            com.example.data.local.entity.CategoryEntity(
-                                id = cat.id,
-                                storeId = uiState.value.currentStore?.id ?: "store_1",
-                                name = cat.name,
-                                description = cat.description,
-                                sortOrder = cat.sortOrder,
-                                status = cat.status
-                            )
-                        )
-                    }
                 }
             }
 
@@ -791,54 +635,12 @@ class MainViewModel(
             if (subsRes.isSuccess) {
                 val liveSubs = subsRes.getOrNull() ?: emptyList()
                 repository.setSubscriptions(liveSubs)
-                db.subscriptionDao().clearAllSubscriptions()
-                liveSubs.forEach { sub ->
-                    db.subscriptionDao().insertSubscription(
-                        com.example.data.local.entity.SubscriptionEntity(
-                            id = sub.id,
-                            storeId = uiState.value.currentStore?.id ?: "store_1",
-                            subscriptionId = sub.subscriptionId,
-                            customerName = sub.customerName,
-                            customerEmail = sub.customerEmail,
-                            planName = sub.planName,
-                            cycleFrequency = sub.cycleFrequency,
-                            amount = sub.amount,
-                            status = sub.status.name,
-                            nextPaymentDate = sub.nextPaymentDate,
-                            startDate = sub.startDate,
-                            paymentMethod = sub.paymentMethod
-                        )
-                    )
-                }
             }
 
             val retRes = apiClient.fetchReturns(url, apiKey, username, limit = 50)
             if (retRes.isSuccess) {
                 val liveReturns = retRes.getOrNull() ?: emptyList()
                 repository.setReturns(liveReturns)
-                db.orderReturnDao().clearAllReturns()
-                liveReturns.forEach { ret ->
-                    db.orderReturnDao().insertReturn(
-                        com.example.data.local.entity.OrderReturnEntity(
-                            id = ret.id,
-                            storeId = uiState.value.currentStore?.id ?: "store_1",
-                            returnId = ret.returnId,
-                            orderId = ret.orderId,
-                            customerName = ret.customerName,
-                            customerEmail = ret.customerEmail,
-                            customerPhone = ret.customerPhone,
-                            productName = ret.productName,
-                            productModel = ret.productModel,
-                            quantity = ret.quantity,
-                            reason = ret.reason,
-                            opened = ret.opened,
-                            status = ret.status.name,
-                            action = ret.action,
-                            dateAdded = ret.dateAdded,
-                            comment = ret.comment
-                        )
-                    )
-                }
             }
 
             apiClient.fetchVisitorTelemetry(url, apiKey, username)
@@ -874,7 +676,6 @@ class MainViewModel(
             val result = apiClient.updateSubscriptionStatus(store.url, store.apiKey, subscriptionId, newStatus.name, store.apiUsername)
             if (result.getOrDefault(false)) {
                 repository.updateSubscriptionStatus(subscriptionId, newStatus)
-                db.subscriptionDao().updateSubscriptionStatus(subscriptionId, newStatus.name)
                 showOperationMessage("Stato abbonamento aggiornato sullo store.")
             } else {
                 showOperationMessage("Abbonamento non aggiornato: ${result.exceptionOrNull()?.message ?: "risposta rifiutata dal bridge"}.")
@@ -899,7 +700,6 @@ class MainViewModel(
             val result = apiClient.updateReturnStatus(store.url, store.apiKey, returnId, statusId, newAction, store.apiUsername)
             if (result.getOrDefault(false)) {
                 repository.updateReturnStatus(returnId, newStatus, newAction)
-                db.orderReturnDao().updateReturnStatus(returnId, newStatus.name, newAction)
                 showOperationMessage("Stato reso aggiornato sullo store.")
             } else {
                 showOperationMessage("Reso non aggiornato: ${result.exceptionOrNull()?.message ?: "risposta rifiutata dal bridge"}.")
@@ -917,7 +717,6 @@ class MainViewModel(
             val result = apiClient.updateOrderStatus(store.url, store.apiKey, orderId, newStatus.toOpenCartStatusId(), "Stato aggiornato da CartAdmin App", store.apiUsername)
             if (result.getOrDefault(false)) {
                 repository.updateOrderStatus(orderId, newStatus)
-                offlineOrderRepository.updateOrderStatus(orderId, newStatus)
                 showOperationMessage("Stato ordine aggiornato sullo store.")
             } else {
                 showOperationMessage("Ordine non aggiornato: ${result.exceptionOrNull()?.message ?: "risposta rifiutata dal bridge"}.")
@@ -936,7 +735,6 @@ class MainViewModel(
             val result = apiClient.updateOrderStatus(store.url, store.apiKey, orderId, order.status.toOpenCartStatusId(), notes, store.apiUsername)
             if (result.getOrDefault(false)) {
                 repository.updateOrderNotes(orderId, notes)
-                offlineOrderRepository.updateOrderNotes(orderId, notes)
                 showOperationMessage("Note ordine aggiornate sullo store.")
             } else {
                 showOperationMessage("Note non aggiornate: ${result.exceptionOrNull()?.message ?: "risposta rifiutata dal bridge"}.")
@@ -954,7 +752,6 @@ class MainViewModel(
             val result = apiClient.updateOrderStatus(store.url, store.apiKey, orderId, newStatus.toOpenCartStatusId(), notes, store.apiUsername)
             if (result.getOrDefault(false)) {
                 repository.updateOrderStatusAndNotes(orderId, newStatus, notes)
-                offlineOrderRepository.updateOrderStatusAndNotes(orderId, newStatus, notes)
                 showOperationMessage("Ordine aggiornato sullo store.")
             } else {
                 showOperationMessage("Ordine non aggiornato: ${result.exceptionOrNull()?.message ?: "risposta rifiutata dal bridge"}.")
@@ -983,7 +780,6 @@ class MainViewModel(
             val result = apiClient.updateProductStock(store.url, store.apiKey, productId, newQty, store.apiUsername)
             if (result.getOrDefault(false)) {
                 repository.updateProductStock(productId, newQty)
-                offlineCatalogRepository.updateProductStock(productId, newQty)
                 showOperationMessage("Quantità aggiornata sullo store: $newQty.")
             } else {
                 showOperationMessage("Quantità non aggiornata: ${result.exceptionOrNull()?.message ?: "risposta rifiutata dal bridge"}.")
@@ -1002,7 +798,6 @@ class MainViewModel(
             val result = apiClient.updateProductStock(store.url, store.apiKey, productId, clamped, store.apiUsername)
             if (result.getOrDefault(false)) {
                 repository.updateProductStock(productId, clamped)
-                offlineCatalogRepository.updateProductStock(productId, clamped)
                 showOperationMessage("Quantità aggiornata sullo store: $clamped.")
             } else {
                 showOperationMessage("Quantità non aggiornata: ${result.exceptionOrNull()?.message ?: "risposta rifiutata dal bridge"}.")
@@ -1046,7 +841,6 @@ class MainViewModel(
             val created = result.getOrNull()
             if (created != null) {
                 repository.insertProduct(created)
-                offlineCatalogRepository.saveProduct(created, store.id)
                 showOperationMessage("Prodotto “${created.name}” creato sullo store.")
             } else {
                 showOperationMessage("Prodotto non creato: ${result.exceptionOrNull()?.message ?: "risposta rifiutata dal bridge"}.")
@@ -1064,7 +858,6 @@ class MainViewModel(
             val result = apiClient.updateProduct(store.url, store.apiKey, product, image, store.apiUsername)
             if (result.getOrDefault(false)) {
                 repository.updateProduct(product)
-                offlineCatalogRepository.saveProduct(product, store.id)
                 showOperationMessage("Prodotto “${product.name}” aggiornato sullo store.")
             } else {
                 showOperationMessage("Prodotto non aggiornato: ${result.exceptionOrNull()?.message ?: "risposta rifiutata dal bridge"}.")
@@ -1082,7 +875,6 @@ class MainViewModel(
             val result = apiClient.deleteProduct(store.url, store.apiKey, productId, store.apiUsername)
             if (result.getOrDefault(false)) {
                 repository.deleteProduct(productId)
-                offlineCatalogRepository.deleteProduct(productId)
                 showOperationMessage("Prodotto eliminato dallo store.")
             } else {
                 showOperationMessage("Prodotto non eliminato: ${result.exceptionOrNull()?.message ?: "risposta rifiutata dal bridge"}.")
@@ -1114,7 +906,6 @@ class MainViewModel(
             val created = result.getOrNull()
             if (created != null) {
                 repository.insertCategory(created)
-                offlineCatalogRepository.saveCategory(created, store.id)
                 showOperationMessage("Categoria “${created.name}” creata sullo store.")
             } else {
                 showOperationMessage("Categoria non creata: ${result.exceptionOrNull()?.message ?: "risposta rifiutata dal bridge"}.")
@@ -1139,7 +930,6 @@ class MainViewModel(
             val result = apiClient.updateCategory(store.url, store.apiKey, updated, store.apiUsername)
             if (result.getOrDefault(false)) {
                 repository.updateCategory(updated.id, updated.name, updated.description, updated.sortOrder, updated.status)
-                offlineCatalogRepository.saveCategory(updated, store.id)
                 showOperationMessage("Categoria “${updated.name}” aggiornata sullo store.")
             } else {
                 showOperationMessage("Categoria non aggiornata: ${result.exceptionOrNull()?.message ?: "risposta rifiutata dal bridge"}.")
@@ -1157,7 +947,6 @@ class MainViewModel(
             val result = apiClient.deleteCategory(store.url, store.apiKey, categoryId, store.apiUsername)
             if (result.getOrDefault(false)) {
                 repository.deleteCategory(categoryId)
-                offlineCatalogRepository.deleteCategory(categoryId)
                 showOperationMessage("Categoria eliminata dallo store; i prodotti restano disponibili senza questa associazione.")
             } else {
                 showOperationMessage("Categoria non eliminata: ${result.exceptionOrNull()?.message ?: "risposta rifiutata dal bridge"}.")
@@ -1196,9 +985,7 @@ class MainViewModel(
     }
 
     fun clearAuditLogs() {
-        viewModelScope.launch(Dispatchers.IO) {
-            offlineAuditRepository.clearAuditLogs()
-        }
+        _auditLogs.value = emptyList()
     }
 
     fun testOpenCartConnection(url: String, username: String, key: String) {
