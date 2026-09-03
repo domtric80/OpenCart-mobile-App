@@ -303,11 +303,13 @@ jobs:
             cat << EOF > release_notes.md
           ## CartAdmin ${TAG_NAME}
 
-          Release stabile di sicurezza. App Android e bridge OpenCart introducono difese fail-closed contro esfiltrazione locale, riutilizzo delle richieste e abuso di token amministrativi.
+          Release stabile di sicurezza. La patch lega lo sblocco biometrico a una firma Android Keystore autenticata per singolo utilizzo e mantiene le difese fail-closed introdotte nella serie 2.1.
 
           ### Hardening confermato
 
           - profilo negozio interamente cifrato tramite AES-256-GCM con chiave non esportabile TEE/StrongBox e autenticazione utente recente;
+          - sblocco biometrico vincolato a \`BiometricPrompt.CryptoObject\`: una challenge casuale deve essere firmata e verificata prima di creare la sessione;
+          - chiave ECDSA di sblocco non esportabile, autorizzata soltanto dalla biometria forte e obbligatoriamente custodita in TEE/StrongBox;
           - nessuna persistenza offline di ordini, clienti, resi, abbonamenti, audit, catalogo, telemetria o token FCM;
           - sessione distrutta quando l'app passa in background e comunque dopo cinque minuti; screenshot, overlay e tocchi oscurati bloccati;
           - ogni richiesta firmata con chiave ECDSA hardware, timestamp e nonce anti-replay; token associato al singolo dispositivo;
@@ -338,7 +340,7 @@ jobs:
 
           Build release firmata, test unitari, compilazione dei test strumentali, Android Lint e struttura del pacchetto OCMOD sono verificati dal workflow di pubblicazione. I workflow di sicurezza eseguono inoltre CodeQL, Semgrep, controllo sintattico PHP e test dell'autenticazione del bridge.
 
-          **Migrazione obbligatoria:** aggiornare prima il modulo OpenCart, revocare i token precedenti, generare un token nominativo con i soli scope necessari per ciascun dispositivo, quindi aggiornare l'app e riconfigurare la connessione.
+          **Aggiornamento dalla 2.1.1:** installare prima il modulo OpenCart 2.1.2 e poi aggiornare l'app. I token per dispositivo creati con la 2.1.1 restano validi e non devono essere ruotati nuovamente.
 
           Compatibilità confermata: Android API 24–36 e OpenCart 4.1.x. Il bridge non dichiara compatibilità con OpenCart 3.x.
           EOF

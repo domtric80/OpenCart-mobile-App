@@ -1,6 +1,6 @@
-# CartAdmin 2.1.1
+# CartAdmin 2.1.2
 
-CartAdmin è un'app Android per consultare e amministrare un negozio OpenCart da smartphone. Il progetto è sviluppato in Kotlin con Jetpack Compose e include il bridge CartAdmin per OpenCart 4.1.x. La release stabile corrente è la v2.1.1.
+CartAdmin è un'app Android per consultare e amministrare un negozio OpenCart da smartphone. Il progetto è sviluppato in Kotlin con Jetpack Compose e include il bridge CartAdmin per OpenCart 4.1.x. La release stabile corrente è la v2.1.2.
 
 ## Download
 
@@ -8,7 +8,7 @@ La release stabile è disponibile in [GitHub Releases](https://github.com/domtri
 
 | Componente | File | Compatibilità confermata |
 | --- | --- | --- |
-| App Android | `CartAdmin-v2.1.1.apk` | Android 7.0 o successivo, API 24–36 |
+| App Android | `CartAdmin-v2.1.2.apk` | Android 7.0 o successivo, API 24–36 |
 | Bridge OpenCart | `cartadmin.ocmod.zip` | OpenCart 4.1.x |
 
 Il bridge incluso non dichiara compatibilità con OpenCart 3.x. Un eventuale pacchetto per quel ramo dovrà essere pubblicato e verificato separatamente.
@@ -27,11 +27,19 @@ Il bridge incluso non dichiara compatibilità con OpenCart 3.x. Un eventuale pac
 - credenziali Android cifrate AES-256-GCM con chiave Android Keystore hardware-backed;
 - compatibilità dei flussi fotocamera/galleria verificata anche con il moderno `ActivityResultRegistry`.
 
-App Android e bridge devono essere aggiornati entrambi alla v2.1.1.
+App Android e bridge devono essere aggiornati entrambi alla v2.1.2.
+
+### Novità della 2.1.2
+
+- lo sblocco biometrico è legato a una firma ECDSA autenticata per singolo utilizzo tramite `BiometricPrompt.CryptoObject`;
+- una challenge casuale viene firmata con una chiave non esportabile e verificata prima di creare la sessione amministrativa;
+- la chiave di sblocco richiede biometria forte ed è accettata soltanto se custodita in TEE o StrongBox;
+- il callback biometrico, da solo, non può più aprire la console; sui dispositivi senza biometria forte rimane disponibile la password CartAdmin;
+- i token per dispositivo generati con la 2.1.1 restano validi e non devono essere ruotati nuovamente.
 
 ### Novità della 2.1.1
 
-- il `MainViewModel`, le credenziali decifrate e le chiamate di rete esistono soltanto dopo lo sblocco tramite biometria forte o credenziale sicura del dispositivo;
+- il `MainViewModel`, le credenziali decifrate e le chiamate di rete esistono soltanto dopo lo sblocco tramite biometria forte o password CartAdmin;
 - l'app si blocca e distrugge la sessione quando passa in background e comunque dopo cinque minuti;
 - screenshot, registrazione schermo, overlay e tocchi oscurati vengono bloccati per la finestra amministrativa;
 - la chiave AES delle credenziali richiede una recente autenticazione utente ed è obbligatoriamente custodita in TEE/StrongBox;
@@ -86,7 +94,7 @@ Usare sempre l'APK e il bridge provenienti dalla stessa release. Servono un sito
 
 Da [GitHub Releases](https://github.com/domtric80/OpenCart-mobile-App/releases/latest) scarica:
 
-- `CartAdmin-v2.1.1.apk`, da installare sul dispositivo Android;
+- `CartAdmin-v2.1.2.apk`, da installare sul dispositivo Android;
 - `cartadmin.ocmod.zip`, da caricare nel pannello OpenCart senza estrarlo e senza rinominarlo.
 
 ### 2. Installa il bridge dal pannello OpenCart
@@ -115,7 +123,7 @@ Nell'immagine il token completo non è visibile: è il comportamento previsto do
 
 ### 4. Installa e proteggi l'app Android
 
-1. Apri `CartAdmin-v2.1.1.apk` sul dispositivo. Se Android lo richiede, autorizza l'installazione da questa origine soltanto per il gestore file o browser usato.
+1. Apri `CartAdmin-v2.1.2.apk` sul dispositivo. Se Android lo richiede, autorizza l'installazione da questa origine soltanto per il gestore file o browser usato.
 2. Al primo avvio inserisci un nome operatore e una password locale robusta, quindi confermala.
 3. La password protegge l'accesso all'app; lo sblocco biometrico forte può essere abilitato sui dispositivi compatibili.
 

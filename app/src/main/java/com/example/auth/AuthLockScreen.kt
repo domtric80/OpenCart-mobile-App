@@ -77,8 +77,14 @@ fun AuthLockScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     fun launchBiometricPrompt() {
-        if (!securityManager.canUseStrongDeviceAuthentication()) {
-            errorMessage = "Configura biometria forte oppure PIN/password sicura sul dispositivo."
+        if (!securityManager.isHardwareBiometricAvailable()) {
+            errorMessage = "Configura una biometria forte oppure usa la password CartAdmin."
+            return
+        }
+        val pendingOperation = try {
+            securityManager.createBiometricUnlockOperation()
+        } catch (_: Exception) {
+            errorMessage = "Chiave biometrica hardware non disponibile. Usa la password CartAdmin."
             return
         }
         val activity = context as? FragmentActivity ?: return
@@ -89,6 +95,11 @@ fun AuthLockScreen(
             object : BiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                     super.onAuthenticationSucceeded(result)
+                    val authenticatedSigner = result.cryptoObject?.signature
+                    if (!securityManager.completeBiometricUnlock(authenticatedSigner, pendingOperation)) {
+                        errorMessage = "Verifica crittografica biometrica non riuscita."
+                        return
+                    }
                     securityManager.recordSuccessfulAuth()
                     onUnlockSuccess()
                 }
@@ -102,14 +113,12 @@ fun AuthLockScreen(
 
         val promptInfo = BiometricPrompt.PromptInfo.Builder()
             .setTitle("Sblocco CartAdmin")
-            .setSubtitle("Usa biometria forte oppure PIN/password del dispositivo")
-            .setAllowedAuthenticators(
-                BiometricManager.Authenticators.BIOMETRIC_STRONG or
-                    BiometricManager.Authenticators.DEVICE_CREDENTIAL
-            )
+            .setSubtitle("Usa la biometria forte protetta da Android Keystore")
+            .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+            .setNegativeButtonText("Usa password CartAdmin")
             .build()
 
-        prompt.authenticate(promptInfo)
+        prompt.authenticate(promptInfo, pendingOperation.cryptoObject)
     }
 
     LaunchedEffect(Unit) {
@@ -332,7 +341,7 @@ fun AuthLockScreen(
                         ) {
                             Icon(Icons.Default.Fingerprint, contentDescription = null, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Usa biometria o blocco dispositivo")
+                            Text("Usa biometria forte")
                         }
                     }
                 }
