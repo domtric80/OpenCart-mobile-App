@@ -303,9 +303,20 @@ jobs:
             cat << EOF > release_notes.md
           ## CartAdmin ${TAG_NAME}
 
-          Release stabile 2.1 dedicata ai flussi amministrativi remoti, alla gestione sicura dei contenuti e all'identità verificabile degli operatori.
+          Release stabile di sicurezza. App Android e bridge OpenCart introducono difese fail-closed contro esfiltrazione locale, riutilizzo delle richieste e abuso di token amministrativi.
 
-          ### Novità confermate
+          ### Hardening confermato
+
+          - profilo negozio interamente cifrato tramite AES-256-GCM con chiave non esportabile TEE/StrongBox e autenticazione utente recente;
+          - nessuna persistenza offline di ordini, clienti, resi, abbonamenti, audit, catalogo, telemetria o token FCM;
+          - sessione distrutta quando l'app passa in background e comunque dopo cinque minuti; screenshot, overlay e tocchi oscurati bloccati;
+          - ogni richiesta firmata con chiave ECDSA hardware, timestamp e nonce anti-replay; token associato al singolo dispositivo;
+          - HTTPS/HSTS obbligatori, rate limiting, metodi HTTP fail-closed e scope granulari distinti per funzione;
+          - identità dell'operatore determinata lato server e audit inserito atomicamente nella stessa transazione delle modifiche;
+          - token legacy revocati durante la migrazione: dopo l'aggiornamento è obbligatorio generare un nuovo token per ogni dispositivo;
+          - azioni GitHub fissate a commit immutabili, dipendenze Gradle verificate con SHA-256, checksum e attestazione di provenienza degli artefatti.
+
+          ### Funzioni incluse dalla serie 2.1
 
           - CRUD remoto verificato per prodotti e categorie, con immagini da fotocamera o galleria validate fino a 5 MB;
           - creazione di articoli e categorie CMS con meta tag, immagine, lingue attive e associazione allo store;
@@ -313,9 +324,6 @@ jobs:
           - editor HTML a pagina intera con toolbar fissa e comandi P/H1/H2/H3, colore, grassetto, corsivo, sottolineato ed elenco puntato;
           - approvazioni clienti e richieste GDPR tramite coda protetta e conferma nel pannello OpenCart;
           - telemetria distinta tra guest e clienti registrati dalla tabella nativa \`customer_online\`, senza identità personali nell'app;
-          - token nominativi associati a operatore e dispositivo, scope minimi e revoca selettiva;
-          - audit server-side atomico con identità verificata e digest HMAC, senza contenuti o dati personali in chiaro;
-          - credenziali Android cifrate AES-256-GCM con chiave Android Keystore hardware-backed;
           - dati amministrativi letti dalle tabelle native OpenCart, senza record dimostrativi;
           - app Android e bridge riportano entrambi la versione ${VERSION} e devono essere aggiornati insieme;
           - compatibilità confermata con Android API 24–36 e OpenCart 4.1.x.
@@ -324,12 +332,13 @@ jobs:
 
           - [CartAdmin-v${VERSION}.apk](https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/CartAdmin-v${VERSION}.apk) — APK release firmato dal workflow GitHub Actions;
           - [cartadmin.ocmod.zip](https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/cartadmin.ocmod.zip) — estensione per OpenCart 4.1.x.
+          - [SHA256SUMS.txt](https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/SHA256SUMS.txt) — checksum verificabili dei due artefatti.
 
           ### Verifiche automatiche
 
           Build release firmata, test unitari, compilazione dei test strumentali, Android Lint e struttura del pacchetto OCMOD sono verificati dal workflow di pubblicazione. I workflow di sicurezza eseguono inoltre CodeQL, Semgrep, controllo sintattico PHP e test dell'autenticazione del bridge.
 
-          La versione 2.1.0 è stata promossa stabile dopo il ciclo di test manuali su dispositivo e negozio OpenCart completato dal maintainer sulle pre-release 2.1.
+          **Migrazione obbligatoria:** aggiornare prima il modulo OpenCart, revocare i token precedenti, generare un token nominativo con i soli scope necessari per ciascun dispositivo, quindi aggiornare l'app e riconfigurare la connessione.
 
           Compatibilità confermata: Android API 24–36 e OpenCart 4.1.x. Il bridge non dichiara compatibilità con OpenCart 3.x.
           EOF
