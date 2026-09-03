@@ -1,6 +1,6 @@
-# CartAdmin 2.1.2
+# CartAdmin 2.1.3
 
-CartAdmin è un'app Android per consultare e amministrare un negozio OpenCart da smartphone. Il progetto è sviluppato in Kotlin con Jetpack Compose e include il bridge CartAdmin per OpenCart 4.1.x. La release stabile corrente è la v2.1.2.
+CartAdmin è un'app Android per consultare e amministrare un negozio OpenCart da smartphone. Il progetto è sviluppato in Kotlin con Jetpack Compose e include il bridge CartAdmin per OpenCart 4.1.x. La release stabile corrente è la v2.1.3.
 
 ## Download
 
@@ -8,7 +8,7 @@ La release stabile è disponibile in [GitHub Releases](https://github.com/domtri
 
 | Componente | File | Compatibilità confermata |
 | --- | --- | --- |
-| App Android | `CartAdmin-v2.1.2.apk` | Android 7.0 o successivo, API 24–36 |
+| App Android | `CartAdmin-v2.1.3.apk` | Android 7.0 o successivo, API 24–36 |
 | Bridge OpenCart | `cartadmin.ocmod.zip` | OpenCart 4.1.x |
 
 Il bridge incluso non dichiara compatibilità con OpenCart 3.x. Un eventuale pacchetto per quel ramo dovrà essere pubblicato e verificato separatamente.
@@ -27,7 +27,14 @@ Il bridge incluso non dichiara compatibilità con OpenCart 3.x. Un eventuale pac
 - credenziali Android cifrate AES-256-GCM con chiave Android Keystore hardware-backed;
 - compatibilità dei flussi fotocamera/galleria verificata anche con il moderno `ActivityResultRegistry`.
 
-App Android e bridge devono essere aggiornati entrambi alla v2.1.2.
+App Android e bridge devono essere aggiornati entrambi alla v2.1.3.
+
+### Novità della 2.1.3
+
+- corretto il crash immediatamente successivo allo sblocco biometrico introdotto dalla creazione del `MainViewModel` senza la factory Android richiesta;
+- il ViewModel amministrativo continua a esistere soltanto durante la sessione sbloccata e viene distrutto quando l'app passa in background;
+- aggiunto un test di regressione che verifica esplicitamente l'uso della factory con il proprietario della sessione protetta;
+- aggiornamento installato sopra la 2.1.2 e sblocco biometrico verificato su Redmi Note 9S con Android 12/API 31, senza eccezioni dell'app in Logcat.
 
 ### Novità della 2.1.2
 
@@ -94,7 +101,7 @@ Usare sempre l'APK e il bridge provenienti dalla stessa release. Servono un sito
 
 Da [GitHub Releases](https://github.com/domtric80/OpenCart-mobile-App/releases/latest) scarica:
 
-- `CartAdmin-v2.1.2.apk`, da installare sul dispositivo Android;
+- `CartAdmin-v2.1.3.apk`, da installare sul dispositivo Android;
 - `cartadmin.ocmod.zip`, da caricare nel pannello OpenCart senza estrarlo e senza rinominarlo.
 
 ### 2. Installa il bridge dal pannello OpenCart
@@ -123,7 +130,7 @@ Nell'immagine il token completo non è visibile: è il comportamento previsto do
 
 ### 4. Installa e proteggi l'app Android
 
-1. Apri `CartAdmin-v2.1.2.apk` sul dispositivo. Se Android lo richiede, autorizza l'installazione da questa origine soltanto per il gestore file o browser usato.
+1. Apri `CartAdmin-v2.1.3.apk` sul dispositivo. Se Android lo richiede, autorizza l'installazione da questa origine soltanto per il gestore file o browser usato.
 2. Al primo avvio inserisci un nome operatore e una password locale robusta, quindi confermala.
 3. La password protegge l'accesso all'app; lo sblocco biometrico forte può essere abilitato sui dispositivi compatibili.
 

@@ -43,7 +43,10 @@ class BiometricCryptoBindingRegressionTest {
             "app/src/main/java/com/example/auth/BiometricUnlockCrypto.kt"
         ).readText()
 
-        assertTrue(source.contains("setUserAuthenticationParameters(\n                0,"))
+        assertTrue(
+            Regex("setUserAuthenticationParameters\\s*\\(\\s*0\\s*,")
+                .containsMatchIn(source)
+        )
         assertTrue(source.contains("KeyProperties.AUTH_BIOMETRIC_STRONG"))
         assertTrue(source.contains("setUserAuthenticationValidityDurationSeconds(-1)"))
         assertTrue(source.contains("SECURITY_LEVEL_TRUSTED_ENVIRONMENT"))
