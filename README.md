@@ -1,16 +1,16 @@
-# CartAdmin 2.1.4
+# CartAdmin 2.1.5
 
 CartAdmin è un'app Android per consultare e amministrare un negozio OpenCart da smartphone. L'app è sviluppata in Kotlin con Jetpack Compose e comunica esclusivamente con il modulo **CartAdmin Bridge** incluso nella stessa release.
 
-> App e bridge devono avere la stessa versione. Per la v2.1.4 aggiorna sia l'APK sia `cartadmin.ocmod.zip`.
+> App e bridge devono avere la stessa versione. Per la v2.1.5 aggiorna sia l'APK sia `cartadmin.ocmod.zip`.
 
 ## Download
 
-La versione stabile corrente è [CartAdmin v2.1.4](https://github.com/domtric80/OpenCart-mobile-App/releases/latest).
+La versione stabile corrente è [CartAdmin v2.1.5](https://github.com/domtric80/OpenCart-mobile-App/releases/latest).
 
 | Componente | File | Compatibilità confermata |
 | --- | --- | --- |
-| App Android | `CartAdmin-v2.1.4.apk` | Android 7.0 o successivo, API 24–36 |
+| App Android | `CartAdmin-v2.1.5.apk` | Android 7.0 o successivo, API 24–36 |
 | Bridge OpenCart | `cartadmin.ocmod.zip` | OpenCart 4.1.x |
 | Integrità | `SHA256SUMS.txt` | SHA-256 di APK e modulo |
 
@@ -50,7 +50,7 @@ Servono:
 
 Apri [GitHub Releases](https://github.com/domtric80/OpenCart-mobile-App/releases/latest) e scarica:
 
-1. `CartAdmin-v2.1.4.apk`;
+1. `CartAdmin-v2.1.5.apk`;
 2. `cartadmin.ocmod.zip`;
 3. facoltativamente `SHA256SUMS.txt`, per verificare l'integrità dei file.
 
@@ -109,7 +109,7 @@ Ogni token appartiene a un singolo operatore e viene associato al primo disposit
 
 ### 4. Installa e proteggi l'app
 
-1. Apri `CartAdmin-v2.1.4.apk` sul telefono.
+1. Apri `CartAdmin-v2.1.5.apk` sul telefono.
 2. Se Android lo richiede, autorizza temporaneamente l'installazione da quella specifica origine.
 3. Al primo avvio inserisci un nome operatore locale e una password robusta.
 4. Se disponibile, abilita lo sblocco biometrico forte.
@@ -151,7 +151,7 @@ Se non esistono profili, il pulsante **Salva** non sostituisce **Aggiungi**. Dop
 | --- | --- | --- |
 | `401 Non autorizzato` | token vuoto, incompleto, revocato o appartenente a un altro dispositivo | genera un nuovo token, copialo integralmente e salvalo sul dispositivo corretto |
 | Test API riuscito ma menu in `403` | manca lo scope di lettura richiesto | genera un token con il corrispondente permesso **Lettura**; aggiungi anche **Gestione** se devi modificare |
-| Il nuovo token non autentica | negli appunti è rimasto il token precedente | usa **Copia token** della v2.1.4 e controlla la conferma, oppure seleziona manualmente e usa `Ctrl+C` |
+| Il nuovo token non autentica | negli appunti è rimasto il token precedente | usa **Copia token** della v2.1.5 e controlla la conferma, oppure seleziona manualmente e usa `Ctrl+C` |
 | Modulo non rilevato | bridge assente, non installato o di versione differente | aggiorna `cartadmin.ocmod.zip`, installa il modulo e usa la stessa versione dell'app |
 | Impossibile salvare il profilo | URL non HTTPS, campi obbligatori mancanti o Keystore non hardware-backed | correggi i campi; usa un dispositivo con TEE o StrongBox |
 | Traffic vuoto | tracciamento OpenCart disabilitato o nessun visitatore attivo | abilita **Clienti online** nelle impostazioni OpenCart e visita lo store |
@@ -191,8 +191,12 @@ L'app non riceve IP, nome, email o identificativo cliente. Metriche che OpenCart
 
 Non inserire token, password, keystore o chiavi di firma in screenshot, issue, chat, commit o file versionati.
 
-## Novità della v2.1.4
+## Novità della v2.1.5
 
+- tornando nell'app dopo uno scatto, la scheda del nuovo prodotto e i dati già inseriti rimangono aperti;
+- l'uscita temporanea verso la fotocamera sospende una sola volta il blocco in background, per un massimo di cinque minuti;
+- annullamento, errore o completamento della fotocamera chiudono sempre l'eccezione temporanea;
+- galleria, blocco biometrico ordinario e timeout di sicurezza restano invariati;
 - il pulsante **Copia token** attende e verifica l'esito della Clipboard API;
 - se il browser limita gli appunti, il pannello seleziona il campo e propone `Ctrl+C`;
 - un messaggio distingue chiaramente copia riuscita e copia manuale necessaria;
@@ -235,7 +239,7 @@ GitHub Actions esegue build, test unitari, compilazione dei test strumentali, An
 Nella cartella che contiene i file scaricati:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 .\CartAdmin-v2.1.4.apk
+Get-FileHash -Algorithm SHA256 .\CartAdmin-v2.1.5.apk
 Get-FileHash -Algorithm SHA256 .\cartadmin.ocmod.zip
 Get-Content .\SHA256SUMS.txt
 ```
