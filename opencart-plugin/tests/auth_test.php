@@ -108,8 +108,8 @@ $contentSource = ($contentCaseStart !== false && $contentCaseEnd !== false)
     ? substr($bridgeSource, $contentCaseStart, $contentCaseEnd - $contentCaseStart)
     : '';
 
-assertSameValue('2.1.3', $manifest['version'] ?? '', 'The OpenCart manifest version must match the stable build.');
-assertSourceContains($bridgeSource, "'bridge_version' => '2.1.3'", 'The status endpoint must report the same stable build.');
+assertSameValue('2.1.4', $manifest['version'] ?? '', 'The OpenCart manifest version must match the stable build.');
+assertSourceContains($bridgeSource, "'bridge_version' => '2.1.4'", 'The status endpoint must report the same stable build.');
 assertSourceOmits($bridgeSource, 'get_key_setup', 'The bridge must not expose public token setup.');
 assertSourceOmits($bridgeSource, "\$_REQUEST['api_key']", 'The bridge must ignore URL/form credentials.');
 assertSourceOmits($bridgeSource, '`username` = ? AND `key` = ?', 'The bridge must not authenticate against plaintext native API keys.');
@@ -144,6 +144,9 @@ assertSourceContains($bridgeSource, '$legacyCredentialsPresent', 'A token recrea
 assertSourceContains($bridgeSource, "'Token legacy revocato', 'Operatore legacy', '', 0", 'Legacy credentials must be migrated only as revoked records without permissions.');
 assertSourceContains($adminModelSource, "&& \$hash === '' && \$legacy === ''", 'The migration marker must not hide credentials recreated by an older rollback.');
 assertSourceContains($adminModelSource, "'ca_' . \$lookup . '_' . bin2hex(random_bytes(32))", 'Tokens must use an indexed prefix and a cryptographically secure secret.');
+assertSourceContains($adminViewSource, 'await navigator.clipboard.writeText(input.value)', 'Token copy must wait for the Clipboard API result.');
+assertSourceContains($adminViewSource, "copied = document.execCommand('copy')", 'Token copy must fall back to explicit selection for older or restricted browsers.');
+assertSourceContains($adminViewSource, "showAlert(copied ? 'success' : 'danger'", 'Token copy must provide visible success or failure feedback.');
 assertSourceContains($bridgeSource, 'cartadminStateDigest($beforeState, $auditSalt)', 'Editorial before-state must be represented by a keyed digest.');
 assertSourceContains($bridgeSource, 'cartadminStateDigest($afterState, $auditSalt)', 'Editorial after-state must be represented by a keyed digest.');
 assertSourceContains($bridgeSource, "'success', \$beforeDigest, \$afterDigest", 'Successful editorial audit must be inserted before transaction commit.');

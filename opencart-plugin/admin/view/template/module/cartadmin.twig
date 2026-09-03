@@ -126,9 +126,30 @@ function showAlert(type, message) {
   notice.textContent = message;
   document.getElementById('alert').replaceChildren(notice);
 }
-document.getElementById('button-copy').addEventListener('click', function () {
+document.getElementById('button-copy').addEventListener('click', async function () {
   const input = document.getElementById('generated-token');
-  navigator.clipboard.writeText(input.value);
+  let copied = false;
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(input.value);
+      copied = true;
+    }
+  } catch (error) {
+    copied = false;
+  }
+  if (!copied) {
+    input.focus();
+    input.select();
+    input.setSelectionRange(0, input.value.length);
+    try {
+      copied = document.execCommand('copy');
+    } catch (error) {
+      copied = false;
+    }
+  }
+  showAlert(copied ? 'success' : 'danger', copied
+    ? '{{ text_token_copied|escape('js') }}'
+    : '{{ error_token_copy|escape('js') }}');
 });
 document.querySelectorAll('.command-action').forEach(function (button) {
   button.addEventListener('click', async function () {
