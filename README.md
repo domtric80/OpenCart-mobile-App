@@ -1,219 +1,35 @@
 # CartAdmin 2.1.4
 
-CartAdmin è un'app Android per consultare e amministrare un negozio OpenCart da smartphone. Il progetto è sviluppato in Kotlin con Jetpack Compose e include il bridge CartAdmin per OpenCart 4.1.x. La release stabile corrente è la v2.1.4.
+CartAdmin è un'app Android per consultare e amministrare un negozio OpenCart da smartphone. L'app è sviluppata in Kotlin con Jetpack Compose e comunica esclusivamente con il modulo **CartAdmin Bridge** incluso nella stessa release.
+
+> App e bridge devono avere la stessa versione. Per la v2.1.4 aggiorna sia l'APK sia `cartadmin.ocmod.zip`.
 
 ## Download
 
-La release stabile è disponibile in [GitHub Releases](https://github.com/domtric80/OpenCart-mobile-App/releases/latest).
+La versione stabile corrente è [CartAdmin v2.1.4](https://github.com/domtric80/OpenCart-mobile-App/releases/latest).
 
 | Componente | File | Compatibilità confermata |
 | --- | --- | --- |
 | App Android | `CartAdmin-v2.1.4.apk` | Android 7.0 o successivo, API 24–36 |
 | Bridge OpenCart | `cartadmin.ocmod.zip` | OpenCart 4.1.x |
+| Integrità | `SHA256SUMS.txt` | SHA-256 di APK e modulo |
 
-Il bridge incluso non dichiara compatibilità con OpenCart 3.x. Un eventuale pacchetto per quel ramo dovrà essere pubblicato e verificato separatamente.
+Il bridge non dichiara compatibilità con OpenCart 3.x.
 
-### Novità della 2.1.0
+## Cosa puoi fare
 
-- CRUD remoto verificato per prodotti e categorie, con conferma del bridge prima dell'aggiornamento dello stato in memoria;
-- immagini prodotto e articolo da fotocamera o galleria, validate come JPEG/PNG/WebP fino a 5 MB;
-- creazione di articoli e categorie CMS, inclusi meta tag, immagine, lingue attive e associazione allo store;
-- modifica controllata di pagine, recensioni, articoli e argomenti, con ricalcolo del rating prodotto;
-- editor HTML a pagina intera con toolbar fissa, P/H1/H2/H3, colore, grassetto, corsivo, sottolineato ed elenco puntato;
-- approvazioni clienti e richieste GDPR tramite coda protetta e conferma nel pannello OpenCart;
-- telemetria distinta tra guest e clienti registrati dalla tabella nativa `customer_online`, senza dati dimostrativi o identità personali nell'app;
-- token nominativi per dispositivo con scope minimi, revoca selettiva e identità operatore verificata lato server;
-- audit atomico delle modifiche con digest HMAC, senza contenuti editoriali o dati personali in chiaro;
-- credenziali Android cifrate AES-256-GCM con chiave Android Keystore hardware-backed;
-- compatibilità dei flussi fotocamera/galleria verificata anche con il moderno `ActivityResultRegistry`.
+- controllare dashboard, ordini, resi e abbonamenti;
+- aggiornare lo stato degli ordini;
+- gestire prodotti, categorie, quantità, prezzi e immagini;
+- creare immagini prodotto dalla fotocamera o sceglierle dalla galleria;
+- gestire pagine, recensioni, articoli e categorie CMS;
+- creare articoli con immagine, autore, contenuto e meta tag;
+- consultare clienti e inoltrare richieste sensibili di approvazione o GDPR;
+- visualizzare i visitatori online distinguendo guest e clienti registrati;
+- consultare l'audit server-side delle operazioni;
+- usare più profili negozio sullo stesso dispositivo.
 
-App Android e bridge devono essere aggiornati entrambi alla v2.1.4.
-
-### Novità della 2.1.4
-
-- il pulsante **Copia token** attende e verifica l'esito della Clipboard API, evitando che negli appunti rimanga silenziosamente una credenziale precedente;
-- nei browser che limitano l'accesso moderno agli appunti viene usato un fallback basato sulla selezione esplicita del campo;
-- il pannello mostra un messaggio chiaro sia quando la copia riesce sia quando occorre usare `Ctrl+C` manualmente;
-- nessun token viene registrato nei log o conservato in chiaro dal modulo: il valore completo continua a essere mostrato una sola volta.
-
-### Novità della 2.1.3
-
-- corretto il crash immediatamente successivo allo sblocco biometrico introdotto dalla creazione del `MainViewModel` senza la factory Android richiesta;
-- il ViewModel amministrativo continua a esistere soltanto durante la sessione sbloccata e viene distrutto quando l'app passa in background;
-- aggiunto un test di regressione che verifica esplicitamente l'uso della factory con il proprietario della sessione protetta;
-- aggiornamento installato sopra la 2.1.2 e sblocco biometrico verificato su Redmi Note 9S con Android 12/API 31, senza eccezioni dell'app in Logcat.
-
-### Novità della 2.1.2
-
-- lo sblocco biometrico è legato a una firma ECDSA autenticata per singolo utilizzo tramite `BiometricPrompt.CryptoObject`;
-- una challenge casuale viene firmata con una chiave non esportabile e verificata prima di creare la sessione amministrativa;
-- la chiave di sblocco richiede biometria forte ed è accettata soltanto se custodita in TEE o StrongBox;
-- il callback biometrico, da solo, non può più aprire la console; sui dispositivi senza biometria forte rimane disponibile la password CartAdmin;
-- i token per dispositivo generati con la 2.1.1 restano validi e non devono essere ruotati nuovamente.
-
-### Novità della 2.1.1
-
-- il `MainViewModel`, le credenziali decifrate e le chiamate di rete esistono soltanto dopo lo sblocco tramite biometria forte o password CartAdmin;
-- l'app si blocca e distrugge la sessione quando passa in background e comunque dopo cinque minuti;
-- screenshot, registrazione schermo, overlay e tocchi oscurati vengono bloccati per la finestra amministrativa;
-- la chiave AES delle credenziali richiede una recente autenticazione utente ed è obbligatoriamente custodita in TEE/StrongBox;
-- ogni richiesta al bridge è firmata con una chiave ECDSA hardware non esportabile; timestamp e nonce impediscono il riutilizzo delle richieste;
-- ordini, clienti, resi, abbonamenti, audit, catalogo e telemetria non vengono persistiti nella cache Room e le vecchie copie locali vengono bonificate;
-- notifiche e schermata di blocco non mostrano cliente, importo, prodotto o token FCM;
-- rimosso il fallback all'API nativa OpenCart con privilegi globali: è accettato soltanto il bridge HTTPS con scope granulari;
-- il bridge applica HTTPS/HSTS, rate limiting, metodi HTTP, token per operatore/dispositivo, scope separati e audit atomico delle scritture;
-- le GitHub Actions di terze parti sono fissate a commit immutabili; release e plugin includono checksum SHA-256 e attestazione di provenienza.
-
-### Novità della 2.0.1
-
-- migliorato il contrasto dell'avviso di prima configurazione e del badge della versione OpenCart;
-- nuova icona launcher ufficiale OpenCart Italia, adattiva, tonda e monocromatica;
-- eliminato l'ultimo valore dimostrativo degli avvisi scorte: senza negozio la dashboard mostra valori zero;
-- aggiunta una guida illustrata completa per installare il bridge, generare o ruotare il token e configurare il primo negozio;
-- mantenute le funzionalità e la navigazione amministrativa introdotte nella 2.0.0.
-
-### Novità della 2.0.0
-
-- barra inferiore ridotta a cinque voci: Home, Vendite, Catalogo, Clienti e Altro;
-- sottomenu Catalogo con Prodotti, Categorie, Piani di abbonamento, Pagine e Recensioni;
-- nuovo menu CMS con Articoli, Argomenti, Commenti e Antispam;
-- nuovo menu Clienti con Clienti, Approvazione clienti e GDPR;
-- Traffic, CMS e Configurazione raggruppati sotto Altro;
-- Audit e Licenza spostati nella schermata Configurazione;
-- elenchi amministrativi letti in tempo reale dalle tabelle native OpenCart, senza record dimostrativi;
-- attivazione e disattivazione remota verificata per i moduli che espongono uno stato semplice;
-- compatibilità esplicita: se una tabella non esiste nella versione installata, l'app mostra “funzione non disponibile” invece di dati fittizi.
-
-Nel pannello, prima di generare un token occorre indicare un'etichetta, selezionare un utente amministrativo OpenCart attivo e scegliere soltanto gli scope necessari. `Stato connessione` è obbligatorio; per il normale uso selezionare separatamente lettura/scrittura di Ordini, Catalogo e Contenuti. Concedere `Lettura clienti e GDPR` e `Clienti e GDPR` soltanto ai dispositivi che devono realmente gestire tali dati. Il token conserva `user_id` e username verificati lato server; per un secondo dispositivo va creato un token separato. La revoca è individuale e non interrompe gli altri dispositivi.
-
-Con il passaggio alla 2.1.1 i token precedenti devono essere revocati e rigenerati: il vecchio scope globale `read` non viene più accettato e il nuovo bridge richiede la prova crittografica della chiave hardware del dispositivo. Aggiornare prima il bridge, generare un token nominativo con privilegi minimi, aggiornare l'app e inserire il nuovo token. App e bridge devono avere la stessa versione.
-
-### Novità della 1.2.8
-
-- telemetria visitatori reale letta dalla tabella nativa OpenCart `customer_online`, con aggiornamento automatico ogni 30 secondi;
-- diagnostica esplicita quando il tracciamento **Clienti online** è disabilitato o il bridge non è aggiornato;
-- modifica remota verificata di nome, descrizione, modello, SKU, prezzo, quantità, stato e categoria esistente dei prodotti;
-- aggiornamenti locali applicati soltanto dopo la conferma positiva del bridge;
-- eliminati i messaggi di successo per operazioni che non hanno ancora un endpoint remoto sicuro;
-- versione e build installate visibili nella schermata Config;
-- mantenute le correzioni 1.2.7 per abbonamenti e resi senza dati dimostrativi.
-
-La creazione e l'eliminazione dei prodotti e il CRUD delle categorie restano temporaneamente non disponibili dall'app: CartAdmin non modifica più soltanto la cache fingendo un aggiornamento dello store. Le offerte e le promozioni programmate continuano a essere gestite dal pannello OpenCart.
-
-## Installazione e prima configurazione
-
-Usare sempre l'APK e il bridge provenienti dalla stessa release. Servono un sito OpenCart 4.1.x raggiungibile in HTTPS, l'accesso al pannello amministrativo e un dispositivo Android 7.0 o successivo.
-
-### 1. Scarica i due file della release
-
-Da [GitHub Releases](https://github.com/domtric80/OpenCart-mobile-App/releases/latest) scarica:
-
-- `CartAdmin-v2.1.4.apk`, da installare sul dispositivo Android;
-- `cartadmin.ocmod.zip`, da caricare nel pannello OpenCart senza estrarlo e senza rinominarlo.
-
-### 2. Installa il bridge dal pannello OpenCart
-
-1. Accedi all'amministrazione OpenCart con un account autorizzato a gestire le estensioni.
-2. Apri **Estensioni > Programma di installazione**; nelle interfacce inglesi la voce è **Extensions > Installer**.
-3. Premi **Carica** e seleziona `cartadmin.ocmod.zip`. Attendi il messaggio di installazione completata. Lo ZIP contiene `install.json`: se OpenCart segnala che manca, il file caricato non è quello della release o è stato estratto/ricomposto.
-4. Apri **Estensioni > Estensioni**, seleziona **Moduli** dal tipo di estensione e cerca **CartAdmin Bridge**.
-5. Premi **Installa** accanto al modulo, poi **Modifica** per aprirne la configurazione.
-
-Non copiare manualmente `cartadmin_api.php` sul server e non modificare file PHP per configurare la chiave: installazione e configurazione avvengono dal pannello.
-
-### 3. Genera la chiave CartAdmin
-
-1. Alla prima apertura del modulo premi **Genera token**.
-2. Copia immediatamente l'intero valore che inizia con `ca_`: viene mostrato una sola volta.
-3. Conservalo temporaneamente soltanto per il tempo necessario a inserirlo nell'app. Non inviarlo in chat, email, issue o screenshot.
-4. Dopo la generazione, il pannello mostra **Token configurato**, endpoint, ultime quattro cifre e data. Nel database rimane soltanto un hash non reversibile.
-5. Se la chiave è stata persa o esposta, premi **Ruota token**. La rotazione invalida subito la chiave precedente: copia il nuovo valore e aggiornalo nell'app.
-
-<p align="center">
-  <img src="docs/screenshots/opencart-bridge-configured.png" alt="Modulo CartAdmin Bridge configurato nel pannello OpenCart" width="860">
-</p>
-
-Nell'immagine il token completo non è visibile: è il comportamento previsto dopo il salvataggio.
-
-### 4. Installa e proteggi l'app Android
-
-1. Apri `CartAdmin-v2.1.4.apk` sul dispositivo. Se Android lo richiede, autorizza l'installazione da questa origine soltanto per il gestore file o browser usato.
-2. Al primo avvio inserisci un nome operatore e una password locale robusta, quindi confermala.
-3. La password protegge l'accesso all'app; lo sblocco biometrico forte può essere abilitato sui dispositivi compatibili.
-
-<p align="center">
-  <img src="docs/screenshots/app-first-access.png" alt="Primo accesso protetto di CartAdmin" width="300">
-</p>
-
-### 5. Aggiungi il primo negozio nell'app
-
-1. Tocca **Altro > Configurazione**. Se non esistono profili compare l'avviso viola **Nessun negozio configurato**.
-2. Inserisci un nome riconoscibile, per esempio `Negozio principale`.
-3. Inserisci soltanto l'URL base HTTPS, per esempio `https://negozio.example`. Non aggiungere `/admin`, `/extension/cartadmin/` o `cartadmin_api.php`.
-4. Inserisci un'etichetta locale. Il registro usa come identità autorevole l'operatore assegnato al token dal pannello OpenCart; il valore dell'app non può sostituirlo. Con il bridge CartAdmin non è necessario creare manualmente una chiave nell'area API nativa di OpenCart.
-5. Incolla nel campo protetto il token `ca_...` generato dal modulo e seleziona **OpenCart 4.1.x**.
-6. Premi **Aggiungi**. Questo pulsante crea e salva il primo profilo; finché i campi obbligatori non sono completi rimane disattivato.
-7. Dopo il salvataggio premi **Test API**. Se il test riesce, premi **Sincronizza dati adesso**.
-
-<p align="center">
-  <img src="docs/screenshots/app-first-store-config.png" alt="Configurazione del primo negozio in CartAdmin" width="300">
-</p>
-
-Dopo il salvataggio il campo token torna vuoto e il valore non viene più mostrato. Per aggiornare gli altri dati lascia il campo vuoto: CartAdmin mantiene il token protetto. Inserisci un nuovo valore solo dopo aver ruotato il token dal pannello OpenCart.
-
-Se compare `401 Non autorizzato`, verificare che il valore incollato non sia vuoto, che inizi realmente con `ca_`, che non contenga spazi e che non sia stato ruotato dopo il salvataggio nell'app. Verificare inoltre di usare l'URL base dello stesso sito in cui è installato il modulo.
-
-### 6. Abilita la telemetria visitatori
-
-1. Nel pannello OpenCart apri **Sistema > Impostazioni** e modifica il negozio.
-2. Nella scheda **Opzioni** abilita **Clienti online** e imposta il tempo di inattività desiderato.
-3. Installa il bridge della stessa release dell'app e riapri **Traffic**.
-
-OpenCart registra soltanto visitatori attivi, URL, provenienza e ultimo aggiornamento. Non registra nella tabella `customer_online` user agent, geolocalizzazione, durata completa della sessione o bounce rate; CartAdmin lascia queste metriche non disponibili invece di generare valori dimostrativi.
-
-CartAdmin mostra separatamente **Guest online** (`customer_id = 0`) e **Clienti online** (`customer_id > 0`). Gli eventi indicano soltanto il tipo di visitatore e il percorso richiesto: IP, nome, email e ID cliente non vengono inviati all'app.
-
-### 7. Foto prodotto e nuovi contenuti CMS
-
-- In **Catalogo > Prodotti > Nuovo prodotto** scegli **Fotocamera** oppure **Galleria**. Android affida lo scatto all'app fotocamera installata e condivide soltanto un file temporaneo privato; CartAdmin non richiede accesso generale alle foto.
-- Sono accettate immagini JPEG, PNG e WebP fino a 5 MB. Il bridge ricontrolla tipo reale e dimensioni, genera un nome casuale e salva il file in `image/catalog/cartadmin/`.
-- In **Altro > CMS > Argomenti** usa **Nuova categoria CMS**. Inserisci titolo, descrizione, ordinamento e stato.
-- In **Altro > CMS > Articoli** usa **Nuovo articolo**, scegli una categoria CMS esistente, quindi inserisci titolo, autore, contenuto, **Meta tag Titolo** obbligatorio, Meta tag Descrizione, Meta tag Parola Chiave, immagine e stato.
-- L'immagine articolo usa lo stesso flusso sicuro di fotocamera/galleria dei prodotti. I nuovi contenuti vengono associati allo store principale e inizializzati in tutte le lingue attive; le traduzioni differenziate restano rifinibili dal pannello OpenCart.
-
-## Come viene protetto il token
-
-- OpenCart genera un token casuale a 256 bit e salva soltanto un hash Argon2id, con fallback all'algoritmo sicuro disponibile in PHP.
-- Android salva la propria copia cifrata con AES-256-GCM e una chiave non esportabile di Android Keystore.
-- StrongBox viene preferito quando presente; in alternativa è obbligatoria una chiave hardware-backed nel TEE. Se il dispositivo offre soltanto protezione software, il salvataggio fallisce in modo sicuro.
-- Il token salvato non viene associato al campo dell'interfaccia. Dopo lo sblocco dell'app la credenziale può essere decifrata in memoria soltanto per effettuare richieste HTTPS autenticate.
-- Il bridge accetta il token negli header HTTP e ignora credenziali inviate in URL o form body.
-- Ogni token è associato al primo dispositivo che lo usa, ha scope espliciti ed è revocabile singolarmente dal pannello OpenCart.
-- L'associazione è verificata da una firma ECDSA P-256 prodotta da una chiave privata non esportabile in TEE/StrongBox; il server conserva soltanto la chiave pubblica e rifiuta richieste scadute o già usate.
-- Gli scope di lettura sono distinti per stato, ordini, catalogo, contenuti, clienti/GDPR e telemetria; non esiste più un permesso globale `read`.
-- Il registro di sicurezza attribuisce l'operazione all'utente OpenCart assegnato al token lato server. L'app 2.1 non invia un nome operatore; eventuali dichiarazioni provenienti da client precedenti vengono conservate soltanto come digest HMAC e indicatore di incongruenza.
-- Le modifiche editoriali riuscite e il relativo evento di audit vengono confermati nella stessa transazione. In caso di rollback viene registrato un fallimento separato, senza contenuti o dati personali in chiaro.
-
-Non inserire token, password, keystore o chiavi di firma in issue, screenshot, commit o file di configurazione versionati.
-
-## Funzionalità presenti
-
-- dashboard con indicatori di vendita e attività;
-- consultazione e aggiornamento dello stato degli ordini;
-- catalogo, categorie, quantità e prezzi con CRUD remoto verificato;
-- elenchi amministrativi per Pagine, Recensioni, CMS e Clienti, editor controllati e coda Clienti/GDPR;
-- abbonamenti e resi esposti dal bridge;
-- cache Room limitata ai profili negozio interamente cifrati con chiave hardware; tutti i dati remoti restano soltanto nella sessione sbloccata;
-- selezione di più profili negozio;
-- notifiche Firebase Cloud Messaging quando configurate;
-- audit delle operazioni inviate al bridge;
-- blocco dell'app con password locale PBKDF2 e sblocco biometrico forte opzionale.
-
-Ordini, clienti, resi, abbonamenti, audit, catalogo e telemetria non sono disponibili offline e scompaiono quando la sessione viene bloccata. Nome, URL, versione e credenziali del profilo negozio sono cifrati tramite una chiave non esportabile in TEE/StrongBox. Anche il token FCM non viene copiato in preferenze locali. L'app non inserisce dati dimostrativi.
-
-## Screenshot
-
-Schermate reali acquisite su emulatore Android senza credenziali o dati cliente. La dashboard senza negozio non genera contenuti dimostrativi; i sottomenu mantengono accessibili le funzioni senza affollare la barra inferiore.
+La barra inferiore contiene cinque aree: **Home**, **Vendite**, **Catalogo**, **Clienti** e **Altro**. I sottomenu mantengono accessibili le funzioni senza affollare la navigazione.
 
 <p align="center">
   <img src="docs/screenshots/app-home-no-store.png" alt="Dashboard CartAdmin senza negozio configurato" width="300">
@@ -221,22 +37,181 @@ Schermate reali acquisite su emulatore Android senza credenziali o dati cliente.
   <img src="docs/screenshots/app-catalog-menu.png" alt="Sottomenu Catalogo di CartAdmin" width="300">
 </p>
 
-Non vengono pubblicati mockup o schermate che contengano token, password, dati cliente reali o altri segreti. La schermata Config nasconde sempre il token digitato e non lo ripropone dopo il salvataggio.
+## Installazione e prima configurazione
 
-L'icona launcher usa l'[asset quadrato pubblicato dal sito ufficiale OpenCart Italia](https://opencartitalia.it/wp-content/uploads/2024/05/opencart-300x300.png), conservato senza modifiche nel progetto e ridimensionato per le densità Android.
+Servono:
+
+- un negozio OpenCart 4.1.x raggiungibile tramite HTTPS;
+- un account amministrativo autorizzato a installare estensioni;
+- un dispositivo Android 7.0 o successivo;
+- APK e bridge scaricati dalla medesima release.
+
+### 1. Scarica i file
+
+Apri [GitHub Releases](https://github.com/domtric80/OpenCart-mobile-App/releases/latest) e scarica:
+
+1. `CartAdmin-v2.1.4.apk`;
+2. `cartadmin.ocmod.zip`;
+3. facoltativamente `SHA256SUMS.txt`, per verificare l'integrità dei file.
+
+Non estrarre e non rinominare `cartadmin.ocmod.zip`.
+
+### 2. Installa CartAdmin Bridge in OpenCart
+
+1. Accedi al pannello amministrativo OpenCart.
+2. Apri **Estensioni > Programma di installazione**; in inglese: **Extensions > Installer**.
+3. Premi il pulsante di caricamento e seleziona `cartadmin.ocmod.zip`.
+4. Attendi il completamento dell'installazione.
+5. Apri **Estensioni > Estensioni**.
+6. Seleziona **Moduli** come tipo di estensione.
+7. Cerca **CartAdmin Bridge**, premi **Installa** e poi **Modifica**.
+
+Lo ZIP ufficiale contiene `install.json`. Se OpenCart segnala che il file manca, è stato caricato un archivio errato oppure lo ZIP è stato estratto e ricomposto.
+
+Non copiare manualmente file PHP sul server e non configurare la chiave modificando i file del bridge.
+
+### 3. Genera un token per il dispositivo
+
+Nel modulo **CartAdmin Bridge**:
+
+1. inserisci un'etichetta riconoscibile, per esempio `Telefono magazzino`;
+2. seleziona un utente OpenCart attivo nel campo **Operatore verificato**;
+3. abilita soltanto i permessi necessari;
+4. premi **Genera token**;
+5. premi **Copia token** e verifica il messaggio di conferma;
+6. se il browser impedisce la copia automatica, seleziona il valore e usa `Ctrl+C`;
+7. conserva il token solo per il tempo necessario a inserirlo nell'app.
+
+<p align="center">
+  <img src="docs/screenshots/opencart-bridge-permissions.png" alt="CartAdmin Bridge: operatore verificato e permessi del token" width="1000">
+</p>
+
+Il token completo inizia con `ca_` ed è mostrato una sola volta. OpenCart conserva soltanto un hash non reversibile.
+
+#### Come scegliere i permessi
+
+| Permesso nel pannello | Consente all'app di |
+| --- | --- |
+| Stato connessione | verificare bridge e autenticazione; è sempre richiesto |
+| Lettura ordini, abbonamenti e resi | mostrare Vendite, abbonamenti e resi |
+| Lettura catalogo | mostrare prodotti, categorie e piani |
+| Lettura contenuti | mostrare pagine, recensioni e CMS |
+| Lettura clienti e GDPR | mostrare clienti e richieste correlate |
+| Lettura telemetria | mostrare Traffic e visitatori online |
+| Gestione ordini | modificare gli ordini |
+| Gestione catalogo | creare e modificare prodotti e categorie |
+| Contenuti e moderazione | creare e modificare contenuti e recensioni |
+| Clienti e GDPR | inviare operazioni sensibili alla coda di approvazione |
+
+I permessi di gestione non sostituiscono quelli di lettura. Per vedere e modificare il Catalogo, per esempio, seleziona sia **Lettura catalogo** sia **Gestione catalogo**. Un token con soli permessi di gestione può superare il Test API ma ricevere `403` aprendo gli elenchi.
+
+Ogni token appartiene a un singolo operatore e viene associato al primo dispositivo che lo usa. Per un altro telefono crea un token separato. La revoca di un token non interrompe gli altri dispositivi.
+
+### 4. Installa e proteggi l'app
+
+1. Apri `CartAdmin-v2.1.4.apk` sul telefono.
+2. Se Android lo richiede, autorizza temporaneamente l'installazione da quella specifica origine.
+3. Al primo avvio inserisci un nome operatore locale e una password robusta.
+4. Se disponibile, abilita lo sblocco biometrico forte.
+
+<p align="center">
+  <img src="docs/screenshots/app-first-access.png" alt="Primo accesso protetto di CartAdmin" width="300">
+</p>
+
+La password locale protegge l'accesso all'app. L'identità usata nell'audit proviene invece dall'utente OpenCart assegnato al token nel pannello.
+
+### 5. Aggiungi il primo negozio
+
+1. Apri **Altro > Configurazione**.
+2. Inserisci un nome riconoscibile, per esempio `Negozio principale`.
+3. Inserisci l'URL base HTTPS, per esempio `https://negozio.example`.
+4. Non aggiungere `/admin`, `/extension/cartadmin/` o `cartadmin_api.php`.
+5. Inserisci un'etichetta locale nel campo operatore.
+6. Incolla il token `ca_...` appena generato.
+7. Seleziona **OpenCart 4.1.x**.
+8. Premi **Aggiungi**: questo pulsante crea e salva il primo profilo.
+
+<p align="center">
+  <img src="docs/screenshots/app-first-store-config.png" alt="Configurazione del primo negozio in CartAdmin" width="300">
+</p>
+
+Se non esistono profili, il pulsante **Salva** non sostituisce **Aggiungi**. Dopo il salvataggio il campo token torna vuoto e il valore non viene mai più mostrato. Per modificare nome o URL lascia vuoto il campo token: quello protetto rimane memorizzato.
+
+### 6. Verifica e sincronizza
+
+1. Premi **Test API**.
+2. Controlla che venga riconosciuto **CartAdmin Bridge**.
+3. Premi **Sincronizza dati adesso**.
+4. Apri **Catalogo**, **Vendite** e gli altri menu concessi al token.
+5. Nel pannello OpenCart verifica che il token passi da **In attesa del primo uso** ad **Associato**.
+
+## Risoluzione dei problemi
+
+| Messaggio | Causa più probabile | Soluzione |
+| --- | --- | --- |
+| `401 Non autorizzato` | token vuoto, incompleto, revocato o appartenente a un altro dispositivo | genera un nuovo token, copialo integralmente e salvalo sul dispositivo corretto |
+| Test API riuscito ma menu in `403` | manca lo scope di lettura richiesto | genera un token con il corrispondente permesso **Lettura**; aggiungi anche **Gestione** se devi modificare |
+| Il nuovo token non autentica | negli appunti è rimasto il token precedente | usa **Copia token** della v2.1.4 e controlla la conferma, oppure seleziona manualmente e usa `Ctrl+C` |
+| Modulo non rilevato | bridge assente, non installato o di versione differente | aggiorna `cartadmin.ocmod.zip`, installa il modulo e usa la stessa versione dell'app |
+| Impossibile salvare il profilo | URL non HTTPS, campi obbligatori mancanti o Keystore non hardware-backed | correggi i campi; usa un dispositivo con TEE o StrongBox |
+| Traffic vuoto | tracciamento OpenCart disabilitato o nessun visitatore attivo | abilita **Clienti online** nelle impostazioni OpenCart e visita lo store |
+
+### Telemetria visitatori
+
+In OpenCart apri **Sistema > Impostazioni**, modifica il negozio e nella scheda **Opzioni** abilita **Clienti online**. CartAdmin legge la tabella nativa `customer_online` e distingue:
+
+- guest: `customer_id = 0`;
+- clienti registrati: `customer_id > 0`.
+
+L'app non riceve IP, nome, email o identificativo cliente. Metriche che OpenCart non registra, come geolocalizzazione o bounce rate, rimangono non disponibili invece di essere simulate.
+
+### Foto prodotto e contenuti CMS
+
+- In **Catalogo > Prodotti > Nuovo prodotto** scegli **Fotocamera** o **Galleria**.
+- Android condivide con CartAdmin soltanto il file scelto o una foto temporanea privata; non è richiesto l'accesso generale alla galleria.
+- Il bridge accetta JPEG, PNG e WebP fino a 5 MB, verifica il contenuto e salva il file con un nome casuale.
+- In **Altro > CMS > Argomenti** puoi creare una categoria CMS.
+- In **Altro > CMS > Articoli** puoi creare un articolo con titolo, autore, contenuto, meta titolo obbligatorio, meta descrizione, parole chiave, immagine e stato.
+- L'editor HTML usa una pagina intera e una toolbar con paragrafo, H1/H2/H3, colore, grassetto, corsivo, sottolineato ed elenco puntato.
+
+## Sicurezza
+
+- il token OpenCart è casuale a 256 bit e nel database viene conservato soltanto come hash;
+- Android cifra il profilo negozio con AES-256-GCM;
+- la chiave AES non è esportabile ed è accettata soltanto se custodita in TEE o StrongBox;
+- lo sblocco biometrico firma una challenge con una chiave ECDSA hardware-backed e autenticata per singolo utilizzo;
+- ogni richiesta al bridge è firmata; timestamp e nonce impediscono il riutilizzo;
+- il token viene trasmesso soltanto negli header HTTPS e non compare in URL o form body;
+- dati remoti, ordini, clienti, catalogo e telemetria restano soltanto nella sessione sbloccata;
+- quando l'app passa in background la sessione amministrativa e il relativo ViewModel vengono distrutti;
+- screenshot, registrazione dello schermo, overlay e tocchi oscurati sono bloccati nella build stabile;
+- le notifiche non mostrano dati cliente, importi, prodotti o token;
+- le scritture e il relativo audit server-side sono confermati atomicamente;
+- le operazioni sensibili su clienti e GDPR richiedono conferma nel pannello OpenCart.
+
+Non inserire token, password, keystore o chiavi di firma in screenshot, issue, chat, commit o file versionati.
+
+## Novità della v2.1.4
+
+- il pulsante **Copia token** attende e verifica l'esito della Clipboard API;
+- se il browser limita gli appunti, il pannello seleziona il campo e propone `Ctrl+C`;
+- un messaggio distingue chiaramente copia riuscita e copia manuale necessaria;
+- il valore completo continua a essere mostrato una sola volta e non viene registrato nei log.
+
+Per la cronologia completa consulta [Releases](https://github.com/domtric80/OpenCart-mobile-App/releases).
 
 ## Architettura
 
 - UI: Jetpack Compose e Material 3;
-- stato applicativo: MVVM, `MainViewModel`, Coroutines e `StateFlow`;
-- persistenza: Room;
-- rete: Retrofit/OkHttp e JSON Moshi;
+- stato: MVVM, `MainViewModel`, Coroutines e `StateFlow`;
+- persistenza locale: Room, limitata ai profili negozio cifrati;
+- rete: Retrofit, OkHttp e Moshi;
 - sicurezza locale: Android Keystore, AES-256-GCM, PBKDF2 e BiometricPrompt;
 - integrazione server: estensione PHP CartAdmin Bridge per OpenCart 4.1.x.
 
 ## Build e test locali
 
-Il progetto usa il Gradle Wrapper e richiede Android Studio con Android SDK 36. È preferibile il JDK integrato in Android Studio.
+Il progetto usa il Gradle Wrapper, Android SDK 36 e preferibilmente il JDK integrato in Android Studio.
 
 In PowerShell:
 
@@ -253,19 +228,32 @@ Con un emulatore o dispositivo collegato:
 ./gradlew.bat :app:connectedDebugAndroidTest
 ```
 
-I workflow GitHub Actions compilano l'APK, eseguono test e Lint, validano il pacchetto OpenCart ed effettuano controlli CodeQL, Semgrep e PHP. La pubblicazione stabile richiede un tag identico al `versionName` e usa i segreti di firma configurati nel repository GitHub.
+GitHub Actions esegue build, test unitari, compilazione dei test strumentali, Android Lint, controlli PHP/OCMOD, CodeQL, Semgrep, controllo dei segreti, firma e attestazione degli artefatti.
+
+## Verifica dei checksum
+
+Nella cartella che contiene i file scaricati:
+
+```powershell
+Get-FileHash -Algorithm SHA256 .\CartAdmin-v2.1.4.apk
+Get-FileHash -Algorithm SHA256 .\cartadmin.ocmod.zip
+Get-Content .\SHA256SUMS.txt
+```
+
+I valori calcolati devono coincidere con quelli pubblicati in `SHA256SUMS.txt`.
 
 ## Repository
 
 - `app/`: applicazione Android e test;
-- `opencart-plugin/`: manifest, modulo amministrativo, bridge PHP e test di autenticazione;
-- `.github/workflows/`: build, pubblicazione e controlli di sicurezza;
+- `opencart-plugin/`: manifest, modulo amministrativo, bridge PHP e test;
+- `docs/screenshots/`: schermate usate nella documentazione;
+- `.github/workflows/`: build, pubblicazione e sicurezza;
 - `gradle/` e `gradlew*`: Gradle Wrapper.
 
 ## Licenza e progetto
 
 CartAdmin è distribuito con licenza [GNU GPL v3](LICENSE).
 
-- OpenCart ITALIA: [www.opencartitalia.it](https://www.opencartitalia.it)
-- SOLO SOLUZIONI: [www.solosoluzioni.it](https://www.solosoluzioni.it)
-- Sviluppatore: [www.domenicotricarico.it](https://www.domenicotricarico.it)
+- [OpenCart ITALIA](https://www.opencartitalia.it)
+- [SOLO SOLUZIONI](https://www.solosoluzioni.it)
+- [Domenico Tricarico](https://www.domenicotricarico.it)
