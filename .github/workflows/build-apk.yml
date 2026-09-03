@@ -306,10 +306,12 @@ jobs:
             cat << EOF > release_notes.md
           ## CartAdmin ${TAG_NAME}
 
-          Release stabile correttiva e di sicurezza. Risolve il crash successivo allo sblocco biometrico mantenendo la sessione amministrativa confinata e le difese fail-closed introdotte nella serie 2.1.
+          Release stabile di manutenzione. Corregge la copia del token nel pannello CartAdmin Bridge mantenendo le protezioni e le difese fail-closed introdotte nella serie 2.1.
 
           ### Hardening confermato
 
+          - il comando **Copia token** verifica l'esito della Clipboard API, usa un fallback compatibile e comunica chiaramente successo o errore;
+          - il token completo continua a essere mostrato una sola volta e non viene scritto nei log o persistito in chiaro dal modulo;
           - corretto il crash dovuto alla creazione del ViewModel protetto senza `AndroidViewModelFactory` dopo l'autenticazione;
           - sessione biometrica verificata su Redmi Note 9S con Android 12/API 31: processo attivo, Activity in stato `RESUMED` e nessuna eccezione applicativa in Logcat;
           - profilo negozio interamente cifrato tramite AES-256-GCM con chiave non esportabile TEE/StrongBox e autenticazione utente recente;
@@ -345,7 +347,7 @@ jobs:
 
           Build release firmata, test unitari, compilazione dei test strumentali, Android Lint e struttura del pacchetto OCMOD sono verificati dal workflow di pubblicazione. I workflow di sicurezza eseguono inoltre CodeQL, Semgrep, controllo sintattico PHP e test dell'autenticazione del bridge.
 
-          **Aggiornamento dalla 2.1.2:** installare prima il modulo OpenCart 2.1.3 e poi aggiornare l'app. I token per dispositivo esistenti restano validi e non devono essere ruotati nuovamente.
+          **Aggiornamento dalla 2.1.3:** installare prima il modulo OpenCart 2.1.4 e poi aggiornare l'app. I token per dispositivo esistenti restano validi e non devono essere ruotati nuovamente.
 
           Compatibilità confermata: Android API 24–36 e OpenCart 4.1.x. Il bridge non dichiara compatibilità con OpenCart 3.x.
           EOF
