@@ -692,7 +692,7 @@ try {
             sendJson([
                 'success' => true,
                 'status' => 'online',
-                'bridge_version' => '2.1.1',
+                'bridge_version' => '2.1.2',
                 'author' => 'SOLO SOLUZIONI (OpenCart ITALIA)',
                 'store_name' => $storeName,
                 'authenticated_operator' => $authenticatedOperator,

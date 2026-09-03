@@ -37,6 +37,7 @@ data class AuthStatus(
 class SecurityManager(private val context: Context) {
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val biometricUnlockCrypto = BiometricUnlockCrypto()
 
     companion object {
         private const val PREFS_NAME = "cartadmin_security_vault"
@@ -125,15 +126,13 @@ class SecurityManager(private val context: Context) {
         return status == BiometricManager.BIOMETRIC_SUCCESS
     }
 
-    fun canUseStrongDeviceAuthentication(): Boolean {
-        val status = runCatching {
-            BiometricManager.from(context).canAuthenticate(
-                BiometricManager.Authenticators.BIOMETRIC_STRONG or
-                    BiometricManager.Authenticators.DEVICE_CREDENTIAL
-            )
-        }.getOrDefault(BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE)
-        return status == BiometricManager.BIOMETRIC_SUCCESS
-    }
+    internal fun createBiometricUnlockOperation(): BiometricUnlockCrypto.PendingOperation =
+        biometricUnlockCrypto.createOperation()
+
+    internal fun completeBiometricUnlock(
+        authenticatedSigner: java.security.Signature?,
+        pendingOperation: BiometricUnlockCrypto.PendingOperation
+    ): Boolean = biometricUnlockCrypto.completeOperation(authenticatedSigner, pendingOperation)
 
     /**
      * Preferenza utente per l'uso della biometria (attivabile/disattivabile nelle impostazioni).
@@ -195,7 +194,7 @@ class SecurityManager(private val context: Context) {
             .putString(KEY_PWD_SALT, salt)
             .putLong(KEY_PWD_CREATED_AT, System.currentTimeMillis())
             .putLong(KEY_LAST_ACTIVE_TIME, System.currentTimeMillis())
-            .putBoolean(KEY_BIOMETRIC_PREF, canUseStrongDeviceAuthentication())
+            .putBoolean(KEY_BIOMETRIC_PREF, isHardwareBiometricAvailable())
             .apply()
         return true
     }
@@ -290,7 +289,7 @@ class SecurityManager(private val context: Context) {
     fun evaluateAuthStatus(isFreshAppLaunch: Boolean = false): AuthStatus {
         val isConfigured = isPasswordSet()
         val lockType = detectDeviceLockType()
-        val hasBiometricHw = canUseStrongDeviceAuthentication()
+        val hasBiometricHw = isHardwareBiometricAvailable()
         val isBioEnabled = isBiometricEnabledByUser()
         val canUseBio = hasBiometricHw && isBioEnabled
 
