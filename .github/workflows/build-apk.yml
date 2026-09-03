@@ -252,6 +252,9 @@ jobs:
 
           ### Correzioni di ${TAG_NAME}
 
+          - corretto il crash immediatamente successivo allo sblocco biometrico: il ViewModel della sessione protetta viene ora creato con la factory Android e riceve correttamente il contesto applicativo;
+          - mantenuta la distruzione del ViewModel e dei dati sensibili a ogni blocco o passaggio dell'app in background;
+          - aggiunto un controllo di regressione specifico per impedire il ritorno della creazione senza factory;
           - barra di formattazione spostata stabilmente in alto, sotto il titolo dell'editor, per restare accessibile con qualsiasi tastiera Android;
           - corretta l'applicazione effettiva di grassetto, corsivo, sottolineato, colore e stili quando il cursore segue le righe finali generate dalla conversione HTML;
           - aggiunto un test strumentale che apre la tastiera, aziona Grassetto e verifica il markup HTML prodotto;

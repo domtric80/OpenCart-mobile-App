@@ -1,5 +1,6 @@
 package com.example
 
+import android.app.Application
 import android.content.Context
 import android.os.Build
 import android.os.Bundle
@@ -47,6 +48,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -106,6 +108,10 @@ fun MainAppContainer(
     context: Context
 ) {
     val securityManager = remember { SecurityManager(context) }
+    val application = context.applicationContext as Application
+    val viewModelFactory = remember(application) {
+        ViewModelProvider.AndroidViewModelFactory.getInstance(application)
+    }
     val lifecycleOwner = LocalLifecycleOwner.current
     var isUnlocked by remember { mutableStateOf(false) }
     var sessionOwner by remember { mutableStateOf<SecureSessionViewModelOwner?>(null) }
@@ -149,7 +155,7 @@ fun MainAppContainer(
     } else {
         val owner = requireNotNull(sessionOwner) { "Sessione sicura non inizializzata" }
         CompositionLocalProvider(LocalViewModelStoreOwner provides owner) {
-            val secureViewModel: MainViewModel = viewModel()
+            val secureViewModel: MainViewModel = viewModel(factory = viewModelFactory)
             MainAppContent(viewModel = secureViewModel)
         }
     }
