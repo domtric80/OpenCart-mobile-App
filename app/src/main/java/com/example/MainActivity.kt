@@ -53,12 +53,14 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.auth.AuthLockScreen
+import com.example.auth.ExternalMediaSessionGate
 import com.example.auth.SecurityManager
 import com.example.model.Order
 import com.example.model.AdminModule
 import com.example.ui.MainViewModel
 import com.example.ui.components.BottomNavBar
 import com.example.ui.components.HeaderSection
+import com.example.ui.components.LocalExternalMediaSessionGate
 import com.example.ui.components.NavigationTab
 import com.example.ui.components.NavigationMenuItem
 import com.example.ui.components.NavigationMenuSheet
@@ -113,10 +115,14 @@ fun MainAppContainer(
         ViewModelProvider.AndroidViewModelFactory.getInstance(application)
     }
     val lifecycleOwner = LocalLifecycleOwner.current
+    val externalMediaSessionGate = remember {
+        ExternalMediaSessionGate(maxDurationMs = SecurityManager.TIMEOUT_INACTIVITY_MS)
+    }
     var isUnlocked by remember { mutableStateOf(false) }
     var sessionOwner by remember { mutableStateOf<SecureSessionViewModelOwner?>(null) }
 
     fun lockAndDestroySession() {
+        externalMediaSessionGate.end()
         isUnlocked = false
         securityManager.lockSession()
         sessionOwner?.clear()
@@ -125,7 +131,7 @@ fun MainAppContainer(
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) {
+            if (event == Lifecycle.Event.ON_STOP && !externalMediaSessionGate.consumeBackgroundLockDeferral()) {
                 lockAndDestroySession()
             }
         }
@@ -154,7 +160,10 @@ fun MainAppContainer(
         )
     } else {
         val owner = requireNotNull(sessionOwner) { "Sessione sicura non inizializzata" }
-        CompositionLocalProvider(LocalViewModelStoreOwner provides owner) {
+        CompositionLocalProvider(
+            LocalViewModelStoreOwner provides owner,
+            LocalExternalMediaSessionGate provides externalMediaSessionGate
+        ) {
             val secureViewModel: MainViewModel = viewModel(factory = viewModelFactory)
             MainAppContent(viewModel = secureViewModel)
         }

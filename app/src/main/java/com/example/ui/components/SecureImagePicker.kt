@@ -15,16 +15,20 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.example.model.ProductImageUpload
+import com.example.auth.ExternalMediaSessionGate
 import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+val LocalExternalMediaSessionGate = staticCompositionLocalOf<ExternalMediaSessionGate?> { null }
 
 /** Selettore minimo basato sulle app di sistema, senza permessi o URI condivisi. */
 @Composable
@@ -62,15 +66,19 @@ fun SecureImagePicker(
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { importImage(it, "gallery-image") }
     }
+    val externalMediaSessionGate = LocalExternalMediaSessionGate.current
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
+        externalMediaSessionGate?.end()
         bitmap?.let(::importCameraPreview)
     }
 
     Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton(
             onClick = {
+                externalMediaSessionGate?.begin()
                 runCatching { cameraLauncher.launch(null) }
                     .onFailure {
+                        externalMediaSessionGate?.end()
                         onError(mediaLaunchError("fotocamera"))
                     }
             },
