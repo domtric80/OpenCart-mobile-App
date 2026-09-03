@@ -19,6 +19,8 @@ class MediaPickerCompatibilityRegressionTest {
     fun cameraUsesMinimalPreviewContractWithoutFileProvider() {
         assertTrue(pickerSource.contains("ActivityResultContracts.TakePicturePreview()"))
         assertTrue(pickerSource.contains("cameraLauncher.launch(null)"))
+        assertTrue(pickerSource.contains("externalMediaSessionGate?.begin()"))
+        assertTrue(pickerSource.contains("externalMediaSessionGate?.end()"))
         assertTrue(!pickerSource.contains("FileProvider"))
         assertTrue(!pickerSource.contains("EXTRA_OUTPUT"))
     }
