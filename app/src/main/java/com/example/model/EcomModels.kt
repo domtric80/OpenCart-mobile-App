@@ -15,7 +15,6 @@ data class Store(
     val version: String = "OpenCart 3.0.3.8",
     val apiUsername: String = "api_admin_sync",
     val apiKey: String = "",
-    val apiToken: String? = null,
     val isConnected: Boolean = true,
     val connectionStatus: ConnectionStatus = ConnectionStatus.CONNECTED,
     val lastSyncTime: String = "Pochi secondi fa",

@@ -3,7 +3,6 @@ package com.example.ui.components
 import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
-import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -71,9 +70,8 @@ fun SecureImagePicker(
         OutlinedButton(
             onClick = {
                 runCatching { cameraLauncher.launch(null) }
-                    .onFailure { error ->
-                        Log.e("CartAdminMedia", "Cannot launch system camera", error)
-                        onError(mediaLaunchError("fotocamera", error))
+                    .onFailure {
+                        onError(mediaLaunchError("fotocamera"))
                     }
             },
             modifier = Modifier.weight(1f).testTag("${tagPrefix}_camera")
@@ -84,9 +82,8 @@ fun SecureImagePicker(
         OutlinedButton(
             onClick = {
                 runCatching { galleryLauncher.launch("image/*") }
-                    .onFailure { error ->
-                        Log.e("CartAdminMedia", "Cannot launch system gallery", error)
-                        onError(mediaLaunchError("galleria", error))
+                    .onFailure {
+                        onError(mediaLaunchError("galleria"))
                     }
             },
             modifier = Modifier.weight(1f).testTag("${tagPrefix}_gallery")
@@ -97,10 +94,8 @@ fun SecureImagePicker(
     }
 }
 
-private fun mediaLaunchError(target: String, error: Throwable): String {
-    val detail = error.message?.replace(Regex("[\\r\\n]+"), " ")?.take(160).orEmpty()
-    return "Impossibile aprire la $target (${error.javaClass.simpleName}${if (detail.isBlank()) "" else ": $detail"})"
-}
+private fun mediaLaunchError(target: String): String =
+    "Impossibile aprire la $target. Verifica che sul dispositivo sia disponibile un'app compatibile."
 
 private suspend fun readValidatedImage(context: Context, uri: Uri, fallbackName: String): ProductImageUpload =
     withContext(Dispatchers.IO) {

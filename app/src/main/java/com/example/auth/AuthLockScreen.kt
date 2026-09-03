@@ -77,6 +77,10 @@ fun AuthLockScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     fun launchBiometricPrompt() {
+        if (!securityManager.canUseStrongDeviceAuthentication()) {
+            errorMessage = "Configura biometria forte oppure PIN/password sicura sul dispositivo."
+            return
+        }
         val activity = context as? FragmentActivity ?: return
         val executor = ContextCompat.getMainExecutor(context)
         val prompt = BiometricPrompt(
@@ -85,34 +89,27 @@ fun AuthLockScreen(
             object : BiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                     super.onAuthenticationSucceeded(result)
-                    if (securityManager.completeBiometricAuthentication(result.cryptoObject)) {
-                        securityManager.recordSuccessfulAuth()
-                        onUnlockSuccess()
-                    } else {
-                        errorMessage = "Verifica crittografica biometrica non riuscita. Usa la password."
-                    }
+                    securityManager.recordSuccessfulAuth()
+                    onUnlockSuccess()
                 }
 
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                     super.onAuthenticationError(errorCode, errString)
-                    // Se l'utente annulla o la biometria fallisce, usa la password
+                    errorMessage = "Autenticazione dispositivo non completata: $errString"
                 }
             }
         )
 
         val promptInfo = BiometricPrompt.PromptInfo.Builder()
             .setTitle("Sblocco CartAdmin")
-            .setSubtitle("Autenticazione biometrica hardware richiesta")
-            .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
-            .setNegativeButtonText("Usa password")
+            .setSubtitle("Usa biometria forte oppure PIN/password del dispositivo")
+            .setAllowedAuthenticators(
+                BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                    BiometricManager.Authenticators.DEVICE_CREDENTIAL
+            )
             .build()
 
-        val cryptoObject = securityManager.prepareBiometricCryptoObject()
-        if (cryptoObject == null) {
-            errorMessage = "Biometria hardware non disponibile. Usa la password."
-            return
-        }
-        prompt.authenticate(promptInfo, cryptoObject)
+        prompt.authenticate(promptInfo)
     }
 
     LaunchedEffect(Unit) {
@@ -241,7 +238,7 @@ fun AuthLockScreen(
                             }
                             val saved = securityManager.setCredentials(usernameInput.ifBlank { "admin" }, passwordInput)
                             if (saved) {
-                                onUnlockSuccess()
+                                launchBiometricPrompt()
                             } else {
                                 errorMessage = "Errore durante il salvataggio credenziali."
                             }
@@ -281,9 +278,10 @@ fun AuthLockScreen(
                         keyboardActions = KeyboardActions(
                             onDone = {
                                 if (securityManager.verifyPassword(passwordInput)) {
-                                    onUnlockSuccess()
+                                    launchBiometricPrompt()
                                 } else {
-                                    errorMessage = "Password non corretta. Riprova."
+                                    val seconds = securityManager.remainingPasswordLockoutSeconds()
+                                    errorMessage = if (seconds > 0) "Troppi tentativi. Riprova tra $seconds secondi." else "Password non corretta. Riprova."
                                 }
                             }
                         ),
@@ -305,9 +303,10 @@ fun AuthLockScreen(
                     Button(
                         onClick = {
                             if (securityManager.verifyPassword(passwordInput)) {
-                                onUnlockSuccess()
+                                launchBiometricPrompt()
                             } else {
-                                errorMessage = "Password non corretta. Riprova."
+                                val seconds = securityManager.remainingPasswordLockoutSeconds()
+                                errorMessage = if (seconds > 0) "Troppi tentativi. Riprova tra $seconds secondi." else "Password non corretta. Riprova."
                             }
                         },
                         modifier = Modifier
@@ -333,7 +332,7 @@ fun AuthLockScreen(
                         ) {
                             Icon(Icons.Default.Fingerprint, contentDescription = null, modifier = Modifier.size(20.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Usa Impronta Digitale")
+                            Text("Usa biometria o blocco dispositivo")
                         }
                     }
                 }

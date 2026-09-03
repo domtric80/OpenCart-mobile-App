@@ -20,28 +20,22 @@ import com.example.model.OrderStatus
 import com.example.model.Product
 import com.example.model.ProductImageUpload
 import com.example.model.ReturnStatus
-import com.example.model.Store
 import com.example.model.Subscription
 import com.example.model.SubscriptionStatus
 import com.example.model.TrafficSource
 import com.example.model.VisitorRealtimeStats
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.IOException
 
 data class OpenCartConnectionResult(
     val isSuccess: Boolean,
     val statusCode: Int,
     val responseTimeMs: Long,
     val message: String,
-    val apiToken: String? = null,
     val details: String? = null,
     val isBridgeDetected: Boolean = false
 )
@@ -49,8 +43,6 @@ data class OpenCartConnectionResult(
 class OpenCartApiClient(context: Context) {
 
     private val tlsClient = TlsPinnedClient(context)
-
-    private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
     /** Recupera un elenco amministrativo reale dal bridge senza persistenza locale. */
     suspend fun fetchAdminModule(
@@ -79,7 +71,7 @@ class OpenCartApiClient(context: Context) {
             tlsClient.execute(request).use { response ->
                 val body = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    return@withContext Result.failure(Exception("HTTP ${response.code}: $body"))
+                    return@withContext Result.failure(Exception("HTTP ${response.code}: operazione non riuscita"))
                 }
 
                 val json = JSONObject(body)
@@ -157,7 +149,7 @@ class OpenCartApiClient(context: Context) {
             tlsClient.execute(request).use { response ->
                 val body = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    Result.failure(Exception("HTTP ${response.code}: $body"))
+                    Result.failure(Exception("HTTP ${response.code}: operazione non riuscita"))
                 } else {
                     val json = JSONObject(body)
                     if (json.optBoolean("success", false)) Result.success(true)
@@ -197,7 +189,7 @@ class OpenCartApiClient(context: Context) {
             tlsClient.execute(request).use { response ->
                 val body = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    Result.failure(Exception("HTTP ${response.code}: $body"))
+                    Result.failure(Exception("HTTP ${response.code}: operazione non riuscita"))
                 } else {
                     val json = JSONObject(body)
                     if (json.optBoolean("success", false)) Result.success(true)
@@ -211,8 +203,7 @@ class OpenCartApiClient(context: Context) {
 
     /**
      * Test connection to OpenCart store:
-     * 1. Checks the CartAdmin Bridge extension endpoint.
-     * 2. If not present, checks standard OpenCart API (index.php?route=api/login)
+     * Verifica esclusivamente il bridge CartAdmin con token a privilegi granulari.
      */
     suspend fun testConnection(
         storeUrl: String,
@@ -261,7 +252,6 @@ class OpenCartApiClient(context: Context) {
                         statusCode = response.code,
                         responseTimeMs = duration,
                         message = "Modulo CartAdmin Bridge attivo e connesso a $storeName!",
-                        apiToken = apiKey,
                         details = "Bridge v$ocVer • Ordini: $ordersCount • Prodotti: $prodsCount • Risposta in ${duration}ms.",
                         isBridgeDetected = true
                     )
@@ -278,83 +268,23 @@ class OpenCartApiClient(context: Context) {
                 }
             }
         } catch (e: Exception) {
-            // Fallback to native OpenCart API
-        }
-
-        // 2. Check Native OpenCart route=api/login
-        val nativeUrl = "$cleanUrl/index.php?route=api/login"
-        val formBody = FormBody.Builder()
-            .add("username", apiUsername)
-            .add("key", apiKey)
-            .build()
-
-        val nativeRequest = Request.Builder()
-            .url(nativeUrl)
-            .post(formBody)
-            .header("User-Agent", "CartAdmin-Android/${BuildConfig.VERSION_NAME}")
-            .header("Accept", "application/json")
-            .build()
-
-        try {
-            tlsClient.execute(nativeRequest).use { response ->
-                val duration = System.currentTimeMillis() - startTime
-                val responseBody = response.body?.string() ?: ""
-                val code = response.code
-
-                if (response.isSuccessful) {
-                    val json = try { JSONObject(responseBody) } catch (e: Exception) { null }
-                    if (json != null && (json.has("api_token") || json.has("token") || json.has("success"))) {
-                        val token = json.optString("api_token", json.optString("token", ""))
-                        return@withContext OpenCartConnectionResult(
-                            isSuccess = true,
-                            statusCode = code,
-                            responseTimeMs = duration,
-                            message = "Connessione OpenCart API nativa riuscita!",
-                            apiToken = token,
-                            details = "Token sessione OpenCart ottenuto in ${duration}ms."
-                        )
-                    } else if (json != null && json.has("error")) {
-                        val errorObj = json.opt("error")
-                        val errorMsg = if (errorObj is JSONObject) {
-                            errorObj.optString("warning", errorObj.optString("key", "Errore IP / credenziali"))
-                        } else errorObj.toString()
-
-                        return@withContext OpenCartConnectionResult(
-                            isSuccess = false,
-                            statusCode = code,
-                            responseTimeMs = duration,
-                            message = "OpenCart API errore: $errorMsg",
-                            details = "Consiglio: installa e configura CartAdmin Bridge dal pannello OpenCart."
-                        )
-                    }
-
-                    return@withContext OpenCartConnectionResult(
-                        isSuccess = true,
-                        statusCode = code,
-                        responseTimeMs = duration,
-                        message = "Store OpenCart raggiungibile ($code OK).",
-                        details = "Risposta ricevuta in ${duration}ms."
-                    )
-                } else {
-                    return@withContext OpenCartConnectionResult(
-                        isSuccess = false,
-                        statusCode = code,
-                        responseTimeMs = duration,
-                        message = "Errore HTTP $code dal server OpenCart.",
-                        details = "Installa cartadmin.ocmod.zip dal pannello OpenCart oppure verifica i permessi API."
-                    )
-                }
-            }
-        } catch (e: IOException) {
             val duration = System.currentTimeMillis() - startTime
             return@withContext OpenCartConnectionResult(
                 isSuccess = false,
                 statusCode = 0,
                 responseTimeMs = duration,
-                message = "Impossibile raggiungere il server: ${e.localizedMessage ?: "Errore di rete"}",
-                details = "Verifica la connessione internet e l'URL inserito ($cleanUrl)."
+                message = "Connessione sicura al bridge non riuscita.",
+                details = "Verifica HTTPS, modulo CartAdmin aggiornato e token associato al dispositivo."
             )
         }
+
+        return@withContext OpenCartConnectionResult(
+            isSuccess = false,
+            statusCode = 0,
+            responseTimeMs = System.currentTimeMillis() - startTime,
+            message = "Bridge CartAdmin non disponibile.",
+            details = "Per sicurezza l'app non usa credenziali API native con privilegi globali."
+        )
     }
 
     /**
@@ -377,7 +307,7 @@ class OpenCartApiClient(context: Context) {
             tlsClient.execute(request).use { response ->
                 val body = response.body?.string() ?: ""
                 if (!response.isSuccessful) {
-                    return@withContext Result.failure(Exception("HTTP ${response.code}: $body"))
+                    return@withContext Result.failure(Exception("HTTP ${response.code}: operazione non riuscita"))
                 }
 
                 val json = JSONObject(body)
@@ -453,7 +383,7 @@ class OpenCartApiClient(context: Context) {
             tlsClient.execute(request).use { response ->
                 val body = response.body?.string() ?: ""
                 if (!response.isSuccessful) {
-                    return@withContext Result.failure(Exception("HTTP ${response.code}: $body"))
+                    return@withContext Result.failure(Exception("HTTP ${response.code}: operazione non riuscita"))
                 }
 
                 val json = JSONObject(body)
@@ -523,7 +453,7 @@ class OpenCartApiClient(context: Context) {
             tlsClient.execute(request).use { response ->
                 val body = response.body?.string() ?: ""
                 if (!response.isSuccessful) {
-                    return@withContext Result.failure(Exception("HTTP ${response.code}: $body"))
+                    return@withContext Result.failure(Exception("HTTP ${response.code}: operazione non riuscita"))
                 }
 
                 val json = JSONObject(body)
@@ -580,7 +510,7 @@ class OpenCartApiClient(context: Context) {
             tlsClient.execute(request).use { response ->
                 val body = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    return@use Result.failure(Exception("HTTP ${response.code}: $body"))
+                    return@use Result.failure(Exception("HTTP ${response.code}: operazione non riuscita"))
                 }
                 val json = JSONObject(body)
                 if (json.optBoolean("success", false)) {
@@ -625,7 +555,7 @@ class OpenCartApiClient(context: Context) {
             tlsClient.execute(request).use { response ->
                 val body = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    Result.failure(Exception("HTTP ${response.code}: $body"))
+                    Result.failure(Exception("HTTP ${response.code}: operazione non riuscita"))
                 } else {
                     val json = JSONObject(body)
                     if (json.optBoolean("success", false)) Result.success(true)
@@ -678,7 +608,7 @@ class OpenCartApiClient(context: Context) {
             )
             tlsClient.execute(request).use { response ->
                 val body = response.body?.string().orEmpty()
-                if (!response.isSuccessful) Result.failure(Exception("HTTP ${response.code}: $body"))
+                if (!response.isSuccessful) Result.failure(Exception("HTTP ${response.code}: operazione non riuscita"))
                 else JSONObject(body).let { json ->
                     if (json.optBoolean("success", false)) Result.success(json.optString("id"))
                     else Result.failure(Exception(json.optString("error", "Creazione CMS rifiutata")))
@@ -712,7 +642,7 @@ class OpenCartApiClient(context: Context) {
             tlsClient.execute(request).use { response ->
                 val body = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    Result.failure(Exception("HTTP ${response.code}: $body"))
+                    Result.failure(Exception("HTTP ${response.code}: operazione non riuscita"))
                 } else {
                     val json = JSONObject(body)
                     if (json.optBoolean("success", false) && json.optString("status") == "pending") {
@@ -741,7 +671,7 @@ class OpenCartApiClient(context: Context) {
             tlsClient.execute(request).use { response ->
                 val body = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    return@use Result.failure(Exception("HTTP ${response.code}: $body"))
+                    return@use Result.failure(Exception("HTTP ${response.code}: operazione non riuscita"))
                 }
                 val json = JSONObject(body)
                 if (!json.optBoolean("success", false)) {
@@ -832,7 +762,7 @@ class OpenCartApiClient(context: Context) {
             tlsClient.execute(request).use { response ->
                 val body = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    return@use Result.failure(Exception("HTTP ${response.code}: $body"))
+                    return@use Result.failure(Exception("HTTP ${response.code}: operazione non riuscita"))
                 }
                 val json = JSONObject(body)
                 if (!json.optBoolean("success", false)) {
@@ -904,7 +834,7 @@ class OpenCartApiClient(context: Context) {
             tlsClient.execute(request).use { response ->
                 val body = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    Result.failure(Exception("HTTP ${response.code}: $body"))
+                    Result.failure(Exception("HTTP ${response.code}: operazione non riuscita"))
                 } else {
                     val json = JSONObject(body)
                     if (json.optBoolean("success", false)) Result.success(true)
@@ -933,7 +863,7 @@ class OpenCartApiClient(context: Context) {
             tlsClient.execute(request).use { response ->
                 val body = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    return@use Result.failure(Exception("HTTP ${response.code}: $body"))
+                    return@use Result.failure(Exception("HTTP ${response.code}: operazione non riuscita"))
                 }
 
                 val json = JSONObject(body)
@@ -1058,7 +988,7 @@ class OpenCartApiClient(context: Context) {
             tlsClient.execute(request).use { response ->
                 val body = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    Result.failure(Exception("HTTP ${response.code}: $body"))
+                    Result.failure(Exception("HTTP ${response.code}: operazione non riuscita"))
                 } else {
                     val json = JSONObject(body)
                     if (json.optBoolean("success", false)) Result.success(true)
@@ -1094,7 +1024,7 @@ class OpenCartApiClient(context: Context) {
             tlsClient.execute(request).use { response ->
                 val body = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    Result.failure(Exception("HTTP ${response.code}: $body"))
+                    Result.failure(Exception("HTTP ${response.code}: operazione non riuscita"))
                 } else {
                     val json = JSONObject(body)
                     if (json.optBoolean("success", false)) Result.success(true)
@@ -1142,8 +1072,8 @@ class OpenCartApiClient(context: Context) {
                             Subscription(
                                 id = obj.optString("id", "sub_$i"),
                                 subscriptionId = obj.optString("subscription_id", "#SUB-$i"),
-                                customerName = obj.optString("customer_name", "Cliente"),
-                                customerEmail = obj.optString("customer_email", "email@store.it"),
+                                customerName = obj.optString("customer_name", ""),
+                                customerEmail = obj.optString("customer_email", ""),
                                 planName = obj.optString("plan_name", "Piano Ricorrente"),
                                 cycleFrequency = obj.optString("cycle_frequency", "Mensile (30 gg)"),
                                 amount = obj.optDouble("amount", 29.90),
@@ -1156,7 +1086,7 @@ class OpenCartApiClient(context: Context) {
                     }
                     Result.success(list)
                 } else {
-                    Result.failure(Exception("HTTP ${response.code}: $body"))
+                    Result.failure(Exception("HTTP ${response.code}: operazione non riuscita"))
                 }
             }
         } catch (e: Exception) {
@@ -1201,8 +1131,8 @@ class OpenCartApiClient(context: Context) {
                                 id = obj.optString("id", "ret_$i"),
                                 returnId = obj.optString("return_id", "RMA-$i"),
                                 orderId = obj.optString("order_id", "#100$i"),
-                                customerName = obj.optString("customer_name", "Cliente"),
-                                customerEmail = obj.optString("customer_email", "email@store.it"),
+                                customerName = obj.optString("customer_name", ""),
+                                customerEmail = obj.optString("customer_email", ""),
                                 customerPhone = obj.optString("customer_phone", ""),
                                 productName = obj.optString("product_name", "Prodotto Reso"),
                                 productModel = obj.optString("product_model", "MOD-1"),
@@ -1218,7 +1148,7 @@ class OpenCartApiClient(context: Context) {
                     }
                     Result.success(list)
                 } else {
-                    Result.failure(Exception("HTTP ${response.code}: $body"))
+                    Result.failure(Exception("HTTP ${response.code}: operazione non riuscita"))
                 }
             }
         } catch (e: Exception) {
@@ -1248,7 +1178,7 @@ class OpenCartApiClient(context: Context) {
             tlsClient.execute(request).use { response ->
                 val body = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    Result.failure(Exception("HTTP ${response.code}: $body"))
+                    Result.failure(Exception("HTTP ${response.code}: operazione non riuscita"))
                 } else {
                     val json = JSONObject(body)
                     if (json.optBoolean("success", false)) Result.success(true)
@@ -1286,7 +1216,7 @@ class OpenCartApiClient(context: Context) {
             tlsClient.execute(request).use { response ->
                 val body = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    Result.failure(Exception("HTTP ${response.code}: $body"))
+                    Result.failure(Exception("HTTP ${response.code}: operazione non riuscita"))
                 } else {
                     val json = JSONObject(body)
                     if (json.optBoolean("success", false)) Result.success(true)
@@ -1295,50 +1225,6 @@ class OpenCartApiClient(context: Context) {
             }
         } catch (e: Exception) {
             Result.failure(e)
-        }
-    }
-
-
-    /**
-     * Log an audit event to OpenCart remote database
-     */
-    suspend fun logAuditRemote(
-        store: Store,
-        actionType: String,
-        description: String,
-        details: String?,
-        operator: String,
-        device: String
-    ): Boolean = withContext(Dispatchers.IO) {
-        var cleanUrl = store.url.trim().removeSuffix("/")
-        if (cleanUrl.isBlank() || store.apiKey.isBlank()) return@withContext false
-        if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
-            cleanUrl = "https://$cleanUrl"
-        }
-
-        val bridgeUrl = "$cleanUrl/extension/cartadmin/cartadmin_api.php?action=audit_log"
-        val payload = JSONObject().apply {
-            put("action_type", actionType)
-            put("description", description)
-            put("details", details ?: "")
-            put("operator_username", operator)
-            put("device_model", device)
-        }
-
-        val request = BridgeRequestFactory.authenticate(
-            Request.Builder()
-                .url(bridgeUrl)
-                .post(payload.toString().toRequestBody(jsonMediaType)),
-            store.apiKey,
-            store.apiUsername
-        ).build()
-
-        try {
-            tlsClient.execute(request).use { res ->
-                res.isSuccessful
-            }
-        } catch (e: Exception) {
-            false
         }
     }
 }

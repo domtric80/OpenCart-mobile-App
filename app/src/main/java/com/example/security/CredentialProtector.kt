@@ -11,6 +11,9 @@ interface CredentialProtector {
 }
 
 enum class CredentialField(val storageName: String) {
+    STORE_NAME("store_name"),
+    STORE_URL("store_url"),
+    STORE_VERSION("store_version"),
     API_USERNAME("api_username"),
     API_KEY("api_key")
 }

@@ -33,6 +33,7 @@ class Cartadmin extends \Opencart\System\Engine\Model {
 			`operator_name` VARCHAR(64) NOT NULL,
 			`scopes` VARCHAR(255) NOT NULL,
 			`device_hash` CHAR(64) NULL,
+			`device_public_key` TEXT NULL,
 			`active` TINYINT(1) NOT NULL DEFAULT 1,
 			`created_at` DATETIME NOT NULL,
 			`last_used_at` DATETIME NULL,
@@ -79,16 +80,36 @@ class Cartadmin extends \Opencart\System\Engine\Model {
 			UNIQUE KEY `uq_pending_target` (`dedupe_key`),
 			INDEX `idx_command_status` (`status`, `created_at`)
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+		$device_key_column = $this->db->query("SHOW COLUMNS FROM `" . DB_PREFIX . "cartadmin_token` LIKE 'device_public_key'");
+		if (!$device_key_column->num_rows) {
+			$this->db->query("ALTER TABLE `" . DB_PREFIX . "cartadmin_token` ADD COLUMN `device_public_key` TEXT NULL AFTER `device_hash`");
+		}
+
+		$this->db->query("CREATE TABLE IF NOT EXISTS `" . DB_PREFIX . "cartadmin_rate_limit` (
+			`rate_key` CHAR(64) PRIMARY KEY,
+			`failures` SMALLINT UNSIGNED NOT NULL DEFAULT '0',
+			`window_started` DATETIME NOT NULL,
+			`blocked_until` DATETIME NULL,
+			INDEX `idx_rate_cleanup` (`window_started`, `blocked_until`)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+		$this->db->query("CREATE TABLE IF NOT EXISTS `" . DB_PREFIX . "cartadmin_device_nonce` (
+			`token_id` INT NOT NULL,
+			`nonce` CHAR(36) NOT NULL,
+			`created_at` DATETIME NOT NULL,
+			PRIMARY KEY (`token_id`, `nonce`),
+			INDEX `idx_nonce_cleanup` (`created_at`)
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
 		$this->migrateLegacyToken();
 	}
 
 	public function createToken(string $label, int $operator_user_id, array $scopes): string {
-		$allowedScopes = ['read', 'orders.write', 'catalog.write', 'content.write', 'customers.write', 'audit.write'];
+		$allowedScopes = ['status.read', 'orders.read', 'catalog.read', 'content.read', 'customers.read', 'telemetry.read', 'orders.write', 'catalog.write', 'content.write', 'customers.write'];
 		$cleanScopes = array_values(array_intersect($allowedScopes, array_unique(array_map('strval', $scopes))));
 		$label = trim(strip_tags($label));
 
-		if ($label === '' || mb_strlen($label) > 64 || $operator_user_id < 1 || !in_array('read', $cleanScopes, true)) {
+		if ($label === '' || mb_strlen($label) > 64 || $operator_user_id < 1 || !in_array('status.read', $cleanScopes, true)) {
 			throw new \InvalidArgumentException('Dati del token CartAdmin non validi.');
 		}
 		$operatorQuery = $this->db->query("SELECT `user_id`, `username` FROM `" . DB_PREFIX . "user` WHERE `user_id` = '" . (int)$operator_user_id . "' AND `status` = '1' LIMIT 1");
@@ -250,7 +271,7 @@ class Cartadmin extends \Opencart\System\Engine\Model {
 		try {
 			if ($hash !== '') {
 				$createdSql = $createdAt !== '' ? "'" . $this->db->escape($createdAt) . "'" : 'NOW()';
-				$this->db->query("INSERT INTO `" . DB_PREFIX . "cartadmin_token` SET `token_hash` = '" . $this->db->escape($hash) . "', `last_four` = '" . $this->db->escape(substr($lastFour, -4)) . "', `label` = 'Token legacy da sostituire', `operator_name` = 'Operatore legacy', `scopes` = 'read,orders.write,catalog.write,content.write,customers.write,audit.write', `active` = '1', `created_at` = " . $createdSql);
+				$this->db->query("INSERT INTO `" . DB_PREFIX . "cartadmin_token` SET `token_hash` = '" . $this->db->escape($hash) . "', `last_four` = '" . $this->db->escape(substr($lastFour, -4)) . "', `label` = 'Token legacy revocato', `operator_name` = 'Operatore legacy', `scopes` = '', `active` = '0', `created_at` = " . $createdSql . ", `revoked_at` = NOW()");
 			}
 			$this->upsert('legacy_token_migrated', '1');
 			$this->db->query("DELETE FROM `" . DB_PREFIX . "cartadmin_setting` WHERE `key` IN ('api_key', 'token_hash', 'token_last_four', 'token_created_at')");

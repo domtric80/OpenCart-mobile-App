@@ -31,7 +31,7 @@ class AndroidKeystoreCredentialProtector(context: Context) : CredentialProtector
         try {
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.ENCRYPT_MODE, getOrCreateHardwareKey())
-            cipher.updateAAD(aad(storeId, field))
+            cipher.updateAAD(aad(FORMAT_PREFIX, storeId, field))
             val encrypted = cipher.doFinal(plainText.toByteArray(Charsets.UTF_8))
             return listOf(
                 FORMAT_PREFIX,
@@ -57,7 +57,8 @@ class AndroidKeystoreCredentialProtector(context: Context) : CredentialProtector
         }
 
         val parts = persistedValue.split(SEPARATOR, limit = 3)
-        if (parts.size != 3 || parts[0] != FORMAT_PREFIX) {
+        val formatPrefix = parts.firstOrNull().orEmpty()
+        if (parts.size != 3 || formatPrefix !in setOf(FORMAT_PREFIX, LEGACY_FORMAT_PREFIX)) {
             throw CredentialProtectionException("Formato credenziale cifrata non valido")
         }
 
@@ -67,15 +68,23 @@ class AndroidKeystoreCredentialProtector(context: Context) : CredentialProtector
             if (iv.size != GCM_IV_BYTES || encrypted.size < GCM_TAG_BYTES) {
                 throw CredentialProtectionException("Credenziale cifrata danneggiata")
             }
+            val key = if (formatPrefix == FORMAT_PREFIX) {
+                getOrCreateHardwareKey()
+            } else {
+                getLegacyHardwareKey()
+            }
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(
                 Cipher.DECRYPT_MODE,
-                getOrCreateHardwareKey(),
+                key,
                 GCMParameterSpec(GCM_TAG_BITS, iv)
             )
-            cipher.updateAAD(aad(storeId, field))
+            cipher.updateAAD(aad(formatPrefix, storeId, field))
             val decrypted = cipher.doFinal(encrypted)
-            return RevealedCredential(String(decrypted, Charsets.UTF_8), false)
+            return RevealedCredential(
+                String(decrypted, Charsets.UTF_8),
+                formatPrefix == LEGACY_FORMAT_PREFIX
+            )
         } catch (error: CredentialProtectionException) {
             throw error
         } catch (error: Exception) {
@@ -89,6 +98,15 @@ class AndroidKeystoreCredentialProtector(context: Context) : CredentialProtector
     override fun hardwareSecurityLevel(): HardwareSecurityLevel =
         inspectHardwareSecurityLevel(getOrCreateHardwareKey())
 
+    fun deleteLegacyKey() {
+        runCatching {
+            KeyStore.getInstance(ANDROID_KEYSTORE).apply {
+                load(null)
+                deleteEntry(LEGACY_KEY_ALIAS)
+            }
+        }
+    }
+
     private fun getOrCreateHardwareKey(): SecretKey {
         val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
         (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { key ->
@@ -96,14 +114,21 @@ class AndroidKeystoreCredentialProtector(context: Context) : CredentialProtector
             return key
         }
 
-        val generated = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            try {
-                generateKey(strongBox = true)
-            } catch (_: StrongBoxUnavailableException) {
+        val generated = try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                try {
+                    generateKey(strongBox = true)
+                } catch (_: StrongBoxUnavailableException) {
+                    generateKey(strongBox = false)
+                }
+            } else {
                 generateKey(strongBox = false)
             }
-        } else {
-            generateKey(strongBox = false)
+        } catch (error: Exception) {
+            throw CredentialProtectionException(
+                "Impossibile creare una chiave credenziali hardware e autenticata",
+                error
+            )
         }
 
         return try {
@@ -115,6 +140,14 @@ class AndroidKeystoreCredentialProtector(context: Context) : CredentialProtector
         }
     }
 
+    private fun getLegacyHardwareKey(): SecretKey {
+        val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
+        val key = keyStore.getKey(LEGACY_KEY_ALIAS, null) as? SecretKey
+            ?: throw CredentialProtectionException("Chiave legacy non disponibile per la migrazione protetta")
+        inspectHardwareSecurityLevel(key)
+        return key
+    }
+
     private fun generateKey(strongBox: Boolean): SecretKey {
         val builder = KeyGenParameterSpec.Builder(
             KEY_ALIAS,
@@ -124,6 +157,17 @@ class AndroidKeystoreCredentialProtector(context: Context) : CredentialProtector
             .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
             .setKeySize(KEY_SIZE_BITS)
             .setRandomizedEncryptionRequired(true)
+            .setUserAuthenticationRequired(true)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            builder.setUserAuthenticationParameters(
+                AUTHORIZATION_WINDOW_SECONDS,
+                KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            builder.setUserAuthenticationValidityDurationSeconds(AUTHORIZATION_WINDOW_SECONDS)
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             builder.setIsStrongBoxBacked(strongBox)
@@ -155,8 +199,8 @@ class AndroidKeystoreCredentialProtector(context: Context) : CredentialProtector
         return HardwareSecurityLevel.TRUSTED_ENVIRONMENT
     }
 
-    private fun aad(storeId: String, field: CredentialField): ByteArray =
-        "$applicationId|$FORMAT_PREFIX|$storeId|${field.storageName}".toByteArray(Charsets.UTF_8)
+    private fun aad(prefix: String, storeId: String, field: CredentialField): ByteArray =
+        "$applicationId|$prefix|$storeId|${field.storageName}".toByteArray(Charsets.UTF_8)
 
     private fun validateStoreId(storeId: String) {
         if (storeId.isBlank() || storeId.length > MAX_STORE_ID_LENGTH) {
@@ -166,16 +210,21 @@ class AndroidKeystoreCredentialProtector(context: Context) : CredentialProtector
 
     companion object {
         private const val ANDROID_KEYSTORE = "AndroidKeyStore"
-        private const val KEY_ALIAS = "CartAdmin_StoreCredentials_HardwareKey_v3"
+        private const val KEY_ALIAS = "CartAdmin_StoreCredentials_UserAuthKey_v4"
+        private const val LEGACY_KEY_ALIAS = "CartAdmin_StoreCredentials_HardwareKey_v3"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
-        private const val FORMAT_PREFIX = "ca1"
+        private const val FORMAT_PREFIX = "ca2"
+        private const val LEGACY_FORMAT_PREFIX = "ca1"
         private const val SEPARATOR = ":"
         private const val KEY_SIZE_BITS = 256
         private const val GCM_TAG_BITS = 128
         private const val GCM_TAG_BYTES = GCM_TAG_BITS / 8
         private const val GCM_IV_BYTES = 12
         private const val MAX_STORE_ID_LENGTH = 256
+        private const val AUTHORIZATION_WINDOW_SECONDS = 300
 
-        fun isProtectedValue(value: String): Boolean = value.startsWith("$FORMAT_PREFIX$SEPARATOR")
+        fun isProtectedValue(value: String): Boolean =
+            value.startsWith("$FORMAT_PREFIX$SEPARATOR") ||
+                value.startsWith("$LEGACY_FORMAT_PREFIX$SEPARATOR")
     }
 }

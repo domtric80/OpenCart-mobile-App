@@ -1,10 +1,11 @@
 package com.example
 
 import android.content.Context
+import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +33,9 @@ import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +43,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.auth.AuthLockScreen
 import com.example.auth.SecurityManager
 import com.example.model.Order
@@ -62,42 +73,85 @@ import com.example.ui.screens.LicenseScreen
 import com.example.ui.screens.OrdersScreen
 import com.example.ui.screens.VisitorsRealtimeScreen
 import com.example.ui.theme.MyApplicationTheme
+import kotlinx.coroutines.delay
 
 class MainActivity : FragmentActivity() {
-
-    private val viewModel: MainViewModel by viewModels()
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        window.decorView.filterTouchesWhenObscured = true
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            runCatching { window.setHideOverlayWindows(true) }
+        }
         enableEdgeToEdge()
 
         setContent {
             MyApplicationTheme {
-                MainAppContainer(viewModel = viewModel, context = this)
+                MainAppContainer(context = this)
             }
         }
     }
 }
 
+private class SecureSessionViewModelOwner : ViewModelStoreOwner {
+    override val viewModelStore = ViewModelStore()
+
+    fun clear() {
+        viewModelStore.clear()
+    }
+}
+
 @Composable
 fun MainAppContainer(
-    viewModel: MainViewModel,
     context: Context
 ) {
     val securityManager = remember { SecurityManager(context) }
-    var isUnlocked by remember {
-        mutableStateOf(!securityManager.evaluateAuthStatus(true).isLocked)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var isUnlocked by remember { mutableStateOf(false) }
+    var sessionOwner by remember { mutableStateOf<SecureSessionViewModelOwner?>(null) }
+
+    fun lockAndDestroySession() {
+        isUnlocked = false
+        securityManager.lockSession()
+        sessionOwner?.clear()
+        sessionOwner = null
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                lockAndDestroySession()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            sessionOwner?.clear()
+            sessionOwner = null
+        }
+    }
+
+    LaunchedEffect(isUnlocked) {
+        if (isUnlocked) {
+            delay(SecurityManager.TIMEOUT_INACTIVITY_MS)
+            lockAndDestroySession()
+        }
     }
 
     if (!isUnlocked) {
         AuthLockScreen(
             securityManager = securityManager,
             onUnlockSuccess = {
+                sessionOwner = SecureSessionViewModelOwner()
                 isUnlocked = true
             }
         )
     } else {
-        MainAppContent(viewModel = viewModel)
+        val owner = requireNotNull(sessionOwner) { "Sessione sicura non inizializzata" }
+        CompositionLocalProvider(LocalViewModelStoreOwner provides owner) {
+            val secureViewModel: MainViewModel = viewModel()
+            MainAppContent(viewModel = secureViewModel)
+        }
     }
 }
 

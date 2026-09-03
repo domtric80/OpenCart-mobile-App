@@ -1,6 +1,6 @@
 # CartAdmin Bridge per OpenCart 4.1
 
-Estensione HTTPS tra CartAdmin Android e OpenCart 4.1.x, sviluppata da OpenCart ITALIA by SOLOSOLUZIONI.
+Estensione HTTPS tra CartAdmin Android e OpenCart 4.1.x, sviluppata da OpenCart ITALIA by SOLOSOLUZIONI. Questo sorgente corrisponde alla build di hardening `2.1.1-dev.1` e deve essere usato con l'app della stessa versione.
 
 ## Installazione
 
@@ -18,7 +18,9 @@ Non creare né modificare manualmente file PHP. Il nome `cartadmin.ocmod.zip` è
 - Nel database viene memorizzato soltanto un hash non reversibile Argon2id, con fallback all'algoritmo sicuro predefinito di PHP.
 - Il token in chiaro è restituito soltanto nella risposta amministrativa che lo genera.
 - Ogni token è revocabile individualmente dal pannello e può avere scope di sola lettura o di scrittura separati per ordini, catalogo, contenuti, clienti e audit.
-- Al primo utilizzo il token viene associato atomicamente a una sola installazione Android. Ogni altro dispositivo deve avere un token distinto.
+- Al primo utilizzo il token viene associato atomicamente alla chiave pubblica ECDSA di una sola installazione Android. La chiave privata non è esportabile dal TEE/StrongBox del dispositivo.
+- Ogni richiesta include firma, timestamp e nonce: il bridge rifiuta firme errate, richieste scadute e replay.
+- I permessi di lettura sono separati tra stato, ordini, catalogo, contenuti, clienti/GDPR e telemetria. Il vecchio scope globale `read` non è accettato.
 - Un eventuale `api_key` in chiaro creato da una versione precedente viene convertito automaticamente in hash e poi eliminato.
 - Le credenziali sono accettate esclusivamente negli header HTTPS; URL e form body vengono ignorati.
 - L'identità autorevole dell'operatore (`user_id` e username) proviene da un utente OpenCart attivo selezionato nel pannello e viene salvata nel token. L'app 2.1 non invia un nome operatore; un eventuale client precedente può produrre soltanto un digest HMAC e un indicatore di incongruenza, senza attribuire l'operazione a un altro utente.
@@ -27,7 +29,7 @@ L'app Android conserva la propria copia del token tramite AES-256-GCM e Android 
 
 ### Aggiornamento dalla 2.0
 
-Il bridge migra una sola volta l'hash già presente, elimina le vecchie impostazioni del token e contrassegna la credenziale come **Token legacy da sostituire**. Poiché un hash non permette di ricostruire l'operatore originario, il token legacy riceve temporaneamente tutti gli scope. Dopo aver aggiornato anche l'app 2.1, genera un token nominativo con privilegi minimi, verifica la connessione e revoca quello legacy. App e bridge vanno aggiornati insieme: il bridge 2.1 rifiuta client che non inviano l'identificatore casuale dell'installazione.
+La 2.1.1 richiede la rotazione dei token precedenti. Dopo l'aggiornamento del bridge genera un token nominativo con i soli scope necessari, aggiorna l'app, verifica la connessione e revoca ogni token legacy. Il bridge rifiuta client privi di prova hardware e token che conservano soltanto il vecchio scope globale `read`.
 
 ## Contenuti e moderazione
 

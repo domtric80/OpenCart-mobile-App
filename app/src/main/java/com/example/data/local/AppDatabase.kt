@@ -22,7 +22,8 @@ import com.example.data.local.entity.StoreProfileEntity
 import com.example.data.local.entity.SubscriptionEntity
 
 /**
- * Main Room database instance for local caching of OpenCart stores, orders, subscriptions, returns, items, products, categories, and audit logs.
+ * Database locale limitato ai profili negozio protetti. Tutte le tabelle contenenti dati
+ * remoti vengono bonificate sincronicamente a ogni apertura.
  */
 @Database(
     entities = [
@@ -81,9 +82,27 @@ abstract class AppDatabase : RoomDatabase() {
                                     // Consuming the result applies the connection-level setting.
                                 }
                             }
+                            db.beginTransaction()
+                            try {
+                                db.execSQL("DELETE FROM order_items_cache")
+                                db.execSQL("DELETE FROM orders_cache")
+                                db.execSQL("DELETE FROM subscriptions_cache")
+                                db.execSQL("DELETE FROM returns_cache")
+                                db.execSQL("DELETE FROM audit_logs")
+                                db.execSQL("DELETE FROM products_cache")
+                                db.execSQL("DELETE FROM categories_cache")
+                                db.setTransactionSuccessful()
+                            } finally {
+                                db.endTransaction()
+                            }
+                            db.query("PRAGMA wal_checkpoint(TRUNCATE)").use { cursor ->
+                                while (cursor.moveToNext()) {
+                                    // Elimina dal WAL eventuali copie precedenti dei record bonificati.
+                                }
+                            }
                         }
                     })
-                    .fallbackToDestructiveMigration()
+                    .fallbackToDestructiveMigration(dropAllTables = true)
                     .build()
                 INSTANCE = instance
                 instance

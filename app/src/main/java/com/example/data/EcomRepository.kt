@@ -80,6 +80,21 @@ class EcomRepository(
         var credentialsMigrated = false
         if (entities.isNotEmpty()) {
             val revealedStores = entities.map { entity ->
+                val name = credentialProtector.reveal(
+                    entity.id,
+                    CredentialField.STORE_NAME,
+                    entity.name
+                )
+                val url = credentialProtector.reveal(
+                    entity.id,
+                    CredentialField.STORE_URL,
+                    entity.url
+                )
+                val version = credentialProtector.reveal(
+                    entity.id,
+                    CredentialField.STORE_VERSION,
+                    entity.openCartVersion
+                )
                 val username = credentialProtector.reveal(
                     entity.id,
                     CredentialField.API_USERNAME,
@@ -91,33 +106,41 @@ class EcomRepository(
                     entity.apiKey
                 )
 
-                if (username.requiresMigration || apiKey.requiresMigration) {
-                    dao.updateProtectedCredentials(
-                        storeId = entity.id,
-                        protectedUsername = credentialProtector.protect(
-                            entity.id,
-                            CredentialField.API_USERNAME,
-                            username.value
-                        ),
-                        protectedApiKey = credentialProtector.protect(
-                            entity.id,
-                            CredentialField.API_KEY,
-                            apiKey.value
+                if (
+                    name.requiresMigration || url.requiresMigration ||
+                    version.requiresMigration || username.requiresMigration || apiKey.requiresMigration
+                ) {
+                    dao.insertOrUpdate(
+                        entity.copy(
+                            name = credentialProtector.protect(entity.id, CredentialField.STORE_NAME, name.value),
+                            url = credentialProtector.protect(entity.id, CredentialField.STORE_URL, url.value),
+                            openCartVersion = credentialProtector.protect(
+                                entity.id,
+                                CredentialField.STORE_VERSION,
+                                version.value
+                            ),
+                            adminUsername = credentialProtector.protect(
+                                entity.id,
+                                CredentialField.API_USERNAME,
+                                username.value
+                            ),
+                            apiKey = credentialProtector.protect(
+                                entity.id,
+                                CredentialField.API_KEY,
+                                apiKey.value
+                            )
                         )
                     )
                     credentialsMigrated = true
                 }
 
-                Triple(entity, username.value, apiKey.value)
-            }
-            val domainStores = revealedStores.map { (entity, username, apiKey) ->
                 Store(
                     id = entity.id,
-                    name = entity.name,
-                    url = entity.url,
-                    version = entity.openCartVersion,
-                    apiUsername = username,
-                    apiKey = apiKey,
+                    name = name.value,
+                    url = url.value,
+                    version = version.value,
+                    apiUsername = username.value,
+                    apiKey = apiKey.value,
                     todayRevenue = 0.0,
                     revenueGrowthPercent = 0.0,
                     pendingOrdersCount = 0,
@@ -125,7 +148,7 @@ class EcomRepository(
                     lastSyncTime = if (entity.lastSyncTimestamp > 0) "Ultima sinc: ${java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.ITALIAN).format(java.util.Date(entity.lastSyncTimestamp))}" else "Nessuna sincronizzazione"
                 )
             }
-            _stores.value = domainStores
+            _stores.value = revealedStores
             val primary = entities.find { it.isPrimary } ?: entities.first()
             _currentStoreId.value = primary.id
         } else {
@@ -162,8 +185,8 @@ class EcomRepository(
         storeProfileDao?.insertOrUpdate(
             StoreProfileEntity(
                 id = newId,
-                name = newStore.name,
-                url = newStore.url,
+                name = credentialProtector.protect(newId, CredentialField.STORE_NAME, newStore.name),
+                url = credentialProtector.protect(newId, CredentialField.STORE_URL, newStore.url),
                 apiKey = credentialProtector.protect(newId, CredentialField.API_KEY, key),
                 adminUsername = credentialProtector.protect(
                     newId,
@@ -173,7 +196,11 @@ class EcomRepository(
                 isPrimary = _stores.value.isEmpty(),
                 isActive = true,
                 lastSyncTimestamp = System.currentTimeMillis(),
-                openCartVersion = newStore.version
+                openCartVersion = credentialProtector.protect(
+                    newId,
+                    CredentialField.STORE_VERSION,
+                    newStore.version
+                )
             )
         )
 
@@ -207,14 +234,18 @@ class EcomRepository(
         storeProfileDao?.insertOrUpdate(
             StoreProfileEntity(
                 id = storeId,
-                name = name,
-                url = url,
+                name = credentialProtector.protect(storeId, CredentialField.STORE_NAME, name),
+                url = credentialProtector.protect(storeId, CredentialField.STORE_URL, url),
                 apiKey = protectedApiKey,
                 adminUsername = protectedUsername,
                 isPrimary = true,
                 isActive = true,
                 lastSyncTimestamp = System.currentTimeMillis(),
-                openCartVersion = version
+                openCartVersion = credentialProtector.protect(
+                    storeId,
+                    CredentialField.STORE_VERSION,
+                    version
+                )
             )
         )
 
@@ -491,5 +522,18 @@ class EcomRepository(
                 )
             }
         }
+    }
+
+    /** Drops every in-memory reference that may contain credentials or personal data. */
+    fun clearSensitiveSession() {
+        _stores.value = emptyList()
+        _currentStoreId.value = ""
+        _activities.value = emptyList()
+        _orders.value = emptyList()
+        _subscriptions.value = emptyList()
+        _returns.value = emptyList()
+        _products.value = emptyList()
+        _categories.value = emptyList()
+        _visitorStats.value = VisitorRealtimeStats()
     }
 }

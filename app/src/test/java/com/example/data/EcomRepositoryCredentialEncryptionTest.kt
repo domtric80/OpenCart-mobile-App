@@ -44,7 +44,11 @@ class EcomRepositoryCredentialEncryptionTest {
         assertEquals("plain-secret", repository.stores.value.single().apiKey)
         assertTrue(dao.row!!.adminUsername.startsWith("test-protected:"))
         assertTrue(dao.row!!.apiKey.startsWith("test-protected:"))
+        assertTrue(dao.row!!.name.startsWith("test-protected:"))
+        assertTrue(dao.row!!.url.startsWith("test-protected:"))
+        assertTrue(dao.row!!.openCartVersion.startsWith("test-protected:"))
         assertFalse(dao.row!!.apiKey.contains("plain-secret"))
+        assertFalse(dao.row!!.url.contains("shop.example"))
     }
 
     @Test
@@ -64,6 +68,9 @@ class EcomRepositoryCredentialEncryptionTest {
         assertTrue(dao.row!!.apiKey.startsWith("test-protected:"))
         assertFalse(dao.row!!.apiKey.contains("new-secret"))
         assertTrue(dao.row!!.adminUsername.startsWith("test-protected:"))
+        assertTrue(dao.row!!.name.startsWith("test-protected:"))
+        assertTrue(dao.row!!.url.startsWith("test-protected:"))
+        assertTrue(dao.row!!.openCartVersion.startsWith("test-protected:"))
         assertTrue(dao.row!!.isPrimary)
     }
 

@@ -23,6 +23,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
+      attestations: write
 
     outputs:
       version: ${{ steps.get_version.outputs.version }}
@@ -31,18 +33,18 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v6
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6
         with:
           java-version: '21'
           distribution: 'temurin'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6
         with:
           gradle-version: '9.3.1'
 
@@ -83,9 +85,11 @@ jobs:
             fi
           fi
 
-          echo "version=${VERSION_NAME}" >> "$GITHUB_OUTPUT"
-          echo "tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
-          echo "is_release=${IS_RELEASE}" >> "$GITHUB_OUTPUT"
+          {
+            echo "version=${VERSION_NAME}"
+            echo "tag=${RELEASE_TAG}"
+            echo "is_release=${IS_RELEASE}"
+          } >> "$GITHUB_OUTPUT"
           echo "Version: ${VERSION_NAME}; Release Tag: ${RELEASE_TAG}; Is Release: ${IS_RELEASE}"
 
       - name: Prepare Build Environment
@@ -181,8 +185,21 @@ jobs:
           grep -Fxq 'admin/controller/module/cartadmin.php' <<<"$entries"
           grep -Fxq 'admin/model/module/cartadmin.php' <<<"$entries"
 
+          (
+            cd release-assets
+            sha256sum "CartAdmin-v${VERSION}.apk" cartadmin.ocmod.zip > SHA256SUMS.txt
+          )
+
+      - name: Attest release artifacts
+        if: steps.get_version.outputs.is_release == 'true'
+        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        with:
+          subject-path: |
+            release-assets/CartAdmin-v${{ steps.get_version.outputs.version }}.apk
+            release-assets/cartadmin.ocmod.zip
+
       - name: Upload Build Artifacts (CI)
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: CartAdmin-Build-Assets
           path: release-assets/*
@@ -198,7 +215,7 @@ jobs:
 
     steps:
       - name: Download Build Artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: CartAdmin-Build-Assets
           path: release-assets
@@ -213,6 +230,7 @@ jobs:
           set -euo pipefail
           APK_PATH="release-assets/CartAdmin-v${VERSION}.apk"
           PLUGIN_PATH="release-assets/cartadmin.ocmod.zip"
+          CHECKSUM_PATH="release-assets/SHA256SUMS.txt"
           RELEASE_TITLE="CartAdmin ${TAG_NAME} — OpenCart ITALIA by SOLO SOLUZIONI"
           RELEASE_FLAGS=(--latest)
 
@@ -240,7 +258,7 @@ jobs:
           - ripristinato il caricamento delle categorie reali nella schermata Nuovo prodotto, con aggiornamento mirato quando la pagina viene aperta e selezione sicura dopo risposte asincrone;
           - editor visuale ridisegnato a schermo intero con area di scrittura estesa, comandi rappresentati da icone e barra fissa sopra tastiera e barre di sistema;
           - aggiunti test strumentali per caricamento tardivo delle categorie e permanenza della toolbar prima e dopo l'apertura della tastiera;
-          - “Nuovo prodotto” e “Nuovo articolo” ora usano schermate dedicate a pagina intera, più leggibili e adatte alla compilazione da smartphone;
+          - "Nuovo prodotto" e "Nuovo articolo" ora usano schermate dedicate a pagina intera, più leggibili e adatte alla compilazione da smartphone;
           - descrizioni prodotto e contenuti articolo dispongono di un editor visuale con P/H1/H2/H3, colore testo, grassetto, corsivo, sottolineato ed elenco puntato;
           - la barra dell'editor si adatta all'apertura della tastiera e il markup viene sanificato sia sul dispositivo sia dal bridge OpenCart prima del salvataggio;
           - flusso multimediale ridotto ai contratti di sistema \`TakePicturePreview\` e \`GetContent\`, eliminando FileProvider, URI condivisi, Photo Picker e grant OEM;
@@ -321,6 +339,7 @@ jobs:
           gh release create "${TAG_NAME}" \
             "$APK_PATH" \
             "$PLUGIN_PATH" \
+            "$CHECKSUM_PATH" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "$RELEASE_TITLE" \
