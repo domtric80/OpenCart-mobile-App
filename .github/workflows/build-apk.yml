@@ -306,10 +306,12 @@ jobs:
             cat << EOF > release_notes.md
           ## CartAdmin ${TAG_NAME}
 
-          Release stabile di sicurezza. La patch lega lo sblocco biometrico a una firma Android Keystore autenticata per singolo utilizzo e mantiene le difese fail-closed introdotte nella serie 2.1.
+          Release stabile correttiva e di sicurezza. Risolve il crash successivo allo sblocco biometrico mantenendo la sessione amministrativa confinata e le difese fail-closed introdotte nella serie 2.1.
 
           ### Hardening confermato
 
+          - corretto il crash dovuto alla creazione del ViewModel protetto senza `AndroidViewModelFactory` dopo l'autenticazione;
+          - sessione biometrica verificata su Redmi Note 9S con Android 12/API 31: processo attivo, Activity in stato `RESUMED` e nessuna eccezione applicativa in Logcat;
           - profilo negozio interamente cifrato tramite AES-256-GCM con chiave non esportabile TEE/StrongBox e autenticazione utente recente;
           - sblocco biometrico vincolato a \`BiometricPrompt.CryptoObject\`: una challenge casuale deve essere firmata e verificata prima di creare la sessione;
           - chiave ECDSA di sblocco non esportabile, autorizzata soltanto dalla biometria forte e obbligatoriamente custodita in TEE/StrongBox;
@@ -343,7 +345,7 @@ jobs:
 
           Build release firmata, test unitari, compilazione dei test strumentali, Android Lint e struttura del pacchetto OCMOD sono verificati dal workflow di pubblicazione. I workflow di sicurezza eseguono inoltre CodeQL, Semgrep, controllo sintattico PHP e test dell'autenticazione del bridge.
 
-          **Aggiornamento dalla 2.1.1:** installare prima il modulo OpenCart 2.1.2 e poi aggiornare l'app. I token per dispositivo creati con la 2.1.1 restano validi e non devono essere ruotati nuovamente.
+          **Aggiornamento dalla 2.1.2:** installare prima il modulo OpenCart 2.1.3 e poi aggiornare l'app. I token per dispositivo esistenti restano validi e non devono essere ruotati nuovamente.
 
           Compatibilità confermata: Android API 24–36 e OpenCart 4.1.x. Il bridge non dichiara compatibilità con OpenCart 3.x.
           EOF

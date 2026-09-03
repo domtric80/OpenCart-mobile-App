@@ -1,6 +1,6 @@
 # CartAdmin Bridge per OpenCart 4.1
 
-Estensione HTTPS tra CartAdmin Android e OpenCart 4.1.x, sviluppata da OpenCart ITALIA by SOLOSOLUZIONI. Questo sorgente corrisponde alla release stabile `2.1.2` e deve essere usato con l'app della stessa versione.
+Estensione HTTPS tra CartAdmin Android e OpenCart 4.1.x, sviluppata da OpenCart ITALIA by SOLOSOLUZIONI. Questo sorgente corrisponde alla release stabile `2.1.3` e deve essere usato con l'app della stessa versione.
 
 ## Installazione
 

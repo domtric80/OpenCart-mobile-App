@@ -108,8 +108,8 @@ $contentSource = ($contentCaseStart !== false && $contentCaseEnd !== false)
     ? substr($bridgeSource, $contentCaseStart, $contentCaseEnd - $contentCaseStart)
     : '';
 
-assertSameValue('2.1.2', $manifest['version'] ?? '', 'The OpenCart manifest version must match the stable build.');
-assertSourceContains($bridgeSource, "'bridge_version' => '2.1.2'", 'The status endpoint must report the same stable build.');
+assertSameValue('2.1.3', $manifest['version'] ?? '', 'The OpenCart manifest version must match the stable build.');
+assertSourceContains($bridgeSource, "'bridge_version' => '2.1.3'", 'The status endpoint must report the same stable build.');
 assertSourceOmits($bridgeSource, 'get_key_setup', 'The bridge must not expose public token setup.');
 assertSourceOmits($bridgeSource, "\$_REQUEST['api_key']", 'The bridge must ignore URL/form credentials.');
 assertSourceOmits($bridgeSource, '`username` = ? AND `key` = ?', 'The bridge must not authenticate against plaintext native API keys.');
