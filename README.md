@@ -1,16 +1,16 @@
-# CartAdmin 2.1.5
+# CartAdmin 2.1.6
 
 CartAdmin è un'app Android per consultare e amministrare un negozio OpenCart da smartphone. L'app è sviluppata in Kotlin con Jetpack Compose e comunica esclusivamente con il modulo **CartAdmin Bridge** incluso nella stessa release.
 
-> App e bridge devono avere la stessa versione. Per la v2.1.5 aggiorna sia l'APK sia `cartadmin.ocmod.zip`.
+> App e bridge devono avere la stessa versione. Per la v2.1.6 aggiorna sia l'APK sia `cartadmin.ocmod.zip`.
 
 ## Download
 
-La versione stabile corrente è [CartAdmin v2.1.5](https://github.com/domtric80/OpenCart-mobile-App/releases/latest).
+La versione stabile corrente è [CartAdmin v2.1.6](https://github.com/domtric80/OpenCart-mobile-App/releases/latest).
 
 | Componente | File | Compatibilità confermata |
 | --- | --- | --- |
-| App Android | `CartAdmin-v2.1.5.apk` | Android 7.0 o successivo, API 24–36 |
+| App Android | `CartAdmin-v2.1.6.apk` | Android 7.0 o successivo, API 24–36 |
 | Bridge OpenCart | `cartadmin.ocmod.zip` | OpenCart 4.1.x |
 | Integrità | `SHA256SUMS.txt` | SHA-256 di APK e modulo |
 
@@ -50,7 +50,7 @@ Servono:
 
 Apri [GitHub Releases](https://github.com/domtric80/OpenCart-mobile-App/releases/latest) e scarica:
 
-1. `CartAdmin-v2.1.5.apk`;
+1. `CartAdmin-v2.1.6.apk`;
 2. `cartadmin.ocmod.zip`;
 3. facoltativamente `SHA256SUMS.txt`, per verificare l'integrità dei file.
 
@@ -109,7 +109,7 @@ Ogni token appartiene a un singolo operatore e viene associato al primo disposit
 
 ### 4. Installa e proteggi l'app
 
-1. Apri `CartAdmin-v2.1.5.apk` sul telefono.
+1. Apri `CartAdmin-v2.1.6.apk` sul telefono.
 2. Se Android lo richiede, autorizza temporaneamente l'installazione da quella specifica origine.
 3. Al primo avvio inserisci un nome operatore locale e una password robusta.
 4. Se disponibile, abilita lo sblocco biometrico forte.
@@ -151,7 +151,7 @@ Se non esistono profili, il pulsante **Salva** non sostituisce **Aggiungi**. Dop
 | --- | --- | --- |
 | `401 Non autorizzato` | token vuoto, incompleto, revocato o appartenente a un altro dispositivo | genera un nuovo token, copialo integralmente e salvalo sul dispositivo corretto |
 | Test API riuscito ma menu in `403` | manca lo scope di lettura richiesto | genera un token con il corrispondente permesso **Lettura**; aggiungi anche **Gestione** se devi modificare |
-| Il nuovo token non autentica | negli appunti è rimasto il token precedente | usa **Copia token** della v2.1.5 e controlla la conferma, oppure seleziona manualmente e usa `Ctrl+C` |
+| Il nuovo token non autentica | negli appunti è rimasto il token precedente | usa **Copia token** della v2.1.6 e controlla la conferma, oppure seleziona manualmente e usa `Ctrl+C` |
 | Modulo non rilevato | bridge assente, non installato o di versione differente | aggiorna `cartadmin.ocmod.zip`, installa il modulo e usa la stessa versione dell'app |
 | Impossibile salvare il profilo | URL non HTTPS, campi obbligatori mancanti o Keystore non hardware-backed | correggi i campi; usa un dispositivo con TEE o StrongBox |
 | Traffic vuoto | tracciamento OpenCart disabilitato o nessun visitatore attivo | abilita **Clienti online** nelle impostazioni OpenCart e visita lo store |
@@ -193,16 +193,15 @@ Il modello di minaccia, i ruoli distinti delle chiavi Android Keystore e i limit
 
 Non inserire token, password, keystore o chiavi di firma in screenshot, issue, chat, commit o file versionati.
 
-## Novità della v2.1.5
+## Novità della v2.1.6
 
-- tornando nell'app dopo uno scatto, la scheda del nuovo prodotto e i dati già inseriti rimangono aperti;
-- l'uscita temporanea verso la fotocamera sospende una sola volta il blocco in background, per un massimo di cinque minuti;
-- annullamento, errore o completamento della fotocamera chiudono sempre l'eccezione temporanea;
-- galleria, blocco biometrico ordinario e timeout di sicurezza restano invariati;
-- il pulsante **Copia token** attende e verifica l'esito della Clipboard API;
-- se il browser limita gli appunti, il pannello seleziona il campo e propone `Ctrl+C`;
-- un messaggio distingue chiaramente copia riuscita e copia manuale necessaria;
-- il valore completo continua a essere mostrato una sola volta e non viene registrato nei log.
+- formalizzato il modello di minaccia delle tre chiavi Android Keystore: protezione delle credenziali, sblocco biometrico e identità del dispositivo hanno ruoli separati;
+- documentato perché la chiave di identità del dispositivo non richiede autenticazione biometrica: dimostra il possesso del dispositivo, mentre accesso all'app, token cifrato, firma, timestamp, nonce e scope costituiscono controlli distinti;
+- documentata la compatibilità Android 7–10, dove il recupero delle credenziali può usare il blocco schermo sicuro entro una finestra limitata, mantenendo AES-GCM e hardware-backed Keystore;
+- aggiunti test strumentali che verificano direttamente le proprietà `KeyInfo` delle chiavi e test di regressione sui percorsi fail-closed, annullamento biometrico e recupero da chiave invalidata;
+- aggiornato CodeQL alla versione 4.38.0, fissando inizializzazione e analisi allo stesso commit immutabile;
+- aggiornato KSP alla 2.3.12 e completata la verifica SHA-256 delle relative dipendenze Gradle;
+- riesaminati gli avvisi CodeQL sulle chiavi Keystore rispetto al modello documentato, senza indebolire la cifratura o i controlli biometrici esistenti.
 
 Per la cronologia completa consulta [Releases](https://github.com/domtric80/OpenCart-mobile-App/releases).
 
@@ -241,7 +240,7 @@ GitHub Actions esegue build, test unitari, compilazione dei test strumentali, An
 Nella cartella che contiene i file scaricati:
 
 ```powershell
-Get-FileHash -Algorithm SHA256 .\CartAdmin-v2.1.5.apk
+Get-FileHash -Algorithm SHA256 .\CartAdmin-v2.1.6.apk
 Get-FileHash -Algorithm SHA256 .\cartadmin.ocmod.zip
 Get-Content .\SHA256SUMS.txt
 ```
