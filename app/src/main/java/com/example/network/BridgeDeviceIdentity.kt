@@ -109,6 +109,8 @@ internal object BridgeDeviceIdentity {
         val builder = KeyGenParameterSpec.Builder(KEY_ALIAS, KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY)
             .setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
             .setDigests(KeyProperties.DIGEST_SHA256)
+            // Device-possession proof, not a local-authentication key. Requests still require the
+            // encrypted bearer token and an unlocked CartAdmin session. See the threat model.
             .setUserAuthenticationRequired(false)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             builder.setIsStrongBoxBacked(strongBox)

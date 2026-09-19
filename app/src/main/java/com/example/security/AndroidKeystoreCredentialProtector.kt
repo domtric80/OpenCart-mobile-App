@@ -165,6 +165,8 @@ class AndroidKeystoreCredentialProtector(context: Context) : CredentialProtector
                 KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL
             )
         } else {
+            // API 24-29 cannot declare authentication types separately. CartAdmin intentionally
+            // permits the secure device credential in this compatibility branch; see threat model.
             @Suppress("DEPRECATION")
             builder.setUserAuthenticationValidityDurationSeconds(AUTHORIZATION_WINDOW_SECONDS)
         }
