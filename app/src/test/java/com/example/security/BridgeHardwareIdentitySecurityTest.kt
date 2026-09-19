@@ -20,4 +20,12 @@ class BridgeHardwareIdentitySecurityTest {
         assertFalse(source.contains("getSharedPreferences"))
         assertFalse(source.contains("SecureRandom"))
     }
+
+    @Test
+    fun bridgeIdentityIsADevicePossessionProofNotALocalAuthenticationKey() {
+        assertTrue(source.contains("setUserAuthenticationRequired(false)"))
+        assertTrue(source.contains("associa al token la sola chiave pubblica"))
+        assertTrue(source.contains("val nonce = UUID.randomUUID().toString()"))
+        assertTrue(source.contains("val timestamp = System.currentTimeMillis() / 1000L"))
+    }
 }

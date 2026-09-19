@@ -29,6 +29,8 @@ class AndroidKeystoreCredentialProtectorSecurityTest {
         assertTrue(source.contains("setUserAuthenticationRequired(true)"))
         assertTrue(source.contains("AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL"))
         assertTrue(source.contains("AUTHORIZATION_WINDOW_SECONDS = 300"))
+        assertTrue(source.contains("setUserAuthenticationValidityDurationSeconds(AUTHORIZATION_WINDOW_SECONDS)"))
+        assertFalse(source.contains("setUserAuthenticationRequired(false)"))
     }
 
     @Test

@@ -53,4 +53,36 @@ class BiometricCryptoBindingRegressionTest {
         assertTrue(source.contains("SECURITY_LEVEL_STRONGBOX"))
         assertTrue(source.contains("verifier.verify(signedChallenge)"))
     }
+
+    @Test
+    fun cancellationAndAuthenticationErrorsCannotUnlockTheSession() {
+        val source = File(
+            projectRoot,
+            "app/src/main/java/com/example/auth/AuthLockScreen.kt"
+        ).readText()
+
+        val errorStart = source.indexOf("override fun onAuthenticationError")
+        val callbackEnd = source.indexOf("}", errorStart)
+        val errorCallback = source.substring(errorStart, callbackEnd)
+
+        assertTrue(errorStart >= 0)
+        assertFalse(errorCallback.contains("onUnlockSuccess"))
+        assertTrue(source.contains("setNegativeButtonText(\"Usa password CartAdmin\")"))
+    }
+
+    @Test
+    fun invalidatedBiometricKeyIsDeletedAndRecreatedBeforeRetry() {
+        val source = File(
+            projectRoot,
+            "app/src/main/java/com/example/auth/BiometricUnlockCrypto.kt"
+        ).readText()
+
+        val recoveryStart = source.indexOf("catch (_: KeyPermanentlyInvalidatedException)")
+        val recoveryEnd = source.indexOf("}", recoveryStart)
+        val recovery = source.substring(recoveryStart, recoveryEnd)
+
+        assertTrue(recoveryStart >= 0)
+        assertTrue(recovery.contains("deleteKey()"))
+        assertTrue(recovery.contains("initializeSigner(getOrCreateHardwarePrivateKey())"))
+    }
 }

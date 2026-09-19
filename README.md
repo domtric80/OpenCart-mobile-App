@@ -176,6 +176,8 @@ L'app non riceve IP, nome, email o identificativo cliente. Metriche che OpenCart
 
 ## Sicurezza
 
+Il modello di minaccia, i ruoli distinti delle chiavi Android Keystore e i limiti dichiarati sono descritti in [Modello di sicurezza Android Keystore](docs/security/android-keystore-threat-model.md).
+
 - il token OpenCart è casuale a 256 bit e nel database viene conservato soltanto come hash;
 - Android cifra il profilo negozio con AES-256-GCM;
 - la chiave AES non è esportabile ed è accettata soltanto se custodita in TEE o StrongBox;
